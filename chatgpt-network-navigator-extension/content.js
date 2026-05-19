@@ -8,7 +8,8 @@
     conversations: {},
     activeConversationId: null,
     turns: [],
-    activeIndex: -1
+    activeIndex: -1,
+    jumping: false
   };
 
   injectPageHook();
@@ -73,6 +74,14 @@
     return '';
   }
 
+  function isRealUserTurn(text) {
+    const t = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!t) return false;
+    if (/^original custom instructions no longer available$/i.test(t)) return false;
+    if (/^custom instructions no longer available$/i.test(t)) return false;
+    return true;
+  }
+
   function normalizeConversationPayload(payload) {
     const mapping = payload && (payload.mapping || payload.conversation?.mapping);
     if (!mapping || typeof mapping !== 'object') return [];
@@ -86,7 +95,7 @@
         if (role !== 'user') return null;
         const id = message.id || message.message_id;
         const text = extractTextFromContent(message.content).replace(/\s+/g, ' ').trim();
-        if (!id || !text) return null;
+        if (!id || !isRealUserTurn(text)) return null;
         const createTime = message.create_time || message.update_time || 0;
         return { id, role, text, createTime };
       })
@@ -210,7 +219,8 @@
     const byId = document.querySelector(`[data-message-id="${cssEscape(turn.id)}"]`);
     if (byId) return byId;
     const candidates = Array.from(document.querySelectorAll('[data-message-author-role="user"]'));
-    return candidates.find(el => (el.textContent || '').replace(/\s+/g, ' ').includes(turn.text.slice(0, 80)));
+    const needle = normalizeForMatch(turn.text).slice(0, 90);
+    return candidates.find(el => normalizeForMatch(el.textContent || '').includes(needle));
   }
 
   function getScroller() {
@@ -223,27 +233,75 @@
     });
   }
 
+  function scrollNodeIntoChatView(node, behavior) {
+    const scroller = getScroller();
+    if (!scroller) {
+      node.scrollIntoView({ behavior, block: 'start' });
+      return;
+    }
+    const nRect = node.getBoundingClientRect();
+    const sRect = scroller.getBoundingClientRect();
+    const top = scroller.scrollTop + (nRect.top - sRect.top) - 18;
+    scroller.scrollTo({ top: Math.max(0, top), behavior });
+  }
+
+  function estimateScrollTopForIndex(scroller, index) {
+    const rendered = state.turns
+      .map((turn, i) => ({ turn, i, node: findRenderedUserMessage(turn) }))
+      .filter(x => x.node);
+    const maxTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    if (!rendered.length) {
+      const ratio = state.turns.length > 1 ? index / (state.turns.length - 1) : 0;
+      return Math.round(maxTop * ratio);
+    }
+
+    const before = [...rendered].reverse().find(x => x.i < index);
+    const after = rendered.find(x => x.i > index);
+    if (before && after) {
+      const bTop = before.node.getBoundingClientRect().top + scroller.scrollTop;
+      const aTop = after.node.getBoundingClientRect().top + scroller.scrollTop;
+      const span = after.i - before.i;
+      return Math.round(bTop + ((index - before.i) / span) * (aTop - bTop));
+    }
+    if (before) {
+      const bTop = before.node.getBoundingClientRect().top + scroller.scrollTop;
+      return Math.min(maxTop, Math.round(bTop + (index - before.i) * scroller.clientHeight * 0.85));
+    }
+    if (after) {
+      const aTop = after.node.getBoundingClientRect().top + scroller.scrollTop;
+      return Math.max(0, Math.round(aTop - (after.i - index) * scroller.clientHeight * 0.85));
+    }
+    const ratio = state.turns.length > 1 ? index / (state.turns.length - 1) : 0;
+    return Math.round(maxTop * ratio);
+  }
+
   function jumpToTurn(index, attempt = 0) {
     const turn = state.turns[index];
     if (!turn) return;
+    state.jumping = true;
     const node = findRenderedUserMessage(turn);
     if (node) {
-      node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      scrollNodeIntoChatView(node, attempt ? 'auto' : 'smooth');
       setActive(index);
+      state.jumping = false;
       return;
     }
     const scroller = getScroller();
-    if (!scroller) return;
-    const ratio = state.turns.length > 1 ? index / (state.turns.length - 1) : 0;
-    const maxTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-    scroller.scrollTo({ top: Math.round(maxTop * ratio), behavior: attempt ? 'auto' : 'smooth' });
+    if (!scroller) {
+      state.jumping = false;
+      return;
+    }
+    scroller.scrollTo({ top: estimateScrollTopForIndex(scroller, index), behavior: attempt ? 'auto' : 'smooth' });
     setActive(index);
-    if (attempt < 4) {
-      setTimeout(() => jumpToTurn(index, attempt + 1), 450);
+    if (attempt < 8) {
+      setTimeout(() => jumpToTurn(index, attempt + 1), attempt ? 260 : 520);
+    } else {
+      state.jumping = false;
     }
   }
 
   function syncActiveFromViewport() {
+    if (state.jumping) return;
     if (!state.turns.length) return;
     const pivot = window.innerHeight * 0.38;
     let best = -1;
@@ -263,5 +321,9 @@
 
   function cssEscape(value) {
     return String(value).replace(/["\\]/g, '\\$&');
+  }
+
+  function normalizeForMatch(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
   }
 })();
