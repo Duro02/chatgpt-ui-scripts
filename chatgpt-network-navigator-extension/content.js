@@ -9,7 +9,8 @@
     activeConversationId: null,
     turns: [],
     activeIndex: -1,
-    jumping: false
+    jumping: false,
+    jumpToken: 0
   };
 
   injectPageHook();
@@ -37,12 +38,30 @@
   }
 
   async function loadStore() {
-    const result = await chrome.storage.local.get(STORE_KEY);
-    state.conversations = result[STORE_KEY] || {};
+    try {
+      if (!isExtensionContextValid()) return;
+      const result = await chrome.storage.local.get(STORE_KEY);
+      state.conversations = result[STORE_KEY] || {};
+    } catch (err) {
+      console.warn('[CGPT Network Navigator] storage read skipped:', err);
+    }
   }
 
   function saveStore() {
-    chrome.storage.local.set({ [STORE_KEY]: state.conversations });
+    try {
+      if (!isExtensionContextValid()) return;
+      chrome.storage.local.set({ [STORE_KEY]: state.conversations });
+    } catch (err) {
+      console.warn('[CGPT Network Navigator] storage write skipped:', err);
+    }
+  }
+
+  function isExtensionContextValid() {
+    try {
+      return !!(chrome && chrome.runtime && chrome.runtime.id && chrome.storage && chrome.storage.local);
+    } catch (_) {
+      return false;
+    }
   }
 
   function getConversationIdFromUrl(url) {
@@ -223,6 +242,27 @@
     return candidates.find(el => normalizeForMatch(el.textContent || '').includes(needle));
   }
 
+  function getRenderedUserTurns() {
+    const nodes = Array.from(document.querySelectorAll('[data-message-author-role="user"]'));
+    const rendered = [];
+    const seen = new Set();
+    nodes.forEach(node => {
+      const msgId = node.getAttribute('data-message-id');
+      let index = msgId ? state.turns.findIndex(turn => turn.id === msgId) : -1;
+      if (index < 0) {
+        const nodeText = normalizeForMatch(node.textContent || '');
+        index = state.turns.findIndex(turn => {
+          const needle = normalizeForMatch(turn.text).slice(0, 90);
+          return needle && nodeText.includes(needle);
+        });
+      }
+      if (index < 0 || seen.has(index)) return;
+      seen.add(index);
+      rendered.push({ index, node });
+    });
+    return rendered.sort((a, b) => a.node.getBoundingClientRect().top - b.node.getBoundingClientRect().top);
+  }
+
   function getScroller() {
     return Array.from(document.querySelectorAll('div,main,section')).find(el => {
       const cs = getComputedStyle(el);
@@ -245,39 +285,62 @@
     scroller.scrollTo({ top: Math.max(0, top), behavior });
   }
 
-  function estimateScrollTopForIndex(scroller, index) {
-    const rendered = state.turns
-      .map((turn, i) => ({ turn, i, node: findRenderedUserMessage(turn) }))
-      .filter(x => x.node);
+  function estimateScrollTopForIndex(scroller, index, bounds) {
+    const rendered = getRenderedUserTurns();
     const maxTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
     if (!rendered.length) {
       const ratio = state.turns.length > 1 ? index / (state.turns.length - 1) : 0;
       return Math.round(maxTop * ratio);
     }
 
-    const before = [...rendered].reverse().find(x => x.i < index);
-    const after = rendered.find(x => x.i > index);
+    const before = [...rendered].reverse().find(x => x.index < index);
+    const after = rendered.find(x => x.index > index);
     if (before && after) {
       const bTop = before.node.getBoundingClientRect().top + scroller.scrollTop;
       const aTop = after.node.getBoundingClientRect().top + scroller.scrollTop;
-      const span = after.i - before.i;
-      return Math.round(bTop + ((index - before.i) / span) * (aTop - bTop));
+      const span = after.index - before.index;
+      return Math.round(bTop + ((index - before.index) / span) * (aTop - bTop));
+    }
+    if (bounds && Number.isFinite(bounds.low) && Number.isFinite(bounds.high) && bounds.high > bounds.low + 8) {
+      return Math.round((bounds.low + bounds.high) / 2);
     }
     if (before) {
-      const bTop = before.node.getBoundingClientRect().top + scroller.scrollTop;
-      return Math.min(maxTop, Math.round(bTop + (index - before.i) * scroller.clientHeight * 0.85));
+      return Math.min(maxTop, Math.round(scroller.scrollTop + scroller.clientHeight * 1.8));
     }
     if (after) {
-      const aTop = after.node.getBoundingClientRect().top + scroller.scrollTop;
-      return Math.max(0, Math.round(aTop - (after.i - index) * scroller.clientHeight * 0.85));
+      return Math.max(0, Math.round(scroller.scrollTop - scroller.clientHeight * 1.8));
     }
     const ratio = state.turns.length > 1 ? index / (state.turns.length - 1) : 0;
     return Math.round(maxTop * ratio);
   }
 
-  function jumpToTurn(index, attempt = 0) {
+  function updateBoundsForRenderedIndex(index, scroller, bounds) {
+    const rendered = getRenderedUserTurns();
+    if (!rendered.length) return bounds;
+    const minIndex = Math.min(...rendered.map(x => x.index));
+    const maxIndex = Math.max(...rendered.map(x => x.index));
+    const currentTop = scroller.scrollTop;
+    const maxTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    if (index < minIndex) {
+      bounds.high = Math.min(bounds.high, currentTop);
+    } else if (index > maxIndex) {
+      bounds.low = Math.max(bounds.low, currentTop);
+    } else {
+      bounds.low = Math.max(0, currentTop - scroller.clientHeight);
+      bounds.high = Math.min(maxTop, currentTop + scroller.clientHeight);
+    }
+    return bounds;
+  }
+
+  function jumpToTurn(index, attempt = 0, bounds = null, token = null) {
     const turn = state.turns[index];
     if (!turn) return;
+    if (attempt === 0) {
+      state.jumpToken += 1;
+      token = state.jumpToken;
+    } else if (token !== state.jumpToken) {
+      return;
+    }
     state.jumping = true;
     const node = findRenderedUserMessage(turn);
     if (node) {
@@ -291,10 +354,13 @@
       state.jumping = false;
       return;
     }
-    scroller.scrollTo({ top: estimateScrollTopForIndex(scroller, index), behavior: attempt ? 'auto' : 'smooth' });
+    const maxTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    const nextBounds = updateBoundsForRenderedIndex(index, scroller, bounds || { low: 0, high: maxTop });
+    const top = estimateScrollTopForIndex(scroller, index, nextBounds);
+    scroller.scrollTo({ top: Math.max(0, Math.min(maxTop, top)), behavior: attempt ? 'auto' : 'smooth' });
     setActive(index);
-    if (attempt < 8) {
-      setTimeout(() => jumpToTurn(index, attempt + 1), attempt ? 260 : 520);
+    if (attempt < 14) {
+      setTimeout(() => jumpToTurn(index, attempt + 1, nextBounds, token), attempt ? 260 : 520);
     } else {
       state.jumping = false;
     }
