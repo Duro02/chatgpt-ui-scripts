@@ -526,7 +526,6 @@
     let activeSyncRaf = null;
     let lastTimelineSignature = '';
     let isTimelineHovering = false;
-    const turnCacheByConversation = new Map();
     const PM_STORAGE_KEY = 'chatgpt_prompt_manager_data_v1';
     const PM_UI_KEY = 'chatgpt_prompt_manager_ui_v1';
     const TL_FAV_STORAGE_KEY = 'chatgpt_timeline_favorites_v1';
@@ -555,83 +554,6 @@
 
     function getConversationKey() {
         return location.pathname || 'root';
-    }
-
-    function getConversationCache() {
-        const key = getConversationKey();
-        if (!turnCacheByConversation.has(key)) {
-            turnCacheByConversation.set(key, { entries: [], scanning: false, scanned: false });
-        }
-        return turnCacheByConversation.get(key);
-    }
-
-    function cacheKeyFromTurn(turn) {
-        return turn.getAttribute('data-message-id')
-            || turn.getAttribute('data-testid')
-            || `${(turn.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 120)}`;
-    }
-
-    function mergeVisibleTurnsIntoCache(visibleTurns) {
-        const cache = getConversationCache();
-        const byKey = new Map(cache.entries.map(e => [e.key, e]));
-        visibleTurns.forEach(turn => {
-            if (!(turn instanceof Element)) return;
-            const key = cacheKeyFromTurn(turn);
-            const text = (turn.innerText || '').replace(/\s+/g, ' ').trim();
-            const existing = byKey.get(key);
-            if (existing) {
-                existing.anchor = turn;
-                existing.text = text || existing.text;
-            } else {
-                byKey.set(key, { key, anchor: turn, text });
-            }
-        });
-        cache.entries = Array.from(byKey.values());
-    }
-
-    function getPrimaryChatScroller() {
-        const all = Array.from(document.querySelectorAll('div,main,section'));
-        for (const el of all) {
-            const cs = window.getComputedStyle(el);
-            const cls = String(el.className || '');
-            const canScroll = (cs.overflowY === 'auto' || cs.overflowY === 'scroll' || cs.overflowY === 'overlay')
-                && el.scrollHeight > el.clientHeight + 100
-                && el.clientHeight > 300;
-            if (!canScroll) continue;
-            if (cls.includes('group/scroll-root') || cls.includes('not-print:overflow-y-auto')) return el;
-        }
-        return null;
-    }
-
-    async function harvestAllTurnsIfNeeded() {
-        const cache = getConversationCache();
-        if (cache.scanned || cache.scanning) return;
-        const scroller = getPrimaryChatScroller();
-        if (!scroller) return;
-        cache.scanning = true;
-        const originalTop = scroller.scrollTop;
-        try {
-            const step = Math.max(300, Math.floor(scroller.clientHeight * 0.85));
-            scroller.scrollTo({ top: 0, behavior: 'auto' });
-            await new Promise(r => setTimeout(r, 120));
-            for (let guard = 0; guard < 800; guard++) {
-                const visible = getUserTurnsRobust();
-                mergeVisibleTurnsIntoCache(visible);
-                const prev = scroller.scrollTop;
-                const next = Math.min(scroller.scrollHeight - scroller.clientHeight, prev + step);
-                if (next <= prev + 1) break;
-                scroller.scrollTo({ top: next, behavior: 'auto' });
-                await new Promise(r => setTimeout(r, 60));
-            }
-        } catch (err) {
-            console.warn('[GPTNav] harvest failed:', err);
-        } finally {
-            scroller.scrollTo({ top: originalTop, behavior: 'auto' });
-            cache.scanning = false;
-            cache.scanned = true;
-            lastTimelineSignature = '';
-            setTimeout(() => updateTimeline(), 80);
-        }
     }
 
     function getTurnStableId(turn, index) {
@@ -1246,18 +1168,9 @@
     function jumpToTurn(index, turnNode, sourceDot) {
         globalTooltip.classList.remove('visible');
         isAutoScrolling = true;
-        const cache = getConversationCache();
-        const cached = cache.entries[index];
-        const anchor = getTurnAnchor(cached?.anchor || turnNode);
+        const anchor = getTurnAnchor(turnNode);
         if (anchor && typeof anchor.scrollIntoView === 'function') {
             anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        } else {
-            const scroller = getPrimaryChatScroller();
-            if (scroller && cache.entries.length > 1) {
-                const ratio = index / (cache.entries.length - 1);
-                const maxTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-                scroller.scrollTo({ top: Math.round(maxTop * ratio), behavior: 'smooth' });
-            }
         }
         setActiveIndex(index);
     }
@@ -1421,24 +1334,18 @@
 
         const userTurns = getUserTurnsRobust();
         trackedTurns = userTurns;
-        mergeVisibleTurnsIntoCache(userTurns);
-        harvestAllTurnsIfNeeded();
-        const cache = getConversationCache();
-        const renderTurns = cache.entries.length
-            ? cache.entries
-            : trackedTurns.map(turn => ({ key: cacheKeyFromTurn(turn), anchor: turn, text: (turn.innerText || '').replace(/\s+/g, ' ').trim() }));
         const timelineScrollTop = container.scrollTop;
         const timelineScrollHeight = container.scrollHeight;
         const timelineRatio = timelineScrollHeight > 0 ? (timelineScrollTop / timelineScrollHeight) : 0;
-        const signature = renderTurns
-            .map((turn, idx) => `${idx}:${turn.key || ''}:${(turn.text || '').slice(0, 40)}`)
+        const signature = trackedTurns
+            .map((turn, idx) => `${idx}:${turn.getAttribute('data-message-id') || ''}:${(turn.innerText || '').slice(0, 40)}`)
             .join('|');
 
         // 保存黄点标记状态（持久化）
         const highlightedTurnIds = readFavoritesForCurrentConversation();
 
         // 时间线渲染判定
-        if (renderTurns.length === 0) {
+        if (trackedTurns.length === 0) {
             container.style.display = 'none';
             menuBtn.style.display = 'none';
             panel.classList.remove('visible');
@@ -1458,14 +1365,11 @@
         panelList.innerHTML = '';
         currentActiveIndex = -1;
 
-        renderTurns.forEach((entry, index) => {
-            const turn = entry.anchor;
-            if (turn instanceof Element) {
-                turn.setAttribute('data-timeline-index', index);
-                scrollObserver.observe(turn);
-            }
-            const stableId = `${index}|${entry.key || ''}`;
-            let rawText = (entry.text || '').replace(/\s+/g, ' ').trim();
+        trackedTurns.forEach((turn, index) => {
+            turn.setAttribute('data-timeline-index', index);
+            const stableId = getTurnStableId(turn, index);
+            scrollObserver.observe(turn);
+            let rawText = turn.innerText.replace(/\s+/g, ' ').trim();
             let previewText = rawText.length > 120 ? rawText.substring(0, 120) + '...' : rawText;
             if (previewText.length === 0) previewText = '[图片或文件]';
 
