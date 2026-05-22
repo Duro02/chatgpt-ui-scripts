@@ -1148,14 +1148,87 @@
 
     function getTurnAnchor(turnNode) {
         if (!turnNode || !(turnNode instanceof Element)) return turnNode;
-        return turnNode.closest('div.flex.max-w-full.flex-col.gap-4.grow')
-            || turnNode.closest('[data-testid^="conversation-turn-"]')
+        return turnNode.closest('[data-testid^="conversation-turn-"]')
+            || turnNode.closest('div.flex.max-w-full.flex-col.gap-4.grow')
             || turnNode;
+    }
+
+    function getScrollContainer(el) {
+        let node = el?.parentElement;
+        while (node && node !== document.body && node !== document.documentElement) {
+            const style = window.getComputedStyle(node);
+            const overflowY = style.overflowY || style.overflow;
+            if (/(auto|scroll|overlay)/.test(overflowY) && node.scrollHeight > node.clientHeight + 4) {
+                return node;
+            }
+            node = node.parentElement;
+        }
+        return document.scrollingElement || document.documentElement;
+    }
+
+    function getScrollerTop(scroller) {
+        if (scroller === document.scrollingElement || scroller === document.documentElement || scroller === document.body) {
+            return 0;
+        }
+        return scroller.getBoundingClientRect().top;
+    }
+
+    function scrollScrollerTo(scroller, top, behavior) {
+        if (scroller === document.scrollingElement || scroller === document.documentElement || scroller === document.body) {
+            window.scrollTo({ top, behavior });
+        } else {
+            scroller.scrollTo({ top, behavior });
+        }
+    }
+
+    function scrollTopOf(scroller) {
+        if (scroller === document.scrollingElement || scroller === document.documentElement || scroller === document.body) {
+            return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+        }
+        return scroller.scrollTop;
+    }
+
+    function preciseScrollToAnchor(anchor, index) {
+        if (!anchor || !(anchor instanceof Element)) return;
+        const scroller = getScrollContainer(anchor);
+        const topOffset = (scroller === document.scrollingElement || scroller === document.documentElement || scroller === document.body) ? 88 : 16;
+        let attempt = 0;
+
+        const step = (behavior) => {
+            if (!document.contains(anchor)) {
+                isAutoScrolling = false;
+                scheduleActiveSync();
+                return;
+            }
+
+            const rect = anchor.getBoundingClientRect();
+            const delta = rect.top - getScrollerTop(scroller) - topOffset;
+            if (Math.abs(delta) > 3) {
+                scrollScrollerTo(scroller, scrollTopOf(scroller) + delta, behavior);
+            }
+
+            setActiveIndex(index);
+            refreshVisibleTurnPreviews();
+            attempt += 1;
+
+            if (attempt < 9 && Math.abs(delta) > 3) {
+                setTimeout(() => step('auto'), attempt === 1 ? 220 : 90);
+            } else {
+                setTimeout(() => {
+                    isAutoScrolling = false;
+                    scheduleActiveSync();
+                    refreshVisibleTurnPreviews();
+                }, 120);
+            }
+        };
+
+        step('smooth');
     }
 
     function syncActiveFromViewport() {
         activeSyncRaf = null;
         if (isAutoScrolling) return;
+        refreshVisibleTurnPreviews();
         const nextIndex = computeActiveIndexByViewport();
         if (nextIndex >= 0) setActiveIndex(nextIndex);
     }
@@ -1169,10 +1242,8 @@
         globalTooltip.classList.remove('visible');
         isAutoScrolling = true;
         const anchor = getTurnAnchor(turnNode);
-        if (anchor && typeof anchor.scrollIntoView === 'function') {
-            anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
         setActiveIndex(index);
+        preciseScrollToAnchor(anchor, index);
     }
 
     function handleAnyScroll() {
@@ -1338,7 +1409,7 @@
         const timelineScrollHeight = container.scrollHeight;
         const timelineRatio = timelineScrollHeight > 0 ? (timelineScrollTop / timelineScrollHeight) : 0;
         const signature = trackedTurns
-            .map((turn, idx) => `${idx}:${turn.getAttribute('data-message-id') || ''}:${(turn.innerText || '').slice(0, 40)}`)
+            .map((turn, idx) => `${idx}:${turn.getAttribute('data-testid') || ''}:${turn.getAttribute('data-message-id') || ''}`)
             .join('|');
 
         // 保存黄点标记状态（持久化）
@@ -1355,6 +1426,7 @@
         }
 
         if (signature === lastTimelineSignature) {
+            refreshVisibleTurnPreviews();
             scheduleActiveSync();
             return;
         }
@@ -1369,9 +1441,7 @@
             turn.setAttribute('data-timeline-index', index);
             const stableId = getTurnStableId(turn, index);
             scrollObserver.observe(turn);
-            let rawText = turn.innerText.replace(/\s+/g, ' ').trim();
-            let previewText = rawText.length > 120 ? rawText.substring(0, 120) + '...' : rawText;
-            if (previewText.length === 0) previewText = '[图片或文件]';
+            const previewText = getTurnPreviewText(turn, index);
 
             const dot = document.createElement('div');
             dot.className = 'timeline-dot';
@@ -1381,12 +1451,15 @@
             const listItem = document.createElement('div');
             listItem.className = 'panel-list-item';
             listItem.setAttribute('data-index', index);
-            listItem.innerHTML = `<div class="panel-list-status"></div><div class="panel-list-text"><span class="panel-list-index">${index + 1}.</span>${previewText}</div>`;
+            listItem.innerHTML = `<div class="panel-list-status"></div><div class="panel-list-text"><span class="panel-list-index">${index + 1}.</span>${escapeHTML(previewText)}</div>`;
             if (highlightedTurnIds.has(stableId)) listItem.classList.add('highlighted');
 
             dot.addEventListener('mouseenter', () => {
                 const rect = dot.getBoundingClientRect();
-                globalTooltip.innerText = previewText;
+                const currentTurn = trackedTurns[index] || turn;
+                const freshPreview = getTurnPreviewText(currentTurn, index);
+                updateTimelineItemPreview(index, freshPreview);
+                globalTooltip.innerText = freshPreview;
                 globalTooltip.style.top = `${rect.top + rect.height / 2}px`;
                 globalTooltip.style.right = `${window.innerWidth - rect.left + 14}px`;
                 globalTooltip.classList.add('visible');
@@ -1412,8 +1485,8 @@
             dot.addEventListener('mouseup', () => clearTimeout(pressTimer));
             dot.addEventListener('mouseleave', () => clearTimeout(pressTimer));
 
-            dot.addEventListener('click', (e) => { if (!isLongPress) jumpToTurn(index, turn, dot); });
-            listItem.addEventListener('click', () => jumpToTurn(index, turn, dot));
+            dot.addEventListener('click', (e) => { if (!isLongPress) jumpToTurn(index, trackedTurns[index] || turn, dot); });
+            listItem.addEventListener('click', () => jumpToTurn(index, trackedTurns[index] || turn, dot));
 
             container.appendChild(dot);
             panelList.appendChild(listItem);
@@ -1428,40 +1501,66 @@
     }
 
     function getUserTurnsRobust() {
-        const candidates = [];
-        // Prefer explicit user message nodes.
-        candidates.push(...Array.from(document.querySelectorAll('[data-testid="user-message"]')));
-        // Fallback for old/new variants.
-        candidates.push(...Array.from(document.querySelectorAll('[data-message-author-role="user"]')));
-        candidates.push(...Array.from(document.querySelectorAll('[data-testid*="user-message"]')));
-        // Virtualized fallback: ChatGPT turn wrappers often persist with sr-only role labels.
-        const turnWrappers = Array.from(document.querySelectorAll('[data-testid^="conversation-turn-"]'));
-        turnWrappers.forEach(wrapper => {
-            const sr = wrapper.querySelector('h2.sr-only, h3.sr-only, h4.sr-only, h5.sr-only, .sr-only');
-            const txt = (sr?.textContent || '').toLowerCase();
-            if (txt.includes('you said')) candidates.push(wrapper);
+        const wrappers = Array.from(document.querySelectorAll('[data-testid^="conversation-turn-"]'));
+        const users = [];
+
+        wrappers.forEach((wrapper, idx) => {
+            if (!(wrapper instanceof Element)) return;
+            const explicitRoleNode = wrapper.querySelector('[data-message-author-role]');
+            const explicitRole = (explicitRoleNode?.getAttribute('data-message-author-role') || '').toLowerCase();
+
+            let isUser = false;
+            if (explicitRole === 'user') {
+                isUser = true;
+            } else if (explicitRole === 'assistant') {
+                isUser = false;
+            } else {
+                const tid = wrapper.getAttribute('data-testid') || '';
+                const m = tid.match(/conversation-turn-(\d+)/);
+                const turnNumber = m ? parseInt(m[1], 10) : (idx + 1);
+                isUser = Number.isInteger(turnNumber) && (turnNumber % 2 === 1);
+            }
+
+            if (isUser) users.push(wrapper);
         });
 
-        const seen = new Set();
-        const out = [];
-        for (const node of candidates) {
-            if (!(node instanceof Element)) continue;
-            // Use the closest per-turn wrapper first; avoid broad shared containers.
-            const anchor = node.closest('[data-testid^="conversation-turn-"]')
-                || node.closest('[data-message-author-role="user"]')
-                || node.closest('[data-user-message-bubble]')
-                || node;
-            if (!(anchor instanceof Element)) continue;
-            const key = anchor.getAttribute('data-message-id')
-                || anchor.getAttribute('data-testid')
-                || `${(node.textContent || '').slice(0, 120)}|${Math.round(anchor.getBoundingClientRect().top)}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            out.push(anchor);
-        }
+        return users;
+    }
 
-        out.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
-        return out;
+    function escapeHTML(text) {
+        return String(text || '').replace(/[&<>"']/g, ch => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[ch]));
+    }
+
+    function updateTimelineItemPreview(index, text) {
+        const item = panelList.querySelector(`.panel-list-item[data-index="${index}"] .panel-list-text`);
+        if (!item || !text || /^User turn \d+$/.test(text)) return;
+        const current = item.textContent || '';
+        if (current.includes(text.slice(0, 32))) return;
+        item.innerHTML = `<span class="panel-list-index">${index + 1}.</span>${escapeHTML(text)}`;
+    }
+
+    function refreshVisibleTurnPreviews() {
+        trackedTurns.forEach((turn, index) => {
+            if (!(turn instanceof Element) || !document.contains(turn)) return;
+            const rect = turn.getBoundingClientRect();
+            const nearViewport = rect.bottom >= -300 && rect.top <= window.innerHeight + 300;
+            if (!nearViewport) return;
+            updateTimelineItemPreview(index, getTurnPreviewText(turn, index));
+        });
+    }
+
+    function getTurnPreviewText(turnWrapper, index) {
+        if (!(turnWrapper instanceof Element)) return `User turn ${index + 1}`;
+        const userNode = turnWrapper.querySelector('[data-message-author-role="user"]');
+        const text = ((userNode?.innerText || userNode?.textContent || '').replace(/\s+/g, ' ').trim());
+        if (text) return text.length > 120 ? `${text.slice(0, 120)}...` : text;
+        return `User turn ${index + 1}`;
     }
 
     // ==========================================
