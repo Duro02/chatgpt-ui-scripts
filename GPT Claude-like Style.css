@@ -1,0 +1,568 @@
+/* ==UserStyle==
+@name           ChatGPT Claude-like Dark Theme
+@namespace      codex.local
+@version        0.3.0
+@description    Low-intrusion Stylus theme that makes ChatGPT dark mode feel closer to Claude's calm, narrow, warm dark layout.
+@author         Codex
+@match          https://chatgpt.com/*
+@match          https://chat.openai.com/*
+==/UserStyle== */
+
+@-moz-document domain("chatgpt.com"), domain("chat.openai.com") {
+:root {
+    --claude-page: #1F1F1E;
+    --claude-sidebar: #181817;
+    --claude-panel: #171716;
+    --claude-sidebar-soft: #20201f;
+    --claude-surface: #252522;
+    --claude-code-surface: #262624;
+    --claude-surface-raised: #292925;
+    --claude-user: #000000;
+    --claude-border: rgba(255, 255, 255, 0.18);
+    --claude-border-soft: rgba(255, 255, 255, 0.07);
+    --claude-divider: rgba(214, 209, 197, 0.28);
+    --claude-text: #f0eee6;
+    --claude-text-soft: #d6d1c5;
+    --claude-muted: #9c978d;
+    --claude-code: #e8d6c1;
+    --claude-inline-code-bg: rgba(255, 255, 255, 0.075);
+    --claude-accent: #d7b98f;
+    --claude-width: 760px;
+    --claude-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", "Microsoft YaHei", "PingFang SC", sans-serif;
+    --claude-prose-font: "Iowan Old Style", Charter, Georgia, "Times New Roman", "Noto Serif CJK SC", "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, serif;
+    --claude-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, "Noto Serif CJK SC", "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, monospace;
+  }
+
+  html.dark,
+  html.dark body,
+  body {
+    background: var(--claude-page) !important;
+    color: var(--claude-text) !important;
+    font-family: var(--claude-font) !important;
+    letter-spacing: 0 !important;
+  }
+
+  /* App shell: keep layout intact so other ChatGPT extensions can still attach to the original nodes. */
+  html.dark main,
+  html.dark [role="main"],
+  html.dark .composer-parent,
+  html.dark .isolate,
+  html.dark #page-header,
+  html.dark .bg-token-main-surface-primary,
+  html.dark .bg-token-sidebar-surface-primary {
+    background-color: var(--claude-page) !important;
+  }
+
+  html.dark #page-header {
+    color: var(--claude-text-soft) !important;
+    border-bottom: 1px solid var(--claude-border-soft) !important;
+    box-shadow: none !important;
+    font-family: var(--claude-prose-font) !important;
+  }
+
+  html.dark #page-header :where(a, button, span, div):not(pre):not(code) {
+    font-family: var(--claude-prose-font) !important;
+  }
+
+  html.dark #page-header a:hover,
+  html.dark #page-header button:hover {
+    background-color: rgba(255, 255, 255, 0.055) !important;
+  }
+
+  html.dark main :where(h1, h2, h3, h4, p, a, button, span, div, li):not(pre):not(code) {
+    font-family: var(--claude-prose-font) !important;
+  }
+
+  html.dark main :where([role="tab"], button[aria-selected], button[data-state], a[aria-current]),
+  html.dark main :where([role="tab"], button[aria-selected], button[data-state], a[aria-current]) :where(span, div) {
+    font-family: var(--claude-prose-font) !important;
+  }
+
+  html.dark main :where([role="tab"], button[aria-selected], button[data-state], a[aria-current]):hover {
+    background: #000000 !important;
+    background-color: #000000 !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    color: var(--claude-text) !important;
+  }
+
+  html.dark main :where([role="tab"][aria-selected="true"], button[aria-selected="true"], button[data-state="active"], a[aria-current="page"]) {
+    background: #000000 !important;
+    background-color: #000000 !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    color: var(--claude-text) !important;
+  }
+
+  html.dark nav,
+  html.dark aside,
+  html.dark [class*="sidebar"],
+  html.dark .bg-token-sidebar-surface-primary {
+    background-color: var(--claude-sidebar) !important;
+    border-color: var(--claude-border-soft) !important;
+  }
+
+  html.dark nav a,
+  html.dark aside a,
+  html.dark nav button,
+  html.dark aside button {
+    color: var(--claude-text-soft) !important;
+    font-family: var(--claude-prose-font) !important;
+    border-radius: 7px !important;
+  }
+
+  html.dark nav,
+  html.dark aside,
+  html.dark nav :where(a, button, span, div, p):not(pre):not(code),
+  html.dark aside :where(a, button, span, div, p):not(pre):not(code) {
+    font-family: var(--claude-prose-font) !important;
+  }
+
+  html.dark nav a:hover,
+  html.dark aside a:hover,
+  html.dark nav button:hover,
+  html.dark aside button:hover {
+    background-color: var(--claude-sidebar-soft) !important;
+    color: var(--claude-text) !important;
+  }
+
+  /* Conversation width and base prose rhythm. */
+  html.dark main article,
+  html.dark [data-testid^="conversation-turn"],
+  html.dark [data-message-author-role] {
+    color: var(--claude-text) !important;
+  }
+
+  html.dark .markdown,
+  html.dark .prose,
+  html.dark [data-message-author-role="assistant"] {
+    color: var(--claude-text) !important;
+    font-family: var(--claude-prose-font) !important;
+    font-size: 15px !important;
+    font-weight: 400 !important;
+    line-height: 1.68 !important;
+  }
+
+  html.dark [data-testid^="conversation-turn"] :where(p, span, div, button, summary, details):not(pre):not(code) {
+    font-family: var(--claude-prose-font) !important;
+  }
+
+  html.dark .markdown p,
+  html.dark .prose p {
+    margin-block: 0.7em !important;
+  }
+
+  html.dark .markdown > :first-child,
+  html.dark .prose > :first-child {
+    margin-top: 0 !important;
+  }
+
+  html.dark .markdown > :last-child,
+  html.dark .prose > :last-child {
+    margin-bottom: 0 !important;
+  }
+
+  /* User bubbles: compact, dark, and visually quieter. */
+  html.dark [data-message-author-role="user"] {
+    color: var(--claude-text) !important;
+  }
+
+  html.dark [data-message-author-role="user"] [class*="bg-token-message-surface"],
+  html.dark [data-message-author-role="user"] [class*="bg-token-main-surface-secondary"],
+  html.dark [data-message-author-role="user"] [class*="bg-token-bg"],
+  html.dark [data-message-author-role="user"] [class*="bg-gray"],
+  html.dark [data-message-author-role="user"] [class*="dark:bg"],
+  html.dark [data-message-author-role="user"] .user-message-bubble-color {
+    background-color: var(--claude-user) !important;
+    background: var(--claude-user) !important;
+    color: var(--claude-text) !important;
+    border: 1px solid rgba(255, 255, 255, 0.035) !important;
+    border-radius: 13px !important;
+    box-shadow: none !important;
+    font-family: var(--claude-font) !important;
+    font-size: 16px !important;
+    font-weight: 450 !important;
+    line-height: 1.52 !important;
+  }
+
+  html.dark [data-message-author-role="user"] .whitespace-pre-wrap {
+    background-color: transparent !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    color: var(--claude-text) !important;
+    font-family: var(--claude-font) !important;
+    font-size: 16px !important;
+    font-weight: 450 !important;
+    line-height: 1.52 !important;
+  }
+
+  html.dark [data-message-author-role="user"] .whitespace-pre-wrap > * {
+    background-color: transparent !important;
+    background: transparent !important;
+  }
+
+  html.dark [data-message-author-role="user"] :has(> p.line-clamp-3),
+  html.dark [data-message-author-role="user"] :has(p.line-clamp-3) {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  html.dark [data-message-author-role="user"] :has(> p.line-clamp-3):hover,
+  html.dark [data-message-author-role="user"] :has(p.line-clamp-3):hover {
+    background: transparent !important;
+  }
+
+  /* Headings and emphasis: readable without ChatGPT's heavier visual weight. */
+  html.dark .markdown h1,
+  html.dark .markdown h2,
+  html.dark .markdown h3,
+  html.dark .markdown h4,
+  html.dark .prose h1,
+  html.dark .prose h2,
+  html.dark .prose h3,
+  html.dark .prose h4 {
+    color: #f6f1e8 !important;
+    font-family: var(--claude-prose-font) !important;
+    font-weight: 650 !important;
+    letter-spacing: 0 !important;
+    line-height: 1.28 !important;
+    margin: 1.2em 0 0.5em !important;
+  }
+
+  html.dark .markdown h1,
+  html.dark .prose h1 {
+    font-size: 1.45em !important;
+  }
+
+  html.dark .markdown h2,
+  html.dark .prose h2 {
+    font-size: 1.28em !important;
+  }
+
+  html.dark .markdown h3,
+  html.dark .prose h3 {
+    font-size: 1.12em !important;
+  }
+
+  html.dark .markdown strong,
+  html.dark .prose strong {
+    color: #fff8ed !important;
+    font-weight: 650 !important;
+  }
+
+  html.dark .markdown a,
+  html.dark .prose a {
+    color: #e4c99d !important;
+    text-decoration-color: rgba(228, 201, 157, 0.45) !important;
+    text-underline-offset: 2px !important;
+  }
+
+  html.dark .markdown hr,
+  html.dark .prose hr {
+    border: 0 !important;
+    border-top: 0.5px solid var(--claude-divider) !important;
+    margin: 1.45em 0 !important;
+  }
+
+  html.dark .markdown p.claude-like-separator,
+  html.dark .prose p.claude-like-separator {
+    color: transparent !important;
+    display: block !important;
+    font-size: 0 !important;
+    height: 1px !important;
+    line-height: 0 !important;
+    margin: 1.55em 0 !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+    position: relative !important;
+    user-select: none !important;
+    width: 100% !important;
+  }
+
+  html.dark .markdown p.claude-like-separator::before,
+  html.dark .prose p.claude-like-separator::before {
+    border-top: 0.5px solid var(--claude-divider) !important;
+    content: "" !important;
+    display: block !important;
+    width: 100% !important;
+  }
+
+  /* Lists, quotes, and tables. */
+  html.dark .markdown ul,
+  html.dark .markdown ol,
+  html.dark .prose ul,
+  html.dark .prose ol {
+    padding-inline-start: 1.35em !important;
+    margin-block: 0.7em !important;
+  }
+
+  html.dark .markdown li,
+  html.dark .prose li {
+    margin-block: 0.25em !important;
+    padding-inline-start: 0.15em !important;
+  }
+
+  html.dark .markdown blockquote,
+  html.dark .prose blockquote {
+    color: var(--claude-text-soft) !important;
+    border-left: 2px solid rgba(215, 185, 143, 0.45) !important;
+    background: rgba(255, 255, 255, 0.035) !important;
+    border-radius: 0 7px 7px 0 !important;
+    margin: 1em 0 !important;
+    padding: 0.6em 0.9em !important;
+  }
+
+  html.dark .markdown table,
+  html.dark .prose table {
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+    border: 1px solid var(--claude-border) !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+    font-size: 0.94em !important;
+  }
+
+  html.dark .markdown th,
+  html.dark .markdown td,
+  html.dark .prose th,
+  html.dark .prose td {
+    border-color: var(--claude-border-soft) !important;
+    color: var(--claude-text-soft) !important;
+    padding: 0.55em 0.75em !important;
+  }
+
+  html.dark .markdown th,
+  html.dark .prose th {
+    background: rgba(255, 255, 255, 0.045) !important;
+    color: var(--claude-text) !important;
+    font-weight: 600 !important;
+  }
+
+  /* Inline code and code blocks. */
+  html.dark .markdown :not(pre) > code,
+  html.dark .prose :not(pre) > code {
+    background: var(--claude-inline-code-bg) !important;
+    color: #ffcab8 !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    border-radius: 5px !important;
+    font-family: var(--claude-mono) !important;
+    font-size: 0.88em !important;
+    font-weight: 500 !important;
+    padding: 0.12em 0.35em !important;
+  }
+
+  html.dark .markdown div[class*="bg-token-main-surface-secondary"]:has(pre),
+  html.dark .prose div[class*="bg-token-main-surface-secondary"]:has(pre),
+  html.dark div[class*="bg-token-main-surface-secondary"]:has(pre) {
+    background: var(--claude-code-surface) !important;
+    color: var(--claude-code) !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    border-radius: 6px !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+  }
+
+  html.dark .markdown div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
+  html.dark .prose div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
+  html.dark div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child {
+    background: var(--claude-code-surface) !important;
+    color: #a9a397 !important;
+    border-bottom: 0 !important;
+  }
+
+  html.dark .markdown pre,
+  html.dark .prose pre,
+  html.dark [class*="bg-token-main-surface-secondary"] pre {
+    background: transparent !important;
+    color: var(--claude-code) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    line-height: 1.55 !important;
+    padding-top: 0.35rem !important;
+  }
+
+  html.dark .markdown pre code,
+  html.dark .prose pre code {
+    color: inherit !important;
+    background: transparent !important;
+    border: 0 !important;
+    font-family: var(--claude-mono) !important;
+    font-size: 13px !important;
+    line-height: 1.55 !important;
+  }
+
+  html.dark .markdown .bg-token-bg-elevated-secondary,
+  html.dark .prose .bg-token-bg-elevated-secondary {
+    background-color: var(--claude-code-surface) !important;
+  }
+
+
+  html.dark .markdown div[class*="overflow-y-auto"],
+  html.dark .prose div[class*="overflow-y-auto"],
+  html.dark .markdown div[class*="contain-inline-size"],
+  html.dark .prose div[class*="contain-inline-size"] {
+    scrollbar-color: rgba(255, 255, 255, 0.24) transparent !important;
+  }
+
+  html.dark .markdown button,
+  html.dark .prose button {
+    color: var(--claude-text-soft) !important;
+  }
+
+  html.dark .markdown button:hover,
+  html.dark .prose button:hover {
+    background-color: rgba(255, 255, 255, 0.055) !important;
+    color: var(--claude-text) !important;
+  }
+
+  /* Assistant action buttons: keep them usable, but visually quiet until hover like Claude. */
+  html.dark [data-testid^="conversation-turn"] button[aria-label] {
+    background-color: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    color: rgba(240, 238, 230, 0.46) !important;
+  }
+
+  html.dark [data-testid^="conversation-turn"] button[aria-label]:hover {
+    background-color: rgba(255, 255, 255, 0.055) !important;
+    border-color: rgba(255, 255, 255, 0.045) !important;
+    color: var(--claude-text) !important;
+  }
+
+  /* Thinking/activity side panel and sources. */
+  html.dark [role="complementary"],
+  html.dark [class*="right-0"][class*="border-l"],
+  html.dark [class*="border-l"][class*="overflow"] {
+    background-color: var(--claude-panel) !important;
+    color: var(--claude-text-soft) !important;
+    border-color: var(--claude-border-soft) !important;
+    font-family: var(--claude-prose-font) !important;
+  }
+
+  html.dark [role="complementary"] *,
+  html.dark [class*="right-0"][class*="border-l"] *,
+  html.dark [class*="border-l"][class*="overflow"] * {
+    font-family: var(--claude-prose-font) !important;
+  }
+
+  html.dark [role="complementary"] :where(p, span, div, button, h1, h2, h3, h4, li):not(pre):not(code),
+  html.dark [class*="right-0"][class*="border-l"] :where(p, span, div, button, h1, h2, h3, h4, li):not(pre):not(code),
+  html.dark [class*="border-l"][class*="overflow"] :where(p, span, div, button, h1, h2, h3, h4, li):not(pre):not(code) {
+    font-family: var(--claude-prose-font) !important;
+  }
+
+  html.dark [role="complementary"] [class*="bg-black"],
+  html.dark [class*="right-0"][class*="border-l"] [class*="bg-black"],
+  html.dark [class*="border-l"][class*="overflow"] [class*="bg-black"] {
+    background-color: var(--claude-panel) !important;
+  }
+
+  html.dark [role="complementary"] [class*="bg-token"],
+  html.dark [class*="right-0"][class*="border-l"] [class*="bg-token"],
+  html.dark [class*="border-l"][class*="overflow"] [class*="bg-token"] {
+    background-color: var(--claude-surface) !important;
+  }
+
+  /* Composer: Claude-like dark rounded input without changing behavior. */
+  html.dark .composer-parent,
+  html.dark .composer-parent::before,
+  html.dark .composer-parent::after,
+  html.dark .composer-parent > *,
+  html.dark .composer-parent > *::before,
+  html.dark .composer-parent > *::after,
+  html.dark .composer-parent div:has(form[data-type="unified-composer"]),
+  html.dark .composer-parent div:has(form[data-type="unified-composer"])::before,
+  html.dark .composer-parent div:has(form[data-type="unified-composer"])::after,
+  html.dark .composer-parent [class*="bg-gradient"],
+  html.dark .composer-parent [class*="from-token"],
+  html.dark .composer-parent [class*="to-token"] {
+    background: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+  }
+
+  html.dark form[data-type="unified-composer"] {
+    background: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+  }
+
+  html.dark form,
+  html.dark textarea,
+  html.dark [contenteditable="true"],
+  html.dark [data-testid="composer-speech-button"],
+  html.dark [data-testid="send-button"] {
+    font-family: var(--claude-prose-font) !important;
+  }
+
+  html.dark .composer-parent form:has(textarea),
+  html.dark .composer-parent form:has([contenteditable="true"]) {
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    min-height: 58px !important;
+  }
+
+  html.dark [data-composer-surface="true"] {
+    background: var(--claude-surface-raised) !important;
+    background-color: var(--claude-surface-raised) !important;
+    border: 1px solid var(--claude-border-soft) !important;
+    border-radius: 24px !important;
+    box-shadow: none !important;
+  }
+
+  html.dark .composer-parent form:has(textarea) [class*="bg-token"],
+  html.dark .composer-parent form:has([contenteditable="true"]) [class*="bg-token"],
+  html.dark .composer-parent form:has(textarea) [class*="bg-gray"],
+  html.dark .composer-parent form:has([contenteditable="true"]) [class*="bg-gray"] {
+    background: var(--claude-surface-raised) !important;
+    background-color: var(--claude-surface-raised) !important;
+    box-shadow: none !important;
+  }
+
+  html.dark textarea,
+  html.dark [contenteditable="true"] {
+    background-color: var(--claude-surface-raised) !important;
+    color: var(--claude-text) !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    font-size: 16px !important;
+    line-height: 1.45 !important;
+  }
+
+  html.dark textarea::placeholder,
+  html.dark [contenteditable="true"][data-placeholder]::before {
+    color: var(--claude-muted) !important;
+  }
+
+  html.dark form button,
+  html.dark .composer-parent button {
+    color: var(--claude-text-soft) !important;
+    border-radius: 12px !important;
+  }
+
+  html.dark form button:hover,
+  html.dark .composer-parent button:hover {
+    background-color: rgba(255, 255, 255, 0.055) !important;
+    color: var(--claude-text) !important;
+  }
+
+  /* Small UI chrome. */
+  html.dark [class*="border-token"],
+  html.dark [class*="border-token-border"] {
+    border-color: var(--claude-border-soft) !important;
+  }
+
+  html.dark [class*="text-token-text-secondary"],
+  html.dark [class*="text-token-text-tertiary"] {
+    color: var(--claude-muted) !important;
+  }
+
+  html.dark ::selection {
+    background: rgba(215, 185, 143, 0.28) !important;
+    color: #fff8ed !important;
+  }
+}
