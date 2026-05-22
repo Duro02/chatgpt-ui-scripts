@@ -16,8 +16,11 @@
     const ROOT_ID = 'cgpt-source-preview-root';
     const STYLE_ID = 'cgpt-source-preview-style';
     const MD_FILE_RE = /\.md(?:$|[?#])/i;
+    const ESTUARY_CONTENT_RE = /\/backend-api\/estuary\/content\b/i;
+    const SOURCE_CLICK_MAX_AGE_MS = 2000;
 
     let activeController = null;
+    let lastMarkdownSourceClick = null;
 
     function injectStyle() {
         if (document.getElementById(STYLE_ID)) return;
@@ -271,6 +274,59 @@
         return MD_FILE_RE.test(aria);
     }
 
+    function getFirstMarkdownLabel(text) {
+        const normalized = String(text || '').replace(/\s+/g, ' ').trim();
+        const match = normalized.match(/[^\/\\\s"'<>|:;]+\.md\b/i);
+        return match ? match[0] : '';
+    }
+
+    function getNearbyMarkdownLabel(event) {
+        if (typeof document.elementsFromPoint !== 'function') return '';
+        const elements = document.elementsFromPoint(event.clientX, event.clientY);
+        for (const element of elements) {
+            if (!(element instanceof Element)) continue;
+            let node = element;
+            for (let depth = 0; node && depth < 6; depth += 1, node = node.parentElement) {
+                const label = getFirstMarkdownLabel(`${node.textContent || ''} ${node.getAttribute('aria-label') || ''} ${node.getAttribute('title') || ''}`);
+                if (label) return label;
+            }
+        }
+
+        const candidates = Array.from(document.querySelectorAll('[aria-label], [title], button, a, div, span'))
+            .map(element => {
+                const rect = element.getBoundingClientRect();
+                return {
+                    element,
+                    rect,
+                    label: getFirstMarkdownLabel(`${element.textContent || ''} ${element.getAttribute('aria-label') || ''} ${element.getAttribute('title') || ''}`)
+                };
+            })
+            .filter(item => item.label && item.rect.width > 0 && item.rect.height > 0)
+            .filter(item => Math.abs((item.rect.top + item.rect.bottom) / 2 - event.clientY) < 48)
+            .sort((a, b) => Math.abs((a.rect.top + a.rect.bottom) / 2 - event.clientY) - Math.abs((b.rect.top + b.rect.bottom) / 2 - event.clientY));
+        return candidates[0]?.label || '';
+    }
+
+    function rememberMarkdownSourceClick(event) {
+        if (!(event.target instanceof Element)) return;
+        const info = findMarkdownClickTarget(event);
+        const url = info ? getFileUrl(info) : '';
+        const label = info ? getFileName(info, url) : getNearbyMarkdownLabel(event);
+        if (!label || !MD_FILE_RE.test(label)) return;
+        lastMarkdownSourceClick = {
+            at: Date.now(),
+            label,
+            info
+        };
+    }
+
+    function consumeRecentMarkdownSourceClick() {
+        const recent = lastMarkdownSourceClick;
+        if (!recent || Date.now() - recent.at > SOURCE_CLICK_MAX_AGE_MS) return null;
+        lastMarkdownSourceClick = null;
+        return recent;
+    }
+
     function findMarkdownClickTarget(event) {
         const path = event.composedPath ? event.composedPath() : [];
         for (const node of path) {
@@ -310,9 +366,15 @@
         }
     }
 
-    async function previewMarkdown(info) {
-        const url = getFileUrl(info);
-        const title = getFileName(info, url);
+    function isEstuaryContentUrl(url) {
+        try {
+            return ESTUARY_CONTENT_RE.test(new URL(url, location.href).pathname);
+        } catch {
+            return ESTUARY_CONTENT_RE.test(String(url || ''));
+        }
+    }
+
+    async function previewMarkdownUrl(url, title) {
         if (!url) {
             showError(title, 'No file URL was found for this Markdown source item.');
             return;
@@ -337,8 +399,15 @@
         }
     }
 
+    async function previewMarkdown(info) {
+        const url = getFileUrl(info);
+        const title = getFileName(info, url);
+        await previewMarkdownUrl(url, title);
+    }
+
     document.addEventListener('click', (event) => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        rememberMarkdownSourceClick(event);
         const info = findMarkdownClickTarget(event);
         if (!info) return;
         event.preventDefault();
@@ -346,4 +415,23 @@
         event.stopImmediatePropagation();
         previewMarkdown(info);
     }, true);
+
+    ['pointerdown', 'mousedown'].forEach(type => {
+        document.addEventListener(type, (event) => {
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            rememberMarkdownSourceClick(event);
+        }, true);
+    });
+
+    const originalOpen = window.open;
+    window.open = function patchedWindowOpen(url, target, features) {
+        if (isEstuaryContentUrl(url)) {
+            const recent = consumeRecentMarkdownSourceClick();
+            if (recent) {
+                previewMarkdownUrl(new URL(url, location.href).href, recent.label || 'source.md');
+                return null;
+            }
+        }
+        return originalOpen.apply(this, arguments);
+    };
 })();
