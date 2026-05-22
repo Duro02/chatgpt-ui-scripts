@@ -1820,6 +1820,17 @@
         });
         return out;
     }
+
+    async function bkGetMessagesForBackup(convo, options = {}) {
+        const totalBefore = bkGetTotalMessageCountFromWrappers();
+        if (totalBefore) bkLog(`Preparing DOM backup (${totalBefore} wrappers)...`);
+        const collected = await bkCollectMessagesByScrolling(options);
+        const messages = collected.messages;
+        const total = collected.total || bkGetTotalMessageCountFromWrappers() || messages.length;
+        if (messages.length < total) bkLog(`Warning: collected ${messages.length}/${total} messages while scrolling.`);
+        return { messages, total, source: 'dom', startIndex: collected.startIndex || 0 };
+    }
+
     function bkExtractMessagesFromCurrentPage() {
         const wrappers = bkGetConversationTurnWrappers();
         const msgs = [];
@@ -1828,11 +1839,7 @@
         wrappers.forEach((wrapper, idx) => {
             const role = bkInferTurnRole(wrapper, idx);
             if (!role) return;
-            let txt = bkExtractTurnText(wrapper, role);
-            if (!txt && role === 'user') {
-                const userIndex = bkUserIndexForWrapper(wrapper, wrappers);
-                if (userIndex >= 0) txt = getCachedTurnPreview(wrapper, userIndex);
-            }
+            const txt = bkExtractTurnText(wrapper, role);
             if (!txt) return;
             const key = `${role}|${txt.slice(0, 220)}`;
             if (seen.has(key)) return;
@@ -1863,8 +1870,39 @@
 
     function bkExtractTurnText(wrapper, role) {
         const roleNode = wrapper.querySelector(`[data-message-author-role="${role}"]`);
+        if (role === 'assistant') {
+            const wrapperText = bkCleanAssistantWrapperText(wrapper.innerText || wrapper.textContent || '');
+            if (wrapperText) return wrapperText;
+        }
         const source = roleNode || wrapper;
-        return (source.innerText || source.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+        return bkCleanExtractedText(source.innerText || source.textContent || '');
+    }
+
+    function bkCleanExtractedText(text) {
+        return String(text || '')
+            .replace(/\r/g, '')
+            .replace(/^\s*(已思考|思考|Thought|Thinking)\s*\d+\s*s?\s*[>›]?\s*/im, '')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+    }
+
+    function bkCleanAssistantWrapperText(text) {
+        const lines = String(text || '').replace(/\r/g, '').split('\n');
+        const cleaned = [];
+
+        lines.forEach(line => {
+            const t = line.trim();
+            if (!t) {
+                if (cleaned.length && cleaned[cleaned.length - 1] !== '') cleaned.push('');
+                return;
+            }
+            if (/^(已思考|思考|Thought|Thinking)\s*\d+\s*s?\s*[>›]?$/.test(t)) return;
+            if (/^(复制|分享|重新生成|更多|来源|Source|Sources|Copy|Share|Regenerate|More)$/.test(t)) return;
+            if (/^OpenAI Help Center(?:\s*\+\d+)?$/.test(t)) return;
+            cleaned.push(line);
+        });
+
+        return cleaned.join('\n').replace(/\n{3,}/g, '\n\n').trim();
     }
 
     function bkUserIndexForWrapper(wrapper, wrappers) {
@@ -1875,6 +1913,127 @@
         }
         return -1;
     }
+
+    async function bkWaitForTurnText(index, role, timeoutMs = 4500) {
+        const started = Date.now();
+        while (Date.now() - started < timeoutMs) {
+            const wrappers = bkGetConversationTurnWrappers();
+            const wrapper = wrappers[index];
+            if (wrapper) {
+                const text = bkExtractTurnText(wrapper, role);
+                if (text) return text;
+            }
+            await bkSleep(160);
+        }
+        return '';
+    }
+
+    async function bkScrollTurnWrapperIntoView(index, timeoutMs = 3200) {
+        const started = Date.now();
+        let first = true;
+
+        while (Date.now() - started < timeoutMs) {
+            const wrapper = bkGetConversationTurnWrappers()[index];
+            if (!(wrapper instanceof Element)) {
+                await bkSleep(180);
+                continue;
+            }
+
+            const scroller = getScrollContainer(wrapper);
+            const topOffset = (scroller === document.scrollingElement || scroller === document.documentElement || scroller === document.body) ? 96 : 18;
+            const rect = wrapper.getBoundingClientRect();
+            const delta = rect.top - getScrollerTop(scroller) - topOffset;
+            if (Math.abs(delta) > 4) {
+                scrollScrollerTo(scroller, scrollTopOf(scroller) + delta, first ? 'smooth' : 'auto');
+            }
+
+            await bkSleep(first ? 420 : 220);
+            first = false;
+
+            const fresh = bkGetConversationTurnWrappers()[index];
+            if (!(fresh instanceof Element)) continue;
+            const freshRect = fresh.getBoundingClientRect();
+            const inViewport = freshRect.bottom >= -20 && freshRect.top <= window.innerHeight + 20;
+            const settled = Math.abs(freshRect.top - getScrollerTop(getScrollContainer(fresh)) - topOffset) <= 12;
+            if (inViewport && settled) return fresh;
+        }
+
+        return bkGetConversationTurnWrappers()[index] || null;
+    }
+
+    async function bkHydrateVisibleMessages(options = {}) {
+        const timeoutPerTurn = options.timeoutPerTurn || 8000;
+        const wrappers = bkGetConversationTurnWrappers();
+        const total = wrappers.length;
+        let hydrated = 0;
+
+        for (let i = 0; i < total; i++) {
+            const wrapper = bkGetConversationTurnWrappers()[i];
+            if (!(wrapper instanceof Element)) continue;
+            const role = bkInferTurnRole(wrapper, i);
+            if (!role) continue;
+            const existing = bkExtractTurnText(wrapper, role);
+            if (existing) continue;
+
+            bkLog(`Loading message ${i + 1}/${total} (${role})...`);
+            isAutoScrolling = true;
+            await bkScrollTurnWrapperIntoView(i);
+            const text = await bkWaitForTurnText(i, role, timeoutPerTurn);
+            if (text) hydrated += 1;
+            else bkLog(`Still missing message ${i + 1}/${total} (${role}).`);
+            await bkSleep(260);
+        }
+
+        isAutoScrolling = false;
+        scheduleActiveSync();
+        refreshVisibleTurnPreviews();
+        return { total, hydrated };
+    }
+
+    async function bkCollectMessagesByScrolling(options = {}) {
+        const timeoutPerTurn = options.timeoutPerTurn || 8000;
+        const wrappers = bkGetConversationTurnWrappers();
+        const total = wrappers.length;
+        const startIndex = bkClamp(Number(options.startIndex) || 0, 0, total);
+        const collected = new Array(total);
+
+        if (startIndex > 0) bkLog(`Skipping already backed up messages 1-${startIndex}.`);
+
+        for (let i = startIndex; i < total; i++) {
+            const wrapper = bkGetConversationTurnWrappers()[i];
+            if (!(wrapper instanceof Element)) continue;
+            const role = bkInferTurnRole(wrapper, i);
+            if (!role) continue;
+
+            let text = bkExtractTurnText(wrapper, role);
+            if (!text) {
+                bkLog(`Loading message ${i + 1}/${total} (${role})...`);
+                isAutoScrolling = true;
+                await bkScrollTurnWrapperIntoView(i);
+                text = await bkWaitForTurnText(i, role, timeoutPerTurn);
+                await bkSleep(220);
+            }
+
+            if (text) {
+                collected[i] = { role, text };
+                if ((i + 1) % 10 === 0 || i === total - 1) {
+                    bkLog(`Collected ${collected.filter(Boolean).length}/${total} messages...`);
+                }
+            } else {
+                bkLog(`Still missing message ${i + 1}/${total} (${role}).`);
+            }
+        }
+
+        isAutoScrolling = false;
+        scheduleActiveSync();
+        refreshVisibleTurnPreviews();
+        return {
+            messages: collected.filter(Boolean),
+            total,
+            startIndex
+        };
+    }
+
     function bkMessagesToMarkdown(messages, startIndex = 1) {
         return messages.map((m, i) => `${m.role === 'user' ? '## User' : '## Assistant'} (${startIndex + i})\n\n${m.text}`).join('\n\n');
     }
@@ -1886,6 +2045,10 @@
         }
         if (start === -1) start = Math.min(record.backedUpMessageCount, messages.length);
         return { start, append: messages.slice(start) };
+    }
+
+    function bkBuildDeltaFromPartial(messages, startIndex) {
+        return { start: startIndex, append: messages };
     }
     function bkIdbOpen() {
         return new Promise((resolve, reject) => {
@@ -1938,17 +2101,19 @@
     }
     async function bkWriteConversationDelta(dirHandle, convo, messages, options = {}) {
         const forceFull = !!options.forceFull;
+        const partialStartIndex = Number.isInteger(options.partialStartIndex) ? options.partialStartIndex : null;
         const record = bkState.manifest.conversations[convo.id] || null;
         const safeTitle = bkSanitizeFilename(convo.title);
         const fileName = `${safeTitle}__${convo.id.slice(0, 12)}.md`;
         const exists = await bkFileExists(dirHandle, fileName);
-        let delta = forceFull || !exists ? { start: 0, append: messages } : bkBuildDelta(messages, record);
+        let delta = partialStartIndex !== null && !forceFull && exists
+            ? bkBuildDeltaFromPartial(messages, partialStartIndex)
+            : (forceFull || !exists ? { start: 0, append: messages } : bkBuildDelta(messages, record));
         if (!delta.append.length) return { appendedCount: 0 };
 
         const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
         const existingText = await (await fileHandle.getFile()).text();
-        const baseIndex = forceFull ? 0 : Math.max(0, record?.lastTurnNumber || record?.backedUpMessageCount || 0);
-        const section = ['','', bkMessagesToMarkdown(delta.append, baseIndex + 1)].join('\n');
+        const section = ['','', bkMessagesToMarkdown(delta.append, delta.start + 1)].join('\n');
         const nextText = (forceFull || !existingText)
             ? `# ${convo.title}\n\nConversation ID: ${convo.id}\n\n${bkMessagesToMarkdown(messages, 1)}`
             : existingText + section;
@@ -1961,8 +2126,8 @@
             id: convo.id,
             title: convo.title,
             fileName,
-            backedUpMessageCount: messages.length,
-            lastTurnNumber: forceFull ? messages.length : (baseIndex + delta.append.length),
+            backedUpMessageCount: forceFull || !existingText ? messages.length : Math.max(record?.backedUpMessageCount || 0, delta.start + delta.append.length),
+            lastTurnNumber: forceFull || !existingText ? messages.length : Math.max(record?.lastTurnNumber || 0, delta.start + delta.append.length),
             lastMessageHash: last ? bkHashText(last.role + '\n' + last.text) : '',
             updatedAt: Date.now()
         };
@@ -1993,10 +2158,18 @@
     }
     async function bkBackupCurrent(dir, options = {}) {
         const convo = { id: bkGetCurrentConversationId(), title: bkGetCurrentConversationTitle(), url: location.href };
-        const messages = bkExtractMessagesFromCurrentPage();
+        const record = bkState.manifest.conversations[convo.id] || null;
+        const total = bkGetTotalMessageCountFromWrappers();
+        const startIndex = options.forceFull ? 0 : bkClamp(record?.backedUpMessageCount || 0, 0, total);
+        const result = await bkGetMessagesForBackup(convo, { timeoutPerTurn: 8000, startIndex });
+        const messages = result.messages;
+        if (!messages.length && startIndex >= total) {
+            bkLog('No new messages to back up.');
+            return { appendedCount: 0, messageCount: record?.backedUpMessageCount || 0, totalMessageCount: total, source: 'dom' };
+        }
         if (!messages.length) throw new Error('Cannot parse messages on current page.');
-        const res = await bkWriteConversationDelta(dir, convo, messages, options);
-        return { ...res, messageCount: messages.length, totalMessageCount: bkGetTotalMessageCountFromWrappers() };
+        const res = await bkWriteConversationDelta(dir, convo, messages, { ...options, partialStartIndex: result.startIndex });
+        return { ...res, messageCount: messages.length, totalMessageCount: result.total, source: result.source };
     }
     async function bkBackupAll(dir, options = {}) {
         const list = bkExtractSidebarConversations();
@@ -2008,8 +2181,11 @@
         for (const convo of list) {
             bkLog(`Backing up: ${convo.title}`);
             await bkGotoConversation(convo);
-            const msgs = bkExtractMessagesFromCurrentPage();
-            const r = await bkWriteConversationDelta(dir, convo, msgs, options);
+            const record = bkState.manifest.conversations[convo.id] || null;
+            const total = bkGetTotalMessageCountFromWrappers();
+            const startIndex = options.forceFull ? 0 : bkClamp(record?.backedUpMessageCount || 0, 0, total);
+            const result = await bkGetMessagesForBackup(convo, { timeoutPerTurn: 6500, startIndex });
+            const r = await bkWriteConversationDelta(dir, convo, result.messages, { ...options, partialStartIndex: result.startIndex });
             totalVisited += 1;
             totalAppended += r.appendedCount;
             await bkSleep(200);
@@ -2179,7 +2355,7 @@
                 if (!(await bkEnsureDirPermission(dir, true))) throw new Error('Folder permission denied.');
                 const forceFull = !!bkState.ui.forceFullCheckbox?.checked;
                 const r = await bkBackupCurrent(dir, { forceFull });
-                bkLog(`Current backed up: +${r.appendedCount} messages (parsed ${r.messageCount}/${r.totalMessageCount || r.messageCount}).`);
+                bkLog(`Current backed up: +${r.appendedCount} messages (${r.source}, parsed ${r.messageCount}/${r.totalMessageCount || r.messageCount}).`);
                 bkRenderStatus();
             } catch (err) { bkLog(`Backup current failed: ${err.message}`); }
             finally { bkSetBusy(false); }
