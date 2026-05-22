@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      0.2.0
 // @description  Preview ChatGPT project source Markdown/text files in-page instead of downloading them.
-// @author       You
+// @author       duro
 // @match        https://chatgpt.com/*
 // @grant        none
 // @run-at       document-idle

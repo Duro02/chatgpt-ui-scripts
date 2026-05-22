@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      2.4
 // @description  时间线/预览/跳转/长按标记/搜索/公式复制/导出Markdown。增强稳定性、性能与兼容性。
-// @author       YukonKong
+// @author       YukonKong (original), duro (modifications)
 // @match        https://chatgpt.com/*
 // @license      CC-BY-NC-4.0
 // @grant        GM_addStyle
@@ -11,9 +11,11 @@
 // @require      https://unpkg.com/turndown-plugin-gfm/dist/turndown-plugin-gfm.js
 // @run-at       document-idle
 // @noframes
-// @downloadURL https://update.greasyfork.org/scripts/570234/ChatGPT%E4%BD%93%E9%AA%8C%E5%A2%9E%E5%BC%BA%E6%8F%92%E4%BB%B6.user.js
-// @updateURL https://update.greasyfork.org/scripts/570234/ChatGPT%E4%BD%93%E9%AA%8C%E5%A2%9E%E5%BC%BA%E6%8F%92%E4%BB%B6.meta.js
 // ==/UserScript==
+//
+// Original script by YukonKong:
+// https://update.greasyfork.org/scripts/570234/ChatGPT%E4%BD%93%E9%AA%8C%E5%A2%9E%E5%BC%BA%E6%8F%92%E4%BB%B6.user.js
+// This modified version keeps the original CC-BY-NC-4.0 license and attribution.
 
 (function() {
     'use strict';

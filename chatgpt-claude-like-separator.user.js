@@ -3,7 +3,7 @@
 // @namespace    codex.local
 // @version      0.1.0
 // @description  Marks text-only separator paragraphs in ChatGPT so the Claude-like UserStyle can render them as warm grey rules.
-// @author       Codex
+// @author       duro
 // @match        https://chatgpt.com/*
 // @match        https://chat.openai.com/*
 // @run-at       document-idle
