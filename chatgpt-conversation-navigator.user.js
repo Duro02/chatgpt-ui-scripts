@@ -198,6 +198,13 @@
             width: 100%; background: var(--tl-input-bg); border: none; border-radius: 6px;
             padding: 8px 12px; color: var(--tl-panel-text); font-size: 13px; outline: none; box-sizing: border-box;
         }
+        #chatgpt-panel-index-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+        #chatgpt-panel-index-missing {
+            border: 1px solid var(--tl-capsule-border); background: var(--tl-capsule-bg); color: var(--tl-panel-text);
+            border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; flex-shrink: 0;
+        }
+        #chatgpt-panel-index-missing:hover { border-color: var(--tl-dot-active-ring); }
+        #chatgpt-panel-index-status { color: var(--tl-icon-color); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         #chatgpt-panel-list { flex-grow: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
         #chatgpt-panel-list::-webkit-scrollbar { width: 6px; }
@@ -445,9 +452,12 @@
     panel.id = 'chatgpt-timeline-panel';
     panel.innerHTML = `<div id="chatgpt-panel-search-wrapper"><input type="text" id="chatgpt-panel-search" placeholder="搜索对话或序号..."></div><div id="chatgpt-panel-list"></div>`;
     document.body.appendChild(panel);
+    panel.innerHTML = `<div id="chatgpt-panel-search-wrapper"><input type="text" id="chatgpt-panel-search" placeholder="Search conversation or number..."><div id="chatgpt-panel-index-row"><button id="chatgpt-panel-index-missing" type="button">Index Missing</button><span id="chatgpt-panel-index-status"></span></div></div><div id="chatgpt-panel-list"></div>`;
 
     const searchInput = document.getElementById('chatgpt-panel-search');
     const panelList = document.getElementById('chatgpt-panel-list');
+    const timelineIndexBtn = document.getElementById('chatgpt-panel-index-missing');
+    const timelineIndexStatus = document.getElementById('chatgpt-panel-index-status');
 
     const promptFab = document.createElement('div');
     promptFab.id = 'chatgpt-pm-fab';
@@ -526,9 +536,11 @@
     let activeSyncRaf = null;
     let lastTimelineSignature = '';
     let isTimelineHovering = false;
+    let isTimelineIndexing = false;
     const PM_STORAGE_KEY = 'chatgpt_prompt_manager_data_v1';
     const PM_UI_KEY = 'chatgpt_prompt_manager_ui_v1';
     const TL_FAV_STORAGE_KEY = 'chatgpt_timeline_favorites_v1';
+    const TL_INFO_STORAGE_KEY = 'chatgpt_timeline_turn_info_v1';
     const DEFAULT_CATEGORY_ID = 'cat_default';
 
     const pmState = {
@@ -561,8 +573,7 @@
             || turn.getAttribute('data-testid')
             || turn.id
             || '';
-        const textSig = normalizeTurnKeyText(turn.innerText || '');
-        return `${index}|${attrId}|${textSig}`;
+        return `${index}|${attrId || `turn-${index}`}`;
     }
 
 
@@ -587,6 +598,56 @@
         const store = readTimelineFavStore();
         store[getConversationKey()] = Array.from(favSet);
         localStorage.setItem(TL_FAV_STORAGE_KEY, JSON.stringify(store));
+    }
+
+    function readTimelineInfoStore() {
+        try {
+            const raw = localStorage.getItem(TL_INFO_STORAGE_KEY);
+            const data = raw ? JSON.parse(raw) : {};
+            return data && typeof data === 'object' ? data : {};
+        } catch (err) {
+            console.warn('[Timeline] turn info load failed:', err);
+            return {};
+        }
+    }
+
+    function writeTimelineInfoStore(store) {
+        localStorage.setItem(TL_INFO_STORAGE_KEY, JSON.stringify(store));
+    }
+
+    function readTurnInfoForCurrentConversation() {
+        const store = readTimelineInfoStore();
+        const rec = store[getConversationKey()];
+        if (rec && typeof rec === 'object' && rec.turns && typeof rec.turns === 'object') return rec;
+        return { version: 1, updatedAt: 0, turns: {} };
+    }
+
+    function writeTurnInfoForCurrentConversation(rec) {
+        const store = readTimelineInfoStore();
+        store[getConversationKey()] = { version: 1, updatedAt: Date.now(), turns: rec.turns || {} };
+        writeTimelineInfoStore(store);
+    }
+
+    function isPlaceholderPreview(text) {
+        return /^User turn \d+$/.test(String(text || ''));
+    }
+
+    function cacheTurnPreview(turn, index, text) {
+        if (!text || isPlaceholderPreview(text)) return;
+        const rec = readTurnInfoForCurrentConversation();
+        const stableId = getTurnStableId(turn, index);
+        rec.turns[stableId] = {
+            preview: text,
+            confirmed: true,
+            updatedAt: Date.now()
+        };
+        writeTurnInfoForCurrentConversation(rec);
+    }
+
+    function getCachedTurnPreview(turn, index) {
+        const rec = readTurnInfoForCurrentConversation();
+        const stableId = getTurnStableId(turn, index);
+        return rec.turns?.[stableId]?.preview || '';
     }
 
     function loadPromptData() {
@@ -1072,6 +1133,7 @@
             item.style.display = text.includes(keyword) ? 'flex' : 'none';
         });
     });
+    timelineIndexBtn.addEventListener('click', indexMissingTimelineTurns);
 
     thinkBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -1539,7 +1601,7 @@
 
     function updateTimelineItemPreview(index, text) {
         const item = panelList.querySelector(`.panel-list-item[data-index="${index}"] .panel-list-text`);
-        if (!item || !text || /^User turn \d+$/.test(text)) return;
+        if (!item || !text || isPlaceholderPreview(text)) return;
         const current = item.textContent || '';
         if (current.includes(text.slice(0, 32))) return;
         item.innerHTML = `<span class="panel-list-index">${index + 1}.</span>${escapeHTML(text)}`;
@@ -1551,7 +1613,9 @@
             const rect = turn.getBoundingClientRect();
             const nearViewport = rect.bottom >= -300 && rect.top <= window.innerHeight + 300;
             if (!nearViewport) return;
-            updateTimelineItemPreview(index, getTurnPreviewText(turn, index));
+            const text = getTurnPreviewText(turn, index);
+            cacheTurnPreview(turn, index, text);
+            updateTimelineItemPreview(index, text);
         });
     }
 
@@ -1559,8 +1623,78 @@
         if (!(turnWrapper instanceof Element)) return `User turn ${index + 1}`;
         const userNode = turnWrapper.querySelector('[data-message-author-role="user"]');
         const text = ((userNode?.innerText || userNode?.textContent || '').replace(/\s+/g, ' ').trim());
-        if (text) return text.length > 120 ? `${text.slice(0, 120)}...` : text;
-        return `User turn ${index + 1}`;
+        if (text) {
+            const preview = text.length > 120 ? `${text.slice(0, 120)}...` : text;
+            cacheTurnPreview(turnWrapper, index, preview);
+            return preview;
+        }
+        return getCachedTurnPreview(turnWrapper, index) || `User turn ${index + 1}`;
+    }
+
+    function tlSleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function waitForTurnPreview(index, timeoutMs = 3200) {
+        const started = Date.now();
+        while (Date.now() - started < timeoutMs) {
+            const currentTurns = getUserTurnsRobust();
+            trackedTurns = currentTurns;
+            const turn = currentTurns[index];
+            const text = getTurnPreviewText(turn, index);
+            if (!isPlaceholderPreview(text)) {
+                updateTimelineItemPreview(index, text);
+                return text;
+            }
+            await tlSleep(160);
+        }
+        return '';
+    }
+
+    function getMissingIndexedTurnIndexes() {
+        const currentTurns = getUserTurnsRobust();
+        trackedTurns = currentTurns;
+        return currentTurns
+            .map((turn, index) => ({ turn, index, preview: getTurnPreviewText(turn, index) }))
+            .filter(item => isPlaceholderPreview(item.preview))
+            .map(item => item.index);
+    }
+
+    async function indexMissingTimelineTurns() {
+        if (isTimelineIndexing) return;
+        isTimelineIndexing = true;
+        timelineIndexBtn.disabled = true;
+        try {
+            updateTimeline();
+            const missing = getMissingIndexedTurnIndexes();
+            if (!missing.length) {
+                timelineIndexStatus.textContent = 'All indexed';
+                return;
+            }
+
+            for (let i = 0; i < missing.length; i++) {
+                const index = missing[i];
+                timelineIndexStatus.textContent = `Indexing ${i + 1}/${missing.length}`;
+                const turn = getUserTurnsRobust()[index];
+                if (!(turn instanceof Element)) continue;
+                isAutoScrolling = true;
+                preciseScrollToAnchor(turn, index);
+                await waitForTurnPreview(index);
+                await tlSleep(260);
+            }
+
+            updateTimeline();
+            timelineIndexStatus.textContent = 'Indexed';
+        } catch (err) {
+            console.error('[Timeline] index missing failed:', err);
+            timelineIndexStatus.textContent = 'Index failed';
+        } finally {
+            isTimelineIndexing = false;
+            timelineIndexBtn.disabled = false;
+            setTimeout(() => {
+                if (!isTimelineIndexing) timelineIndexStatus.textContent = '';
+            }, 1800);
+        }
     }
 
     // ==========================================
@@ -1687,22 +1821,59 @@
         return out;
     }
     function bkExtractMessagesFromCurrentPage() {
-        const users = Array.from(document.querySelectorAll('[data-message-author-role="user"]'))
-            .map(el => ({ role: 'user', el }));
-        const assts = Array.from(document.querySelectorAll('[data-message-author-role="assistant"]'))
-            .map(el => ({ role: 'assistant', el }));
-        const merged = users.concat(assts).sort((a, b) => a.el.getBoundingClientRect().top - b.el.getBoundingClientRect().top);
+        const wrappers = bkGetConversationTurnWrappers();
         const msgs = [];
         const seen = new Set();
-        merged.forEach(item => {
-            const txt = (item.el.innerText || '').replace(/\n{3,}/g, '\n\n').trim();
+
+        wrappers.forEach((wrapper, idx) => {
+            const role = bkInferTurnRole(wrapper, idx);
+            if (!role) return;
+            let txt = bkExtractTurnText(wrapper, role);
+            if (!txt && role === 'user') {
+                const userIndex = bkUserIndexForWrapper(wrapper, wrappers);
+                if (userIndex >= 0) txt = getCachedTurnPreview(wrapper, userIndex);
+            }
             if (!txt) return;
-            const key = `${item.role}|${txt.slice(0, 220)}`;
+            const key = `${role}|${txt.slice(0, 220)}`;
             if (seen.has(key)) return;
             seen.add(key);
-            msgs.push({ role: item.role, text: txt });
+            msgs.push({ role, text: txt });
         });
         return msgs;
+    }
+
+    function bkGetConversationTurnWrappers() {
+        return Array.from(document.querySelectorAll('[data-testid^="conversation-turn-"]'));
+    }
+
+    function bkGetTotalMessageCountFromWrappers() {
+        return bkGetConversationTurnWrappers().length;
+    }
+
+    function bkInferTurnRole(wrapper, idx) {
+        const explicitRoleNode = wrapper.querySelector('[data-message-author-role]');
+        const explicitRole = (explicitRoleNode?.getAttribute('data-message-author-role') || '').toLowerCase();
+        if (explicitRole === 'user' || explicitRole === 'assistant') return explicitRole;
+        const tid = wrapper.getAttribute('data-testid') || '';
+        const m = tid.match(/conversation-turn-(\d+)/);
+        const turnNumber = m ? parseInt(m[1], 10) : (idx + 1);
+        if (!Number.isInteger(turnNumber)) return '';
+        return turnNumber % 2 === 1 ? 'user' : 'assistant';
+    }
+
+    function bkExtractTurnText(wrapper, role) {
+        const roleNode = wrapper.querySelector(`[data-message-author-role="${role}"]`);
+        const source = roleNode || wrapper;
+        return (source.innerText || source.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+    }
+
+    function bkUserIndexForWrapper(wrapper, wrappers) {
+        let userIndex = -1;
+        for (let i = 0; i < wrappers.length; i++) {
+            if (bkInferTurnRole(wrappers[i], i) === 'user') userIndex += 1;
+            if (wrappers[i] === wrapper) return userIndex;
+        }
+        return -1;
     }
     function bkMessagesToMarkdown(messages, startIndex = 1) {
         return messages.map((m, i) => `${m.role === 'user' ? '## User' : '## Assistant'} (${startIndex + i})\n\n${m.text}`).join('\n\n');
@@ -1825,7 +1996,7 @@
         const messages = bkExtractMessagesFromCurrentPage();
         if (!messages.length) throw new Error('Cannot parse messages on current page.');
         const res = await bkWriteConversationDelta(dir, convo, messages, options);
-        return { ...res, messageCount: messages.length };
+        return { ...res, messageCount: messages.length, totalMessageCount: bkGetTotalMessageCountFromWrappers() };
     }
     async function bkBackupAll(dir, options = {}) {
         const list = bkExtractSidebarConversations();
@@ -1853,10 +2024,11 @@
         const title = bkGetCurrentConversationTitle();
         const rec = bkState.manifest.conversations[id];
         const msgs = bkExtractMessagesFromCurrentPage();
-        const total = msgs.length;
+        const total = bkGetTotalMessageCountFromWrappers() || msgs.length;
+        const parsed = msgs.length;
         const backed = rec?.backedUpMessageCount || 0;
         const pending = Math.max(0, total - backed);
-        bkState.ui.currentInfo.textContent = `${title}\nTotal messages: ${total}\nBacked up: ${backed}\nPending: ${pending}`;
+        bkState.ui.currentInfo.textContent = `${title}\nTotal messages: ${total}\nBackup-ready messages: ${parsed}\nBacked up: ${backed}\nPending: ${pending}`;
         const convs = bkExtractSidebarConversations();
         const backedConvs = convs.filter(c => bkState.manifest.conversations[c.id]).length;
         bkState.ui.allInfo.textContent = `Sidebar conversations: ${convs.length}\nBacked up at least once: ${backedConvs}\nNot backed up yet: ${Math.max(0, convs.length - backedConvs)}`;
@@ -2007,7 +2179,7 @@
                 if (!(await bkEnsureDirPermission(dir, true))) throw new Error('Folder permission denied.');
                 const forceFull = !!bkState.ui.forceFullCheckbox?.checked;
                 const r = await bkBackupCurrent(dir, { forceFull });
-                bkLog(`Current backed up: +${r.appendedCount} messages (total ${r.messageCount}).`);
+                bkLog(`Current backed up: +${r.appendedCount} messages (parsed ${r.messageCount}/${r.totalMessageCount || r.messageCount}).`);
                 bkRenderStatus();
             } catch (err) { bkLog(`Backup current failed: ${err.message}`); }
             finally { bkSetBusy(false); }
