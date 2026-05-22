@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         ChatGPT Project Source Markdown Preview
+// @name         ChatGPT Project Source Text Preview
 // @namespace    http://tampermonkey.net/
-// @version      0.1.0
-// @description  Preview ChatGPT project source Markdown files in-page instead of downloading them.
+// @version      0.2.0
+// @description  Preview ChatGPT project source Markdown/text files in-page instead of downloading them.
 // @author       You
 // @match        https://chatgpt.com/*
 // @grant        none
@@ -15,12 +15,12 @@
 
     const ROOT_ID = 'cgpt-source-preview-root';
     const STYLE_ID = 'cgpt-source-preview-style';
-    const MD_FILE_RE = /\.md(?:$|[?#])/i;
+    const TEXT_FILE_RE = /\.(?:md|txt)(?:$|[?#])/i;
     const ESTUARY_CONTENT_RE = /\/backend-api\/estuary\/content\b/i;
     const SOURCE_CLICK_MAX_AGE_MS = 2000;
 
     let activeController = null;
-    let lastMarkdownSourceClick = null;
+    let lastTextSourceClick = null;
 
     function injectStyle() {
         if (document.getElementById(STYLE_ID)) return;
@@ -136,7 +136,7 @@
                     <div class="cgpt-sp-title"></div>
                     <div class="cgpt-sp-actions">
                         <button class="cgpt-sp-btn cgpt-sp-copy" type="button">Copy</button>
-                        <button class="cgpt-sp-btn cgpt-sp-raw" type="button">Raw</button>
+                        <button class="cgpt-sp-btn cgpt-sp-toggle" type="button">Raw</button>
                         <button class="cgpt-sp-btn cgpt-sp-close" type="button">Close</button>
                     </div>
                 </div>
@@ -151,9 +151,18 @@
             const raw = root.dataset.raw || '';
             if (raw) await navigator.clipboard.writeText(raw);
         });
-        root.querySelector('.cgpt-sp-raw').addEventListener('click', () => {
+        root.querySelector('.cgpt-sp-toggle').addEventListener('click', () => {
             const body = root.querySelector('.cgpt-sp-body');
+            const button = root.querySelector('.cgpt-sp-toggle');
+            if (root.dataset.mode === 'raw') {
+                body.innerHTML = root.dataset.rendered || renderMarkdown(root.dataset.raw || '');
+                root.dataset.mode = 'preview';
+                button.textContent = 'Raw';
+                return;
+            }
             body.innerHTML = `<pre><code>${escapeHTML(root.dataset.raw || '')}</code></pre>`;
+            root.dataset.mode = 'raw';
+            button.textContent = 'Preview';
         });
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape') hidePreview();
@@ -164,9 +173,12 @@
 
     function showPreview(title, html, raw) {
         const root = getRoot();
-        root.querySelector('.cgpt-sp-title').textContent = title || 'Markdown Preview';
+        root.querySelector('.cgpt-sp-title').textContent = title || 'Text Preview';
         root.querySelector('.cgpt-sp-body').innerHTML = html;
         root.dataset.raw = raw || '';
+        root.dataset.rendered = html || '';
+        root.dataset.mode = 'preview';
+        root.querySelector('.cgpt-sp-toggle').textContent = 'Raw';
         root.classList.add('visible');
     }
 
@@ -267,27 +279,27 @@
             .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
     }
 
-    function looksLikeMarkdownTarget(target) {
+    function looksLikeTextSourceTarget(target) {
         const text = (target?.textContent || '').trim();
-        if (MD_FILE_RE.test(text)) return true;
+        if (TEXT_FILE_RE.test(text)) return true;
         const aria = target?.getAttribute?.('aria-label') || target?.getAttribute?.('title') || '';
-        return MD_FILE_RE.test(aria);
+        return TEXT_FILE_RE.test(aria);
     }
 
-    function getFirstMarkdownLabel(text) {
+    function getFirstTextSourceLabel(text) {
         const normalized = String(text || '').replace(/\s+/g, ' ').trim();
-        const match = normalized.match(/[^\/\\\s"'<>|:;]+\.md\b/i);
+        const match = normalized.match(/[^\/\\\s"'<>|:;]+\.(?:md|txt)\b/i);
         return match ? match[0] : '';
     }
 
-    function getNearbyMarkdownLabel(event) {
+    function getNearbyTextSourceLabel(event) {
         if (typeof document.elementsFromPoint !== 'function') return '';
         const elements = document.elementsFromPoint(event.clientX, event.clientY);
         for (const element of elements) {
             if (!(element instanceof Element)) continue;
             let node = element;
             for (let depth = 0; node && depth < 6; depth += 1, node = node.parentElement) {
-                const label = getFirstMarkdownLabel(`${node.textContent || ''} ${node.getAttribute('aria-label') || ''} ${node.getAttribute('title') || ''}`);
+                const label = getFirstTextSourceLabel(`${node.textContent || ''} ${node.getAttribute('aria-label') || ''} ${node.getAttribute('title') || ''}`);
                 if (label) return label;
             }
         }
@@ -298,7 +310,7 @@
                 return {
                     element,
                     rect,
-                    label: getFirstMarkdownLabel(`${element.textContent || ''} ${element.getAttribute('aria-label') || ''} ${element.getAttribute('title') || ''}`)
+                    label: getFirstTextSourceLabel(`${element.textContent || ''} ${element.getAttribute('aria-label') || ''} ${element.getAttribute('title') || ''}`)
                 };
             })
             .filter(item => item.label && item.rect.width > 0 && item.rect.height > 0)
@@ -307,34 +319,34 @@
         return candidates[0]?.label || '';
     }
 
-    function rememberMarkdownSourceClick(event) {
+    function rememberTextSourceClick(event) {
         if (!(event.target instanceof Element)) return;
-        const info = findMarkdownClickTarget(event);
+        const info = findTextSourceClickTarget(event);
         const url = info ? getFileUrl(info) : '';
-        const label = info ? getFileName(info, url) : getNearbyMarkdownLabel(event);
-        if (!label || !MD_FILE_RE.test(label)) return;
-        lastMarkdownSourceClick = {
+        const label = info ? getFileName(info, url) : getNearbyTextSourceLabel(event);
+        if (!label || !TEXT_FILE_RE.test(label)) return;
+        lastTextSourceClick = {
             at: Date.now(),
             label,
             info
         };
     }
 
-    function consumeRecentMarkdownSourceClick() {
-        const recent = lastMarkdownSourceClick;
+    function consumeRecentTextSourceClick() {
+        const recent = lastTextSourceClick;
         if (!recent || Date.now() - recent.at > SOURCE_CLICK_MAX_AGE_MS) return null;
-        lastMarkdownSourceClick = null;
+        lastTextSourceClick = null;
         return recent;
     }
 
-    function findMarkdownClickTarget(event) {
+    function findTextSourceClickTarget(event) {
         const path = event.composedPath ? event.composedPath() : [];
         for (const node of path) {
             if (!(node instanceof Element)) continue;
             const href = node.getAttribute('href') || node.closest?.('a[href]')?.getAttribute('href') || '';
             const download = node.getAttribute('download') || node.closest?.('[download]')?.getAttribute('download') || '';
             const label = `${href} ${download} ${node.textContent || ''} ${node.getAttribute('aria-label') || ''} ${node.getAttribute('title') || ''}`;
-            if (MD_FILE_RE.test(label)) {
+            if (TEXT_FILE_RE.test(label)) {
                 return {
                     element: node,
                     link: node.closest?.('a[href]') || (node.matches?.('a[href]') ? node : null)
@@ -342,7 +354,7 @@
             }
         }
         const el = event.target instanceof Element ? event.target : null;
-        if (el && looksLikeMarkdownTarget(el)) return { element: el, link: el.closest('a[href]') };
+        if (el && looksLikeTextSourceTarget(el)) return { element: el, link: el.closest('a[href]') };
         return null;
     }
 
@@ -356,13 +368,13 @@
     }
 
     function getFileName(info, url) {
-        const label = (info?.element?.textContent || '').trim().split('\n').map(x => x.trim()).find(x => MD_FILE_RE.test(x));
+        const label = (info?.element?.textContent || '').trim().split('\n').map(x => x.trim()).find(x => TEXT_FILE_RE.test(x));
         if (label) return label;
         try {
             const path = new URL(url, location.href).pathname.split('/').pop();
-            return decodeURIComponent(path || 'source.md');
+            return decodeURIComponent(path || 'source.txt');
         } catch {
-            return 'source.md';
+            return 'source.txt';
         }
     }
 
@@ -374,9 +386,9 @@
         }
     }
 
-    async function previewMarkdownUrl(url, title) {
+    async function previewTextSourceUrl(url, title) {
         if (!url) {
-            showError(title, 'No file URL was found for this Markdown source item.');
+            showError(title, 'No file URL was found for this text source item.');
             return;
         }
 
@@ -399,36 +411,36 @@
         }
     }
 
-    async function previewMarkdown(info) {
+    async function previewTextSource(info) {
         const url = getFileUrl(info);
         const title = getFileName(info, url);
-        await previewMarkdownUrl(url, title);
+        await previewTextSourceUrl(url, title);
     }
 
     document.addEventListener('click', (event) => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-        rememberMarkdownSourceClick(event);
-        const info = findMarkdownClickTarget(event);
+        rememberTextSourceClick(event);
+        const info = findTextSourceClickTarget(event);
         if (!info) return;
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
-        previewMarkdown(info);
+        previewTextSource(info);
     }, true);
 
     ['pointerdown', 'mousedown'].forEach(type => {
         document.addEventListener(type, (event) => {
             if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-            rememberMarkdownSourceClick(event);
+            rememberTextSourceClick(event);
         }, true);
     });
 
     const originalOpen = window.open;
     window.open = function patchedWindowOpen(url, target, features) {
         if (isEstuaryContentUrl(url)) {
-            const recent = consumeRecentMarkdownSourceClick();
+            const recent = consumeRecentTextSourceClick();
             if (recent) {
-                previewMarkdownUrl(new URL(url, location.href).href, recent.label || 'source.md');
+                previewTextSourceUrl(new URL(url, location.href).href, recent.label || 'source.txt');
                 return null;
             }
         }
