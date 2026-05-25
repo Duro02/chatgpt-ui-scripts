@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Project Source Text Preview
 // @namespace    http://tampermonkey.net/
-// @version      0.2.0
+// @version      0.2.1
 // @description  Preview ChatGPT project source Markdown/text files in-page instead of downloading them.
 // @author       duro
 // @match        https://chatgpt.com/*
@@ -292,6 +292,19 @@
         return match ? match[0] : '';
     }
 
+    function getSmallElementText(element) {
+        if (!(element instanceof Element)) return '';
+        const tag = element.tagName;
+        if (tag === 'HTML' || tag === 'BODY' || tag === 'MAIN') return '';
+        const text = element.textContent || '';
+        return text.length > 1200 ? '' : text;
+    }
+
+    function getElementLabel(element) {
+        if (!(element instanceof Element)) return '';
+        return `${getSmallElementText(element)} ${element.getAttribute('aria-label') || ''} ${element.getAttribute('title') || ''}`;
+    }
+
     function getNearbyTextSourceLabel(event) {
         if (typeof document.elementsFromPoint !== 'function') return '';
         const elements = document.elementsFromPoint(event.clientX, event.clientY);
@@ -299,24 +312,11 @@
             if (!(element instanceof Element)) continue;
             let node = element;
             for (let depth = 0; node && depth < 6; depth += 1, node = node.parentElement) {
-                const label = getFirstTextSourceLabel(`${node.textContent || ''} ${node.getAttribute('aria-label') || ''} ${node.getAttribute('title') || ''}`);
+                const label = getFirstTextSourceLabel(getElementLabel(node));
                 if (label) return label;
             }
         }
-
-        const candidates = Array.from(document.querySelectorAll('[aria-label], [title], button, a, div, span'))
-            .map(element => {
-                const rect = element.getBoundingClientRect();
-                return {
-                    element,
-                    rect,
-                    label: getFirstTextSourceLabel(`${element.textContent || ''} ${element.getAttribute('aria-label') || ''} ${element.getAttribute('title') || ''}`)
-                };
-            })
-            .filter(item => item.label && item.rect.width > 0 && item.rect.height > 0)
-            .filter(item => Math.abs((item.rect.top + item.rect.bottom) / 2 - event.clientY) < 48)
-            .sort((a, b) => Math.abs((a.rect.top + a.rect.bottom) / 2 - event.clientY) - Math.abs((b.rect.top + b.rect.bottom) / 2 - event.clientY));
-        return candidates[0]?.label || '';
+        return '';
     }
 
     function rememberTextSourceClick(event) {
@@ -345,7 +345,7 @@
             if (!(node instanceof Element)) continue;
             const href = node.getAttribute('href') || node.closest?.('a[href]')?.getAttribute('href') || '';
             const download = node.getAttribute('download') || node.closest?.('[download]')?.getAttribute('download') || '';
-            const label = `${href} ${download} ${node.textContent || ''} ${node.getAttribute('aria-label') || ''} ${node.getAttribute('title') || ''}`;
+            const label = `${href} ${download} ${getElementLabel(node)}`;
             if (TEXT_FILE_RE.test(label)) {
                 return {
                     element: node,
@@ -427,13 +427,6 @@
         event.stopImmediatePropagation();
         previewTextSource(info);
     }, true);
-
-    ['pointerdown', 'mousedown'].forEach(type => {
-        document.addEventListener(type, (event) => {
-            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-            rememberTextSourceClick(event);
-        }, true);
-    });
 
     const originalOpen = window.open;
     window.open = function patchedWindowOpen(url, target, features) {
