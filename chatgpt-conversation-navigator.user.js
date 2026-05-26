@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT体验增强插件
 // @namespace    http://tampermonkey.net/
-// @version      2.4
+// @version      2.5
 // @description  时间线/预览/跳转/长按标记/搜索/公式复制/导出Markdown。增强稳定性、性能与兼容性。
 // @author       YukonKong (original), duro (modifications)
 // @match        https://chatgpt.com/*
@@ -1116,6 +1116,49 @@
         return tdService;
     }
 
+    function prepareMarkdownClone(markdownDiv) {
+        const clone = markdownDiv.cloneNode(true);
+
+        clone.querySelectorAll('svg').forEach(svg => svg.remove());
+        clone.querySelectorAll('button, [role="button"], [data-testid="copy-turn-action-button"]').forEach(btn => btn.remove());
+
+        clone.querySelectorAll('[data-testid="webpage-citation-pill"] a').forEach(aTag => {
+            const visibleSpan = aTag.querySelector('span[style*="opacity: 1"]');
+            let correctText = '';
+            if (visibleSpan) {
+                correctText = visibleSpan.textContent.trim();
+            } else {
+                const backupSpan = aTag.querySelector('span > span');
+                correctText = backupSpan ? backupSpan.textContent.trim() : aTag.textContent.trim();
+            }
+            aTag.innerHTML = '';
+            aTag.textContent = correctText;
+        });
+
+        clone.querySelectorAll('.katex-display').forEach(katex => {
+            const annotation = katex.querySelector('annotation[encoding="application/x-tex"]');
+            if (annotation) katex.textContent = '\n$$\n' + annotation.textContent.trim() + '\n$$\n';
+        });
+        clone.querySelectorAll('.katex').forEach(katex => {
+            const annotation = katex.querySelector('annotation[encoding="application/x-tex"]');
+            if (annotation && !katex.classList.contains('katex-display')) {
+                katex.textContent = '$' + annotation.textContent.trim() + '$';
+            }
+        });
+
+        return clone;
+    }
+
+    function markdownDomToMarkdown(markdownDiv) {
+        if (!markdownDiv) return '';
+        try {
+            return getTurndownService().turndown(prepareMarkdownClone(markdownDiv)).trim();
+        } catch (err) {
+            console.warn('[ChatGPT Navigator] Markdown conversion failed:', err);
+            return '';
+        }
+    }
+
     menuBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         panel.classList.toggle('visible');
@@ -1383,39 +1426,7 @@
                         }
                     }
                     
-                    const clone = markdownDiv.cloneNode(true);
-                    
-                    // 移除 SVG 图标（防止干扰文本提取）
-                    clone.querySelectorAll('svg').forEach(svg => svg.remove());
-
-                    // 修复引用胶囊的重复标题问题
-                    clone.querySelectorAll('[data-testid="webpage-citation-pill"] a').forEach(aTag => {
-                        const visibleSpan = aTag.querySelector('span[style*="opacity: 1"]');
-                        let correctText = '';
-                        if (visibleSpan) {
-                            correctText = visibleSpan.textContent.trim();
-                        } else {
-                            const backupSpan = aTag.querySelector('span > span');
-                            correctText = backupSpan ? backupSpan.textContent.trim() : aTag.textContent.trim();
-                        }
-                        // 清空内部DOM，直接替换为干净的文本
-                        aTag.innerHTML = '';
-                        aTag.textContent = correctText;
-                    });
-                    
-                    // 提前将公式占位为Markdown标准语法，防Turndown误除
-                    clone.querySelectorAll('.katex-display').forEach(katex => {
-                        const annotation = katex.querySelector('annotation[encoding="application/x-tex"]');
-                        if (annotation) katex.textContent = '\n$$\n' + annotation.textContent.trim() + '\n$$\n';
-                    });
-                    clone.querySelectorAll('.katex').forEach(katex => {
-                        const annotation = katex.querySelector('annotation[encoding="application/x-tex"]');
-                        if (annotation && !katex.classList.contains('katex-display')) {
-                            katex.textContent = '$' + annotation.textContent.trim() + '$';
-                        }
-                    });
-
-                    let md = turndown.turndown(clone);
+                    let md = turndown.turndown(prepareMarkdownClone(markdownDiv));
                     
                     // 若是思考层则封装为引用快
                     if (isThought) {
@@ -1870,9 +1881,20 @@
         return turnNumber % 2 === 1 ? 'user' : 'assistant';
     }
 
+    function bkExtractAssistantMarkdown(wrapper, roleNode) {
+        const root = roleNode || wrapper;
+        const markdownNodes = Array.from(root.querySelectorAll?.('.markdown') || []);
+        const parts = markdownNodes
+            .map(node => markdownDomToMarkdown(node))
+            .filter(Boolean);
+        return parts.join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
+    }
+
     function bkExtractTurnText(wrapper, role) {
         const roleNode = wrapper.querySelector(`[data-message-author-role="${role}"]`);
         if (role === 'assistant') {
+            const markdownText = bkExtractAssistantMarkdown(wrapper, roleNode);
+            if (markdownText) return markdownText;
             const wrapperText = bkCleanAssistantWrapperText(wrapper.innerText || wrapper.textContent || '');
             if (wrapperText) return wrapperText;
         }
