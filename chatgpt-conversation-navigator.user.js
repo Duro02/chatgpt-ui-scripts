@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT体验增强插件
 // @namespace    http://tampermonkey.net/
-// @version      2.5
+// @version      2.6
 // @description  时间线/预览/跳转/长按标记/搜索/公式复制/导出Markdown。增强稳定性、性能与兼容性。
 // @author       YukonKong (original), duro (modifications)
 // @match        https://chatgpt.com/*
@@ -1881,9 +1881,8 @@
         return turnNumber % 2 === 1 ? 'user' : 'assistant';
     }
 
-    function bkExtractAssistantMarkdown(wrapper, roleNode) {
-        const root = roleNode || wrapper;
-        const markdownNodes = Array.from(root.querySelectorAll?.('.markdown') || []);
+    function bkExtractAssistantMarkdown(wrapper) {
+        const markdownNodes = Array.from(wrapper.querySelectorAll?.('.markdown') || []);
         const parts = markdownNodes
             .map(node => markdownDomToMarkdown(node))
             .filter(Boolean);
@@ -1893,7 +1892,7 @@
     function bkExtractTurnText(wrapper, role) {
         const roleNode = wrapper.querySelector(`[data-message-author-role="${role}"]`);
         if (role === 'assistant') {
-            const markdownText = bkExtractAssistantMarkdown(wrapper, roleNode);
+            const markdownText = bkExtractAssistantMarkdown(wrapper);
             if (markdownText) return markdownText;
             const wrapperText = bkCleanAssistantWrapperText(wrapper.innerText || wrapper.textContent || '');
             if (wrapperText) return wrapperText;
