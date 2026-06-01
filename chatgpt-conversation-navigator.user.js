@@ -219,6 +219,30 @@
         .panel-list-index { font-weight: 600; color: var(--tl-icon-color); margin-right: 6px; font-size: 12px; }
         .panel-list-status { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
         .panel-list-item.highlighted .panel-list-status { background-color: #FFC107; box-shadow: 0 0 6px rgba(255, 193, 7, 0.6); }
+        .panel-list-item.has-branch .panel-list-status { background-color: #6CA8FF; box-shadow: 0 0 7px rgba(108, 168, 255, 0.75); }
+        .panel-list-item.has-answer-branch .panel-list-status { background-color: #ffffff; box-shadow: 0 0 7px rgba(255, 255, 255, 0.65); }
+        .panel-list-item.has-branch.has-answer-branch .panel-list-status { background: linear-gradient(135deg, #6CA8FF 0%, #6CA8FF 48%, #ffffff 52%, #ffffff 100%); }
+        .panel-list-item.has-branch.highlighted .panel-list-status { background: linear-gradient(135deg, #FFC107 0%, #FFC107 48%, #6CA8FF 52%, #6CA8FF 100%); }
+        .panel-list-item.has-answer-branch.highlighted .panel-list-status { background: linear-gradient(135deg, #FFC107 0%, #FFC107 48%, #ffffff 52%, #ffffff 100%); box-shadow: 0 0 7px rgba(255, 214, 95, 0.75); }
+        .panel-list-item.has-branch.has-answer-branch.highlighted .panel-list-status { background: linear-gradient(135deg, #FFC107 0%, #FFC107 30%, #6CA8FF 35%, #6CA8FF 65%, #ffffff 70%, #ffffff 100%); box-shadow: 0 0 7px rgba(255, 214, 95, 0.75); }
+        .panel-list-branch-badge {
+            display: inline-flex; align-items: center; margin-left: 8px; padding: 1px 6px;
+            border: 1px solid rgba(108, 168, 255, 0.55); border-radius: 999px;
+            color: #9EC5FF; background: rgba(108, 168, 255, 0.12);
+            font-size: 11px; font-weight: 600; line-height: 1.4; vertical-align: 1px;
+        }
+        .panel-list-answer-branch-badge {
+            display: inline-flex; align-items: center; margin-left: 6px; padding: 1px 6px;
+            border: 1px solid rgba(255, 255, 255, 0.55); border-radius: 999px;
+            color: #ffffff; background: rgba(255, 255, 255, 0.12);
+            font-size: 11px; font-weight: 600; line-height: 1.4; vertical-align: 1px;
+        }
+        .timeline-dot.has-branch { background-color: #6CA8FF; box-shadow: 0 0 7px rgba(108, 168, 255, 0.75); }
+        .timeline-dot.has-answer-branch { background-color: #ffffff; box-shadow: 0 0 7px rgba(255, 255, 255, 0.65); }
+        .timeline-dot.has-branch.has-answer-branch { background: linear-gradient(135deg, #6CA8FF 0%, #6CA8FF 48%, #ffffff 52%, #ffffff 100%); }
+        .timeline-dot.has-branch.highlighted { background: linear-gradient(135deg, #FFC107 0%, #FFC107 48%, #6CA8FF 52%, #6CA8FF 100%); }
+        .timeline-dot.has-answer-branch.highlighted { background: linear-gradient(135deg, #FFC107 0%, #FFC107 48%, #ffffff 52%, #ffffff 100%); box-shadow: 0 0 7px rgba(255, 214, 95, 0.75); }
+        .timeline-dot.has-branch.has-answer-branch.highlighted { background: linear-gradient(135deg, #FFC107 0%, #FFC107 30%, #6CA8FF 35%, #6CA8FF 65%, #ffffff 70%, #ffffff 100%); box-shadow: 0 0 7px rgba(255, 214, 95, 0.75); }
 
         .katex-display { position: relative; }
         .formula-copy-btn {
@@ -639,6 +663,7 @@
         const rec = readTurnInfoForCurrentConversation();
         const stableId = getTurnStableId(turn, index);
         rec.turns[stableId] = {
+            ...(rec.turns[stableId] || {}),
             preview: text,
             confirmed: true,
             updatedAt: Date.now()
@@ -650,6 +675,56 @@
         const rec = readTurnInfoForCurrentConversation();
         const stableId = getTurnStableId(turn, index);
         return rec.turns?.[stableId]?.preview || '';
+    }
+
+    function cacheTurnBranchInfo(turn, index, branchInfo) {
+        if (!(turn instanceof Element) || !branchInfo || !branchInfo.label) return;
+        const rec = readTurnInfoForCurrentConversation();
+        const stableId = getTurnStableId(turn, index);
+        rec.turns[stableId] = {
+            ...(rec.turns[stableId] || {}),
+            branch: {
+                current: branchInfo.current,
+                total: branchInfo.total,
+                label: branchInfo.label,
+                updatedAt: Date.now()
+            },
+            updatedAt: Date.now()
+        };
+        writeTurnInfoForCurrentConversation(rec);
+    }
+
+    function getCachedTurnBranchInfo(turn, index) {
+        const rec = readTurnInfoForCurrentConversation();
+        const stableId = getTurnStableId(turn, index);
+        const branch = rec.turns?.[stableId]?.branch;
+        if (!branch || !branch.label || !(branch.total > 1)) return null;
+        return branch;
+    }
+
+    function cacheTurnAnswerBranchInfo(turn, index, branchInfo) {
+        if (!(turn instanceof Element) || !branchInfo || !branchInfo.label) return;
+        const rec = readTurnInfoForCurrentConversation();
+        const stableId = getTurnStableId(turn, index);
+        rec.turns[stableId] = {
+            ...(rec.turns[stableId] || {}),
+            answerBranch: {
+                current: branchInfo.current,
+                total: branchInfo.total,
+                label: branchInfo.label,
+                updatedAt: Date.now()
+            },
+            updatedAt: Date.now()
+        };
+        writeTurnInfoForCurrentConversation(rec);
+    }
+
+    function getCachedTurnAnswerBranchInfo(turn, index) {
+        const rec = readTurnInfoForCurrentConversation();
+        const stableId = getTurnStableId(turn, index);
+        const branch = rec.turns?.[stableId]?.answerBranch;
+        if (!branch || !branch.label || !(branch.total > 1)) return null;
+        return branch;
     }
 
     function loadPromptData() {
@@ -1169,6 +1244,8 @@
         if (panel.classList.contains('visible') && !panel.contains(e.target) && !menuBtn.contains(e.target)) {
             panel.classList.remove('visible');
         }
+        const branchControl = e.target?.closest?.('button, [role="button"]');
+        if (isBranchControlButton(branchControl)) refreshBranchNearControl(branchControl);
     });
 
     searchInput.addEventListener('input', (e) => {
@@ -1330,6 +1407,82 @@
         };
 
         step('smooth');
+    }
+
+    function getTurnBranchInfo(turn) {
+        if (!(turn instanceof Element)) return null;
+        const allText = (turn.innerText || turn.textContent || '').replace(/\s+/g, ' ');
+        const matches = Array.from(allText.matchAll(/\b([1-9]\d*)\s*\/\s*([1-9]\d*)\b/g))
+            .map(match => ({ current: parseInt(match[1], 10), total: parseInt(match[2], 10), label: `${match[1]}/${match[2]}` }))
+            .filter(item => item.total > 1 && item.current <= item.total);
+        if (!matches.length) return null;
+
+        const branchControls = Array.from(turn.querySelectorAll('button, [role="button"]')).filter(button => {
+            const label = `${button.innerText || button.textContent || ''} ${button.getAttribute('aria-label') || ''} ${button.getAttribute('title') || ''} ${button.getAttribute('data-testid') || ''}`;
+            if (/(copy|edit|export|markdown|复制|编辑|导出|展开|collapsible)/i.test(label)) return false;
+            const className = String(button.className || '');
+            return /(previous|next|prev|上一|下一|回复|response)/i.test(label)
+                || (/disabled:opacity-50/.test(className) && /rounded-md/.test(className));
+        });
+
+        if (branchControls.length < 2) return null;
+        return matches[matches.length - 1];
+    }
+
+    function getTurnBranchInfoCached(turn, index) {
+        const liveInfo = getTurnBranchInfo(turn);
+        if (liveInfo) {
+            cacheTurnBranchInfo(turn, index, liveInfo);
+            return liveInfo;
+        }
+        return getCachedTurnBranchInfo(turn, index);
+    }
+
+    function inferTimelineWrapperRole(wrapper, idx) {
+        const explicitRole = (wrapper?.querySelector?.('[data-message-author-role]')?.getAttribute('data-message-author-role') || '').toLowerCase();
+        if (explicitRole === 'user' || explicitRole === 'assistant') return explicitRole;
+        const tid = wrapper?.getAttribute?.('data-testid') || '';
+        const m = tid.match(/conversation-turn-(\d+)/);
+        const turnNumber = m ? parseInt(m[1], 10) : (idx + 1);
+        if (!Number.isInteger(turnNumber)) return '';
+        return turnNumber % 2 === 1 ? 'user' : 'assistant';
+    }
+
+    function getAssistantTurnForUserTurn(userTurn) {
+        const wrappers = Array.from(document.querySelectorAll('[data-testid^="conversation-turn-"]'));
+        const start = wrappers.indexOf(userTurn);
+        if (start < 0) return null;
+        for (let i = start + 1; i < wrappers.length; i++) {
+            const role = inferTimelineWrapperRole(wrappers[i], i);
+            if (role === 'assistant') return wrappers[i];
+            if (role === 'user') return null;
+        }
+        return null;
+    }
+
+    function getPreviousUserTurnForAssistantTurn(assistantTurn) {
+        const wrappers = Array.from(document.querySelectorAll('[data-testid^="conversation-turn-"]'));
+        const start = wrappers.indexOf(assistantTurn);
+        if (start < 0) return null;
+        for (let i = start - 1; i >= 0; i--) {
+            if (inferTimelineWrapperRole(wrappers[i], i) === 'user') return wrappers[i];
+        }
+        return null;
+    }
+
+    function getUserIndexForTurn(userTurn) {
+        const users = getUserTurnsRobust();
+        return users.indexOf(userTurn);
+    }
+
+    function getTurnAnswerBranchInfoCached(turn, index) {
+        const assistantTurn = getAssistantTurnForUserTurn(turn);
+        const liveInfo = getTurnBranchInfo(assistantTurn);
+        if (liveInfo) {
+            cacheTurnAnswerBranchInfo(turn, index, liveInfo);
+            return liveInfo;
+        }
+        return getCachedTurnAnswerBranchInfo(turn, index);
     }
 
     function syncActiveFromViewport() {
@@ -1517,16 +1670,36 @@
             const stableId = getTurnStableId(turn, index);
             scrollObserver.observe(turn);
             const previewText = getTurnPreviewText(turn, index);
+            const branchInfo = getTurnBranchInfoCached(turn, index);
+            const answerBranchInfo = getTurnAnswerBranchInfoCached(turn, index);
 
             const dot = document.createElement('div');
             dot.className = 'timeline-dot';
             dot.setAttribute('data-index', index);
+            if (branchInfo) {
+                dot.classList.add('has-branch');
+                dot.setAttribute('title', `Branch ${branchInfo.label}`);
+            }
+            if (answerBranchInfo) {
+                dot.classList.add('has-answer-branch');
+                dot.setAttribute('title', `Answer branch ${answerBranchInfo.label}`);
+            }
             if (highlightedTurnIds.has(stableId)) dot.classList.add('highlighted');
 
             const listItem = document.createElement('div');
             listItem.className = 'panel-list-item';
             listItem.setAttribute('data-index', index);
-            listItem.innerHTML = `<div class="panel-list-status"></div><div class="panel-list-text"><span class="panel-list-index">${index + 1}.</span>${escapeHTML(previewText)}</div>`;
+            if (branchInfo) {
+                listItem.classList.add('has-branch');
+                listItem.setAttribute('title', `Branch ${branchInfo.label}`);
+            }
+            if (answerBranchInfo) {
+                listItem.classList.add('has-answer-branch');
+                listItem.setAttribute('title', `Answer branch ${answerBranchInfo.label}`);
+            }
+            const branchBadge = branchInfo ? `<span class="panel-list-branch-badge">${escapeHTML(branchInfo.label)}</span>` : '';
+            const answerBranchBadge = answerBranchInfo ? `<span class="panel-list-answer-branch-badge">A ${escapeHTML(answerBranchInfo.label)}</span>` : '';
+            listItem.innerHTML = `<div class="panel-list-status"></div><div class="panel-list-text"><span class="panel-list-index">${index + 1}.</span>${branchBadge}${answerBranchBadge}${escapeHTML(previewText)}</div>`;
             if (highlightedTurnIds.has(stableId)) listItem.classList.add('highlighted');
 
             dot.addEventListener('mouseenter', () => {
@@ -1617,7 +1790,56 @@
         if (!item || !text || isPlaceholderPreview(text)) return;
         const current = item.textContent || '';
         if (current.includes(text.slice(0, 32))) return;
-        item.innerHTML = `<span class="panel-list-index">${index + 1}.</span>${escapeHTML(text)}`;
+        const turn = trackedTurns[index];
+        const branchInfo = getTurnBranchInfoCached(turn, index);
+        const answerBranchInfo = getTurnAnswerBranchInfoCached(turn, index);
+        const branchBadge = branchInfo ? `<span class="panel-list-branch-badge">${escapeHTML(branchInfo.label)}</span>` : '';
+        const answerBranchBadge = answerBranchInfo ? `<span class="panel-list-answer-branch-badge">A ${escapeHTML(answerBranchInfo.label)}</span>` : '';
+        item.innerHTML = `<span class="panel-list-index">${index + 1}.</span>${branchBadge}${answerBranchBadge}${escapeHTML(text)}`;
+    }
+
+    function updateTimelineItemBranch(index, branchInfo) {
+        if (!branchInfo) return;
+        const dot = container.querySelector(`.timeline-dot[data-index="${index}"]`);
+        const item = panelList.querySelector(`.panel-list-item[data-index="${index}"]`);
+        const text = item?.querySelector('.panel-list-text');
+
+        dot?.classList.add('has-branch');
+        dot?.setAttribute('title', `Branch ${branchInfo.label}`);
+        item?.classList.add('has-branch');
+        item?.setAttribute('title', `Branch ${branchInfo.label}`);
+
+        if (text && !text.querySelector('.panel-list-branch-badge')) {
+            const indexNode = text.querySelector('.panel-list-index');
+            if (indexNode) indexNode.insertAdjacentHTML('afterend', `<span class="panel-list-branch-badge">${escapeHTML(branchInfo.label)}</span>`);
+            else text.insertAdjacentHTML('afterbegin', `<span class="panel-list-branch-badge">${escapeHTML(branchInfo.label)}</span>`);
+        } else {
+            const badge = text?.querySelector('.panel-list-branch-badge');
+            if (badge) badge.textContent = branchInfo.label;
+        }
+    }
+
+    function updateTimelineItemAnswerBranch(index, branchInfo) {
+        if (!branchInfo) return;
+        const dot = container.querySelector(`.timeline-dot[data-index="${index}"]`);
+        const item = panelList.querySelector(`.panel-list-item[data-index="${index}"]`);
+        const text = item?.querySelector('.panel-list-text');
+
+        dot?.classList.add('has-answer-branch');
+        dot?.setAttribute('title', `Answer branch ${branchInfo.label}`);
+        item?.classList.add('has-answer-branch');
+        item?.setAttribute('title', `Answer branch ${branchInfo.label}`);
+
+        if (text && !text.querySelector('.panel-list-answer-branch-badge')) {
+            const userBadge = text.querySelector('.panel-list-branch-badge');
+            const indexNode = text.querySelector('.panel-list-index');
+            if (userBadge) userBadge.insertAdjacentHTML('afterend', `<span class="panel-list-answer-branch-badge">A ${escapeHTML(branchInfo.label)}</span>`);
+            else if (indexNode) indexNode.insertAdjacentHTML('afterend', `<span class="panel-list-answer-branch-badge">A ${escapeHTML(branchInfo.label)}</span>`);
+            else text.insertAdjacentHTML('afterbegin', `<span class="panel-list-answer-branch-badge">A ${escapeHTML(branchInfo.label)}</span>`);
+        } else {
+            const badge = text?.querySelector('.panel-list-answer-branch-badge');
+            if (badge) badge.textContent = `A ${branchInfo.label}`;
+        }
     }
 
     function refreshVisibleTurnPreviews() {
@@ -1626,6 +1848,16 @@
             const rect = turn.getBoundingClientRect();
             const nearViewport = rect.bottom >= -300 && rect.top <= window.innerHeight + 300;
             if (!nearViewport) return;
+            const branchInfo = getTurnBranchInfo(turn);
+            if (branchInfo) {
+                cacheTurnBranchInfo(turn, index, branchInfo);
+                updateTimelineItemBranch(index, branchInfo);
+            }
+            const answerBranchInfo = getTurnBranchInfo(getAssistantTurnForUserTurn(turn));
+            if (answerBranchInfo) {
+                cacheTurnAnswerBranchInfo(turn, index, answerBranchInfo);
+                updateTimelineItemAnswerBranch(index, answerBranchInfo);
+            }
             const text = getTurnPreviewText(turn, index);
             cacheTurnPreview(turn, index, text);
             updateTimelineItemPreview(index, text);
@@ -1673,31 +1905,89 @@
             .map(item => item.index);
     }
 
+    function getUnconfirmedBranchScanIndexes() {
+        const currentTurns = getUserTurnsRobust();
+        trackedTurns = currentTurns;
+        return currentTurns
+            .map((turn, index) => ({ turn, index }))
+            .filter(item => !getCachedTurnBranchInfo(item.turn, item.index))
+            .map(item => item.index);
+    }
+
+    async function scanTurnForBranch(index) {
+        const turn = getUserTurnsRobust()[index];
+        if (!(turn instanceof Element)) return null;
+        const branchInfo = getTurnBranchInfo(turn);
+        if (branchInfo) {
+            cacheTurnBranchInfo(turn, index, branchInfo);
+            updateTimelineItemBranch(index, branchInfo);
+            return branchInfo;
+        }
+        const answerBranchInfo = getTurnBranchInfo(getAssistantTurnForUserTurn(turn));
+        if (answerBranchInfo) {
+            cacheTurnAnswerBranchInfo(turn, index, answerBranchInfo);
+            updateTimelineItemAnswerBranch(index, answerBranchInfo);
+            return answerBranchInfo;
+        }
+        return null;
+    }
+
+    function isBranchControlButton(button) {
+        if (!(button instanceof Element)) return false;
+        const label = `${button.innerText || button.textContent || ''} ${button.getAttribute('aria-label') || ''} ${button.getAttribute('title') || ''} ${button.getAttribute('data-testid') || ''}`;
+        if (/(copy|edit|export|markdown|复制|编辑|导出|展开|collapsible)/i.test(label)) return false;
+        return /(regenerate|重新生成|previous response|next response|上一.*回复|下一.*回复|上一个回复|下一个回复|上一回答|下一回答)/i.test(label);
+    }
+
+    function refreshBranchNearControl(button) {
+        const wrapper = button?.closest?.('[data-testid^="conversation-turn-"]');
+        if (!(wrapper instanceof Element)) return;
+        const wrappers = Array.from(document.querySelectorAll('[data-testid^="conversation-turn-"]'));
+        const wrapperIndex = wrappers.indexOf(wrapper);
+        const role = inferTimelineWrapperRole(wrapper, wrapperIndex);
+        const userTurn = role === 'assistant' ? getPreviousUserTurnForAssistantTurn(wrapper) : wrapper;
+        const userIndex = getUserIndexForTurn(userTurn);
+        if (userIndex < 0) return;
+
+        [450, 1300, 2800].forEach(delay => {
+            setTimeout(async () => {
+                trackedTurns = getUserTurnsRobust();
+                await scanTurnForBranch(userIndex);
+                refreshVisibleTurnPreviews();
+            }, delay);
+        });
+    }
+
     async function indexMissingTimelineTurns() {
         if (isTimelineIndexing) return;
         isTimelineIndexing = true;
         timelineIndexBtn.disabled = true;
         try {
             updateTimeline();
-            const missing = getMissingIndexedTurnIndexes();
-            if (!missing.length) {
+            const targets = Array.from(new Set([
+                ...getMissingIndexedTurnIndexes(),
+                ...getUnconfirmedBranchScanIndexes()
+            ])).sort((a, b) => a - b);
+            if (!targets.length) {
                 timelineIndexStatus.textContent = 'All indexed';
                 return;
             }
 
-            for (let i = 0; i < missing.length; i++) {
-                const index = missing[i];
-                timelineIndexStatus.textContent = `Indexing ${i + 1}/${missing.length}`;
+            let foundBranches = 0;
+            for (let i = 0; i < targets.length; i++) {
+                const index = targets[i];
+                timelineIndexStatus.textContent = `Indexing ${i + 1}/${targets.length}`;
                 const turn = getUserTurnsRobust()[index];
                 if (!(turn instanceof Element)) continue;
                 isAutoScrolling = true;
                 preciseScrollToAnchor(turn, index);
                 await waitForTurnPreview(index);
+                if (await scanTurnForBranch(index)) foundBranches += 1;
                 await tlSleep(260);
             }
 
-            updateTimeline();
-            timelineIndexStatus.textContent = 'Indexed';
+            refreshVisibleTurnPreviews();
+            timelineIndexStatus.textContent = foundBranches ? `Indexed, branches +${foundBranches}` : 'Indexed';
         } catch (err) {
             console.error('[Timeline] index missing failed:', err);
             timelineIndexStatus.textContent = 'Index failed';
