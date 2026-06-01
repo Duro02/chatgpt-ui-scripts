@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         ChatGPT体验增强插件
 // @namespace    http://tampermonkey.net/
-// @version      2.6
-// @description  时间线/预览/跳转/长按标记/搜索/公式复制/导出Markdown。增强稳定性、性能与兼容性。
+// @version      3.2
+// @description  duro 修改版：时间线/预览/跳转/长按标记/搜索/公式复制/Prompt管理/备份/导出Markdown。修复长对话跳转、虚拟化备份、表格备份与“已思考”截断。
 // @author       YukonKong (original), duro (modifications)
 // @match        https://chatgpt.com/*
 // @license      CC-BY-NC-4.0
