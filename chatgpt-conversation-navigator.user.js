@@ -563,10 +563,18 @@
     let lastTimelineSignature = '';
     let isTimelineHovering = false;
     let isTimelineIndexing = false;
+    let timelineInfoStoreCache = null;
+    let timelineInfoWriteTimer = null;
+    let lastEnhanceAt = 0;
+    let lastVisiblePreviewRefreshAt = 0;
+    let turnWrapperCache = { at: 0, list: [] };
+    let activeTimelineDot = null;
+    let activePanelListItem = null;
     const PM_STORAGE_KEY = 'chatgpt_prompt_manager_data_v1';
     const PM_UI_KEY = 'chatgpt_prompt_manager_ui_v1';
     const TL_FAV_STORAGE_KEY = 'chatgpt_timeline_favorites_v1';
     const TL_INFO_STORAGE_KEY = 'chatgpt_timeline_turn_info_v1';
+    const TL_INFO_MAX_CONVERSATIONS = 80;
     const DEFAULT_CATEGORY_ID = 'cat_default';
 
     const pmState = {
@@ -595,11 +603,15 @@
     }
 
     function getTurnStableId(turn, index) {
-        const attrId = turn.getAttribute('data-message-id')
-            || turn.getAttribute('data-testid')
+        const attrId = turn.getAttribute('data-testid')
+            || turn.getAttribute('data-message-id')
             || turn.id
             || '';
         return `${index}|${attrId || `turn-${index}`}`;
+    }
+
+    function getTurnIndexPrefix(index) {
+        return `${index}|`;
     }
 
 
@@ -627,18 +639,48 @@
     }
 
     function readTimelineInfoStore() {
+        if (timelineInfoStoreCache && typeof timelineInfoStoreCache === 'object') return timelineInfoStoreCache;
         try {
             const raw = localStorage.getItem(TL_INFO_STORAGE_KEY);
             const data = raw ? JSON.parse(raw) : {};
-            return data && typeof data === 'object' ? data : {};
+            timelineInfoStoreCache = data && typeof data === 'object' ? data : {};
+            return timelineInfoStoreCache;
         } catch (err) {
             console.warn('[Timeline] turn info load failed:', err);
-            return {};
+            timelineInfoStoreCache = {};
+            return timelineInfoStoreCache;
         }
     }
 
+    function pruneTimelineInfoStore(store) {
+        const entries = Object.entries(store || {});
+        if (entries.length <= TL_INFO_MAX_CONVERSATIONS) return store || {};
+        entries.sort((a, b) => (b[1]?.updatedAt || 0) - (a[1]?.updatedAt || 0));
+        return Object.fromEntries(entries.slice(0, TL_INFO_MAX_CONVERSATIONS));
+    }
+
     function writeTimelineInfoStore(store) {
-        localStorage.setItem(TL_INFO_STORAGE_KEY, JSON.stringify(store));
+        timelineInfoStoreCache = pruneTimelineInfoStore(store);
+        try {
+            localStorage.setItem(TL_INFO_STORAGE_KEY, JSON.stringify(timelineInfoStoreCache));
+        } catch (err) {
+            console.warn('[Timeline] turn info save failed, pruning cache:', err);
+            timelineInfoStoreCache = pruneTimelineInfoStore(timelineInfoStoreCache);
+            const entries = Object.entries(timelineInfoStoreCache);
+            timelineInfoStoreCache = Object.fromEntries(entries.slice(0, Math.max(20, Math.floor(entries.length / 2))));
+            try {
+                localStorage.setItem(TL_INFO_STORAGE_KEY, JSON.stringify(timelineInfoStoreCache));
+            } catch (retryErr) {
+                console.warn('[Timeline] turn info save retry failed:', retryErr);
+            }
+        }
+    }
+
+    function scheduleTimelineInfoStoreWrite() {
+        clearTimeout(timelineInfoWriteTimer);
+        timelineInfoWriteTimer = setTimeout(() => {
+            if (timelineInfoStoreCache) writeTimelineInfoStore(timelineInfoStoreCache);
+        }, 250);
     }
 
     function readTurnInfoForCurrentConversation() {
@@ -651,7 +693,17 @@
     function writeTurnInfoForCurrentConversation(rec) {
         const store = readTimelineInfoStore();
         store[getConversationKey()] = { version: 1, updatedAt: Date.now(), turns: rec.turns || {} };
-        writeTimelineInfoStore(store);
+        timelineInfoStoreCache = store;
+        scheduleTimelineInfoStoreWrite();
+    }
+
+    function getCachedTurnRecord(turn, index) {
+        const rec = readTurnInfoForCurrentConversation();
+        const exact = rec.turns?.[getTurnStableId(turn, index)];
+        if (exact) return exact;
+        const prefix = getTurnIndexPrefix(index);
+        const legacyKey = Object.keys(rec.turns || {}).find(key => key.startsWith(prefix));
+        return legacyKey ? rec.turns[legacyKey] : null;
     }
 
     function isPlaceholderPreview(text) {
@@ -672,9 +724,7 @@
     }
 
     function getCachedTurnPreview(turn, index) {
-        const rec = readTurnInfoForCurrentConversation();
-        const stableId = getTurnStableId(turn, index);
-        return rec.turns?.[stableId]?.preview || '';
+        return getCachedTurnRecord(turn, index)?.preview || '';
     }
 
     function cacheTurnBranchInfo(turn, index, branchInfo) {
@@ -695,9 +745,7 @@
     }
 
     function getCachedTurnBranchInfo(turn, index) {
-        const rec = readTurnInfoForCurrentConversation();
-        const stableId = getTurnStableId(turn, index);
-        const branch = rec.turns?.[stableId]?.branch;
+        const branch = getCachedTurnRecord(turn, index)?.branch;
         if (!branch || !branch.label || !(branch.total > 1)) return null;
         return branch;
     }
@@ -720,9 +768,7 @@
     }
 
     function getCachedTurnAnswerBranchInfo(turn, index) {
-        const rec = readTurnInfoForCurrentConversation();
-        const stableId = getTurnStableId(turn, index);
-        const branch = rec.turns?.[stableId]?.answerBranch;
+        const branch = getCachedTurnRecord(turn, index)?.answerBranch;
         if (!branch || !branch.label || !(branch.total > 1)) return null;
         return branch;
     }
@@ -1294,18 +1340,25 @@
         if (index === currentActiveIndex) return;
         currentActiveIndex = index;
 
-        document.querySelectorAll('.timeline-dot').forEach(dot => dot.classList.remove('active'));
-        const activeDot = document.querySelector(`.timeline-dot[data-index="${index}"]`);
+        activeTimelineDot?.classList.remove('active');
+        const activeDot = container.querySelector(`.timeline-dot[data-index="${index}"]`);
         if (activeDot) {
             activeDot.classList.add('active');
+            activeTimelineDot = activeDot;
             updateIndicator(activeDot);
         } else {
+            activeTimelineDot = null;
             updateIndicator(null);
         }
 
-        document.querySelectorAll('.panel-list-item').forEach(item => item.classList.remove('active'));
-        const targetListItem = document.querySelector(`.panel-list-item[data-index="${index}"]`);
-        if (targetListItem) targetListItem.classList.add('active');
+        activePanelListItem?.classList.remove('active');
+        const targetListItem = panelList.querySelector(`.panel-list-item[data-index="${index}"]`);
+        if (targetListItem) {
+            targetListItem.classList.add('active');
+            activePanelListItem = targetListItem;
+        } else {
+            activePanelListItem = null;
+        }
     }
 
     function computeActiveIndexByViewport() {
@@ -1335,6 +1388,43 @@
         return turnNode.closest('[data-testid^="conversation-turn-"]')
             || turnNode.closest('div.flex.max-w-full.flex-col.gap-4.grow')
             || turnNode;
+    }
+
+    function invalidateTurnWrapperCache() {
+        turnWrapperCache = { at: 0, list: [] };
+    }
+
+    function getConversationTurnWrappersCached(maxAgeMs = 180) {
+        const now = Date.now();
+        if (turnWrapperCache.list.length && now - turnWrapperCache.at < maxAgeMs) return turnWrapperCache.list;
+        const byTurnNumber = new Map();
+        Array.from(document.querySelectorAll('[data-testid^="conversation-turn-"]')).forEach(wrapper => {
+            if (!(wrapper instanceof Element)) return;
+            const tid = wrapper.getAttribute('data-testid') || '';
+            const match = tid.match(/^conversation-turn-(\d+)$/);
+            if (!match) return;
+            const turnNumber = parseInt(match[1], 10);
+            if (!Number.isInteger(turnNumber)) return;
+
+            const existing = byTurnNumber.get(turnNumber);
+            if (!existing) {
+                byTurnNumber.set(turnNumber, wrapper);
+                return;
+            }
+
+            // ChatGPT may keep duplicate/hidden turn wrappers around; prefer the one
+            // that currently contains real message content without dropping placeholders.
+            const currentHasContent = !!wrapper.querySelector('[data-message-author-role], .markdown, .whitespace-pre-wrap');
+            const existingHasContent = !!existing.querySelector('[data-message-author-role], .markdown, .whitespace-pre-wrap');
+            if (currentHasContent && !existingHasContent) byTurnNumber.set(turnNumber, wrapper);
+        });
+        turnWrapperCache = {
+            at: now,
+            list: Array.from(byTurnNumber.entries())
+                .sort((a, b) => a[0] - b[0])
+                .map(([, wrapper]) => wrapper)
+        };
+        return turnWrapperCache.list;
     }
 
     function getScrollContainer(el) {
@@ -1449,7 +1539,7 @@
     }
 
     function getAssistantTurnForUserTurn(userTurn) {
-        const wrappers = Array.from(document.querySelectorAll('[data-testid^="conversation-turn-"]'));
+        const wrappers = getConversationTurnWrappersCached();
         const start = wrappers.indexOf(userTurn);
         if (start < 0) return null;
         for (let i = start + 1; i < wrappers.length; i++) {
@@ -1461,7 +1551,7 @@
     }
 
     function getPreviousUserTurnForAssistantTurn(assistantTurn) {
-        const wrappers = Array.from(document.querySelectorAll('[data-testid^="conversation-turn-"]'));
+        const wrappers = getConversationTurnWrappersCached();
         const start = wrappers.indexOf(assistantTurn);
         if (start < 0) return null;
         for (let i = start - 1; i >= 0; i--) {
@@ -1488,7 +1578,7 @@
     function syncActiveFromViewport() {
         activeSyncRaf = null;
         if (isAutoScrolling) return;
-        refreshVisibleTurnPreviews();
+        refreshVisibleTurnPreviewsThrottled(700);
         const nextIndex = computeActiveIndexByViewport();
         if (nextIndex >= 0) setActiveIndex(nextIndex);
     }
@@ -1626,10 +1716,17 @@
         });
     }
 
-    function updateTimeline() {
-        ensureMounted();
+    function runLightEnhancements(force = false) {
+        const now = Date.now();
+        if (!force && now - lastEnhanceAt < 2200) return;
+        lastEnhanceAt = now;
         enhanceFormulas();
         addExportButtons();
+    }
+
+    function updateTimeline() {
+        ensureMounted();
+        runLightEnhancements();
 
         const userTurns = getUserTurnsRobust();
         trackedTurns = userTurns;
@@ -1654,7 +1751,7 @@
         }
 
         if (signature === lastTimelineSignature) {
-            refreshVisibleTurnPreviews();
+            refreshVisibleTurnPreviewsThrottled(1000);
             scheduleActiveSync();
             return;
         }
@@ -1664,6 +1761,8 @@
         scrollObserver.disconnect();
         panelList.innerHTML = '';
         currentActiveIndex = -1;
+        activeTimelineDot = null;
+        activePanelListItem = null;
 
         trackedTurns.forEach((turn, index) => {
             turn.setAttribute('data-timeline-index', index);
@@ -1706,8 +1805,11 @@
                 const rect = dot.getBoundingClientRect();
                 const currentTurn = trackedTurns[index] || turn;
                 const freshPreview = getTurnPreviewText(currentTurn, index);
-                updateTimelineItemPreview(index, freshPreview);
-                globalTooltip.innerText = freshPreview;
+                const preview = isPlaceholderPreview(freshPreview)
+                    ? (getCachedTurnPreview(currentTurn, index) || freshPreview)
+                    : freshPreview;
+                updateTimelineItemPreview(index, preview);
+                globalTooltip.innerText = preview;
                 globalTooltip.style.top = `${rect.top + rect.height / 2}px`;
                 globalTooltip.style.right = `${window.innerWidth - rect.left + 14}px`;
                 globalTooltip.classList.add('visible');
@@ -1749,7 +1851,7 @@
     }
 
     function getUserTurnsRobust() {
-        const wrappers = Array.from(document.querySelectorAll('[data-testid^="conversation-turn-"]'));
+        const wrappers = getConversationTurnWrappersCached();
         const users = [];
 
         wrappers.forEach((wrapper, idx) => {
@@ -1859,15 +1961,30 @@
                 updateTimelineItemAnswerBranch(index, answerBranchInfo);
             }
             const text = getTurnPreviewText(turn, index);
-            cacheTurnPreview(turn, index, text);
-            updateTimelineItemPreview(index, text);
+            if (!isPlaceholderPreview(text)) {
+                cacheTurnPreview(turn, index, text);
+                updateTimelineItemPreview(index, text);
+            }
         });
+    }
+
+    function refreshVisibleTurnPreviewsThrottled(minIntervalMs = 800) {
+        const now = Date.now();
+        if (now - lastVisiblePreviewRefreshAt < minIntervalMs) return;
+        lastVisiblePreviewRefreshAt = now;
+        refreshVisibleTurnPreviews();
+    }
+
+    function extractUserPreviewText(turnWrapper) {
+        const userNode = turnWrapper.querySelector('[data-message-author-role="user"]')
+            || turnWrapper.querySelector('.user-message-bubble-color .whitespace-pre-wrap')
+            || turnWrapper.querySelector('.whitespace-pre-wrap');
+        return ((userNode?.innerText || userNode?.textContent || '').replace(/\s+/g, ' ').trim());
     }
 
     function getTurnPreviewText(turnWrapper, index) {
         if (!(turnWrapper instanceof Element)) return `User turn ${index + 1}`;
-        const userNode = turnWrapper.querySelector('[data-message-author-role="user"]');
-        const text = ((userNode?.innerText || userNode?.textContent || '').replace(/\s+/g, ' ').trim());
+        const text = extractUserPreviewText(turnWrapper);
         if (text) {
             const preview = text.length > 120 ? `${text.slice(0, 120)}...` : text;
             cacheTurnPreview(turnWrapper, index, preview);
@@ -1942,7 +2059,7 @@
     function refreshBranchNearControl(button) {
         const wrapper = button?.closest?.('[data-testid^="conversation-turn-"]');
         if (!(wrapper instanceof Element)) return;
-        const wrappers = Array.from(document.querySelectorAll('[data-testid^="conversation-turn-"]'));
+        const wrappers = getConversationTurnWrappersCached(0);
         const wrapperIndex = wrappers.indexOf(wrapper);
         const role = inferTimelineWrapperRole(wrapper, wrapperIndex);
         const userTurn = role === 'assistant' ? getPreviousUserTurnForAssistantTurn(wrapper) : wrapper;
@@ -1987,6 +2104,7 @@
             }
 
             refreshVisibleTurnPreviews();
+            if (timelineInfoStoreCache) writeTimelineInfoStore(timelineInfoStoreCache);
             timelineIndexStatus.textContent = foundBranches ? `Indexed, branches +${foundBranches}` : 'Indexed';
         } catch (err) {
             console.error('[Timeline] index missing failed:', err);
@@ -2689,18 +2807,28 @@
         });
     }
 
+    function isNavigatorOwnedNode(node) {
+        const el = node instanceof Element ? node : node?.parentElement;
+        return !!el?.closest?.('#chatgpt-dot-timeline, #chatgpt-timeline-indicator, #chatgpt-timeline-tooltip, #chatgpt-timeline-tools, #chatgpt-timeline-panel, #chatgpt-pm-fab, #chatgpt-pm-panel, #chatgpt-pm-toast, #chatgpt-bk-fab, #chatgpt-bk-panel');
+    }
+
     let debounceTimer;
     container.addEventListener('mouseenter', () => { isTimelineHovering = true; });
     container.addEventListener('mouseleave', () => { isTimelineHovering = false; });
-    const domObserver = new MutationObserver(() => {
+    const domObserver = new MutationObserver((mutations) => {
+        if (mutations.length && mutations.every(m => isNavigatorOwnedNode(m.target))) return;
+        invalidateTurnWrapperCache();
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
             ensureMounted();
             updateTimeline();
-        }, isTimelineHovering ? 1200 : 600);
+        }, isTimelineHovering ? 1600 : 900);
     });
     domObserver.observe(document.documentElement, { childList: true, subtree: true });
     document.addEventListener('scroll', handleAnyScroll, { passive: true, capture: true });
+    window.addEventListener('beforeunload', () => {
+        if (timelineInfoStoreCache) writeTimelineInfoStore(timelineInfoStoreCache);
+    });
     window.addEventListener('resize', scheduleActiveSync, { passive: true });
     initPromptManager();
     initBackupManager();
