@@ -1,11 +1,13 @@
 // ==UserScript==
 // @name         ChatGPT Project Source Text Preview
 // @namespace    http://tampermonkey.net/
-// @version      0.2.1
+// @version      0.4.0
 // @description  Preview ChatGPT project source Markdown/text files in-page instead of downloading them.
 // @author       duro
 // @match        https://chatgpt.com/*
 // @grant        none
+// @require      https://cdn.jsdelivr.net/npm/marked@16.2.1/lib/marked.umd.js
+// @require      https://cdn.jsdelivr.net/npm/dompurify@3.3.3/dist/purify.min.js
 // @run-at       document-idle
 // @noframes
 // ==/UserScript==
@@ -18,9 +20,11 @@
     const TEXT_FILE_RE = /\.(?:md|txt)(?:$|[?#])/i;
     const ESTUARY_CONTENT_RE = /\/backend-api\/estuary\/content\b/i;
     const SOURCE_CLICK_MAX_AGE_MS = 2000;
+    const NATIVE_DOWNLOAD_BYPASS_MS = 1500;
 
     let activeController = null;
     let lastTextSourceClick = null;
+    let nativeDownloadBypassUntil = 0;
 
     function injectStyle() {
         if (document.getElementById(STYLE_ID)) return;
@@ -99,6 +103,48 @@
             #${ROOT_ID} .cgpt-sp-body h2 { font-size: 20px; }
             #${ROOT_ID} .cgpt-sp-body h3 { font-size: 17px; }
             #${ROOT_ID} .cgpt-sp-body p { margin: 0.7em 0; }
+            #${ROOT_ID} .cgpt-sp-body ul,
+            #${ROOT_ID} .cgpt-sp-body ol {
+                margin: 0.75em 0 0.75em 1.35em;
+                padding-left: 1.1em;
+                list-style-position: outside !important;
+            }
+            #${ROOT_ID} .cgpt-sp-body ul { list-style-type: disc !important; }
+            #${ROOT_ID} .cgpt-sp-body ol { list-style-type: decimal !important; }
+            #${ROOT_ID} .cgpt-sp-body li {
+                margin: 0.35em 0;
+                display: list-item !important;
+            }
+            #${ROOT_ID} .cgpt-sp-body li::marker {
+                color: #cbd5e1 !important;
+                font-weight: 600;
+            }
+            #${ROOT_ID} .cgpt-sp-body li > p {
+                margin: 0.35em 0;
+            }
+            #${ROOT_ID} .cgpt-sp-body table {
+                width: max-content;
+                max-width: 100%;
+                margin: 1em 0;
+                border-collapse: collapse;
+                overflow: auto;
+                display: block;
+            }
+            #${ROOT_ID} .cgpt-sp-body th,
+            #${ROOT_ID} .cgpt-sp-body td {
+                border: 1px solid rgba(148, 163, 184, 0.35);
+                padding: 7px 10px;
+                vertical-align: top;
+            }
+            #${ROOT_ID} .cgpt-sp-body th {
+                background: rgba(255, 255, 255, 0.08);
+                font-weight: 700;
+            }
+            #${ROOT_ID} .cgpt-sp-body hr {
+                border: 0;
+                border-top: 1px solid rgba(148, 163, 184, 0.35);
+                margin: 1.4em 0;
+            }
             #${ROOT_ID} .cgpt-sp-body pre {
                 overflow: auto;
                 padding: 12px;
@@ -114,6 +160,9 @@
                 padding-left: 12px;
                 border-left: 3px solid rgba(148, 163, 184, 0.55);
                 color: #cbd5e1;
+            }
+            #${ROOT_ID} .cgpt-sp-body a {
+                color: #93c5fd;
             }
             #${ROOT_ID} .cgpt-sp-error {
                 color: #fca5a5;
@@ -208,6 +257,21 @@
     }
 
     function renderMarkdown(md) {
+        const source = String(md || '');
+        const markedParser = globalThis.marked;
+        const purifier = globalThis.DOMPurify;
+        if (typeof markedParser?.parse === 'function' && typeof purifier?.sanitize === 'function') {
+            try {
+                const dirty = markedParser.parse(source, { gfm: true, breaks: false });
+                return purifier.sanitize(dirty, { USE_PROFILES: { html: true } });
+            } catch (err) {
+                console.warn('[source-preview] marked render failed, using fallback renderer:', err);
+            }
+        }
+        return renderMarkdownFallback(source);
+    }
+
+    function renderMarkdownFallback(md) {
         const blocks = [];
         const lines = String(md || '').replace(/\r/g, '').split('\n');
         let paragraph = [];
@@ -319,16 +383,36 @@
         return '';
     }
 
+    function getPotentialChatFileLabel(event) {
+        const path = event.composedPath ? event.composedPath() : [];
+        for (const node of path) {
+            if (!(node instanceof Element)) continue;
+            const text = getSmallElementText(node).replace(/\s+/g, ' ').trim();
+            if (!text || text.length > 220) continue;
+            if (TEXT_FILE_RE.test(text)) return getFirstTextSourceLabel(text) || text;
+
+            const looksTruncated = /(?:\.\.\.|…)$/.test(text);
+            const looksFileLike = /[A-Za-z0-9][A-Za-z0-9_.-]{8,}/.test(text) && !/[。！？?!]/.test(text);
+            const hasFileIcon = !!node.querySelector?.('svg');
+            if ((looksTruncated || looksFileLike) && hasFileIcon) return text;
+        }
+        return '';
+    }
+
     function rememberTextSourceClick(event) {
         if (!(event.target instanceof Element)) return;
         const info = findTextSourceClickTarget(event);
         const url = info ? getFileUrl(info) : '';
-        const label = info ? getFileName(info, url) : getNearbyTextSourceLabel(event);
-        if (!label || !TEXT_FILE_RE.test(label)) return;
+        const label = info ? getFileName(info, url) : (getNearbyTextSourceLabel(event) || getPotentialChatFileLabel(event));
+        if (!label) return;
+        const isExplicitTextFile = TEXT_FILE_RE.test(label);
+        const isPotentialChatFile = !isExplicitTextFile && !!getPotentialChatFileLabel(event);
+        if (!isExplicitTextFile && !isPotentialChatFile) return;
         lastTextSourceClick = {
             at: Date.now(),
             label,
-            info
+            info,
+            explicit: isExplicitTextFile
         };
     }
 
@@ -356,6 +440,17 @@
         const el = event.target instanceof Element ? event.target : null;
         if (el && looksLikeTextSourceTarget(el)) return { element: el, link: el.closest('a[href]') };
         return null;
+    }
+
+    function getEstuaryContentClickUrl(event) {
+        if (Date.now() < nativeDownloadBypassUntil) return '';
+        const path = event.composedPath ? event.composedPath() : [];
+        for (const node of path) {
+            if (!(node instanceof Element)) continue;
+            const link = node.matches?.('a[href]') ? node : node.closest?.('a[href]');
+            if (link?.href && isEstuaryContentUrl(link.href)) return link.href;
+        }
+        return '';
     }
 
     function getFileUrl(info) {
@@ -386,7 +481,42 @@
         }
     }
 
-    async function previewTextSourceUrl(url, title) {
+    function getHeaderFileName(res) {
+        const header = res?.headers?.get?.('content-disposition') || '';
+        const utf8 = header.match(/filename\*=UTF-8''([^;]+)/i);
+        if (utf8) {
+            try { return decodeURIComponent(utf8[1].replace(/["']/g, '')); } catch { return utf8[1]; }
+        }
+        const plain = header.match(/filename="?([^";]+)"?/i);
+        return plain ? plain[1] : '';
+    }
+
+    function isTextLikeResponse(res, title) {
+        if (TEXT_FILE_RE.test(title || '')) return true;
+        const type = (res?.headers?.get?.('content-type') || '').toLowerCase();
+        return /^text\//.test(type) || /(?:markdown|json|xml|javascript|typescript)/.test(type);
+    }
+
+    function looksProbablyText(text) {
+        const sample = String(text || '').slice(0, 4096);
+        if (!sample) return true;
+        if (sample.includes('\u0000') || sample.includes('\ufffd')) return false;
+        const controlChars = sample.match(/[\x00-\x08\x0E-\x1F]/g);
+        return !controlChars || controlChars.length / sample.length < 0.01;
+    }
+
+    function triggerNativeDownload(url) {
+        nativeDownloadBypassUntil = Date.now() + NATIVE_DOWNLOAD_BYPASS_MS;
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    }
+
+    async function previewTextSourceUrl(url, title, options = {}) {
         if (!url) {
             showError(title, 'No file URL was found for this text source item.');
             return;
@@ -401,8 +531,14 @@
                 headers: { accept: 'text/markdown,text/plain,*/*' }
             });
             if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+            const resolvedTitle = getHeaderFileName(res) || title || 'source.txt';
             const text = await res.text();
-            showPreview(title, renderMarkdown(text), text);
+            if (options.fallbackToNative && !isTextLikeResponse(res, resolvedTitle) && !looksProbablyText(text)) {
+                hidePreview();
+                triggerNativeDownload(url);
+                return;
+            }
+            showPreview(resolvedTitle, renderMarkdown(text), text);
         } catch (err) {
             if (err.name === 'AbortError') return;
             showError(title, `Cannot preview this file.\n\n${err.message}`);
@@ -419,9 +555,23 @@
 
     document.addEventListener('click', (event) => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        const estuaryUrl = getEstuaryContentClickUrl(event);
+        if (estuaryUrl) {
+            const recent = consumeRecentTextSourceClick();
+            if (recent) {
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+                previewTextSourceUrl(new URL(estuaryUrl, location.href).href, recent.label || 'source.txt', { fallbackToNative: !recent.explicit });
+                return;
+            }
+        }
+
         rememberTextSourceClick(event);
         const info = findTextSourceClickTarget(event);
         if (!info) return;
+        const url = getFileUrl(info);
+        if (!url) return;
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
