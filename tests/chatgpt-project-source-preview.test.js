@@ -20,6 +20,12 @@ assert(
 );
 
 assert(
+    /function isExplicitDownloadClick\s*\(/.test(script)
+    && /isExplicitDownloadClick\(event\)[\s\S]{0,180}bypassPreviewForNativeDownload\(\)/.test(script),
+    'source preview should bypass previews for explicit download menu clicks'
+);
+
+assert(
     /@require\s+https:\/\/cdn\.jsdelivr\.net\/npm\/marked@[^/]+\/lib\/marked\.umd\.js/.test(script),
     'source preview should load the marked UMD browser build'
 );

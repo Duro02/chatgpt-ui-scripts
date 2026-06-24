@@ -147,6 +147,56 @@
     font-family: var(--claude-prose-font) !important;
   }
 
+  /* KaTeX relies on its own glyph fonts; broad prose font overrides can turn
+     symbols such as \ne / \neq into missing-glyph boxes. */
+  html.dark .katex,
+  html.dark .katex-display {
+    font-family: KaTeX_Main, "Times New Roman", serif !important;
+    line-height: 1.2 !important;
+    text-rendering: auto !important;
+  }
+
+  html.dark .katex :where(.mord, .mop, .mbin, .mrel, .mopen, .mclose, .mpunct, .minner, .base) {
+    font-family: KaTeX_Main, "Times New Roman", serif !important;
+  }
+
+  html.dark .katex .mathnormal {
+    font-family: KaTeX_Math, KaTeX_Main, "Times New Roman", serif !important;
+    font-style: italic !important;
+  }
+
+  html.dark .katex .mathrm,
+  html.dark .katex .mainrm {
+    font-family: KaTeX_Main, "Times New Roman", serif !important;
+    font-style: normal !important;
+  }
+
+  html.dark .katex .amsrm,
+  html.dark .katex .mathbb,
+  html.dark .katex .textbb {
+    font-family: KaTeX_AMS, KaTeX_Main, "Times New Roman", serif !important;
+  }
+
+  html.dark .katex .mathcal {
+    font-family: KaTeX_Caligraphic, KaTeX_Main, "Times New Roman", serif !important;
+  }
+
+  html.dark .katex .mathfrak {
+    font-family: KaTeX_Fraktur, KaTeX_Main, "Times New Roman", serif !important;
+  }
+
+  html.dark .katex .mathtt {
+    font-family: KaTeX_Typewriter, Consolas, monospace !important;
+  }
+
+  html.dark .katex .mathsf {
+    font-family: KaTeX_SansSerif, sans-serif !important;
+  }
+
+  html.dark .katex .mathscr {
+    font-family: KaTeX_Script, KaTeX_Main, "Times New Roman", serif !important;
+  }
+
   html.dark .markdown p,
   html.dark .prose p {
     margin-block: 0.7em !important;
@@ -564,5 +614,72 @@
   html.dark ::selection {
     background: rgba(215, 185, 143, 0.28) !important;
     color: #fff8ed !important;
+  }
+
+  /* Final KaTeX guard: keep this near the end so broad ChatGPT/prose font
+     overrides cannot break private-use math glyphs such as not/neq/nexists. */
+  html.dark .katex,
+  html.dark .katex * {
+    font-family: KaTeX_Main, "Times New Roman", serif !important;
+  }
+
+  html.dark .katex .mathnormal,
+  html.dark .katex .mathnormal * {
+    font-family: KaTeX_Math, KaTeX_Main, "Times New Roman", serif !important;
+    font-style: italic !important;
+  }
+
+  html.dark .katex .mathrm,
+  html.dark .katex .mathrm *,
+  html.dark .katex .mainrm,
+  html.dark .katex .mainrm * {
+    font-family: KaTeX_Main, "Times New Roman", serif !important;
+    font-style: normal !important;
+  }
+
+  html.dark .katex .amsrm,
+  html.dark .katex .amsrm *,
+  html.dark .katex .mathbb,
+  html.dark .katex .mathbb *,
+  html.dark .katex .textbb,
+  html.dark .katex .textbb * {
+    font-family: KaTeX_AMS, KaTeX_Main, "Times New Roman", serif !important;
+  }
+
+  html.dark .katex .mathcal,
+  html.dark .katex .mathcal * {
+    font-family: KaTeX_Caligraphic, KaTeX_Main, "Times New Roman", serif !important;
+  }
+
+  html.dark .katex .mathfrak,
+  html.dark .katex .mathfrak * {
+    font-family: KaTeX_Fraktur, KaTeX_Main, "Times New Roman", serif !important;
+  }
+
+  html.dark .katex .mathtt,
+  html.dark .katex .mathtt * {
+    font-family: KaTeX_Typewriter, Consolas, monospace !important;
+  }
+
+  html.dark .katex .mathsf,
+  html.dark .katex .mathsf * {
+    font-family: KaTeX_SansSerif, sans-serif !important;
+  }
+
+  html.dark .katex .mathscr,
+  html.dark .katex .mathscr * {
+    font-family: KaTeX_Script, KaTeX_Main, "Times New Roman", serif !important;
+  }
+
+  /* KaTeX renders \not/\neq by overlaying a private-use glyph inside .mrel.
+     If any prose font leaks into this nested vbox/rlap path, the glyph becomes
+     a square. Keep relation symbols strictly on KaTeX_Main. */
+  html.dark [data-testid^="conversation-turn"] .katex-html .mrel,
+  html.dark [data-testid^="conversation-turn"] .katex-html .mrel *,
+  html.dark .katex-html .mrel,
+  html.dark .katex-html .mrel * {
+    font-family: KaTeX_Main, "Times New Roman", serif !important;
+    font-style: normal !important;
+    font-weight: 400 !important;
   }
 }

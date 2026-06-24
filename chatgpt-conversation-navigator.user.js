@@ -603,15 +603,58 @@
     }
 
     function getTurnStableId(turn, index) {
-        const attrId = turn.getAttribute('data-testid')
-            || turn.getAttribute('data-message-id')
-            || turn.id
-            || '';
-        return `${index}|${attrId || `turn-${index}`}`;
+        if (!(turn instanceof Element)) return `missing|${index}`;
+        const attrId = turn.getAttribute('data-testid') || turn.id || '';
+        if (attrId) return `turn|${attrId}`;
+        const messageId = getTurnMessageId(turn);
+        return messageId ? `msg|${messageId}` : `missing|${index}`;
     }
 
-    function getTurnIndexPrefix(index) {
-        return `${index}|`;
+    function getTurnMessageId(turn) {
+        if (!(turn instanceof Element)) return '';
+        return turn.getAttribute('data-message-id')
+            || turn.querySelector('[data-message-id]')?.getAttribute('data-message-id')
+            || '';
+    }
+
+    function getTurnContentCacheKey(turn) {
+        const messageId = getTurnMessageId(turn);
+        if (messageId) return `msg|${messageId}`;
+        const text = typeof extractUserPreviewText === 'function' ? extractUserPreviewText(turn) : '';
+        const normalized = normalizeTurnKeyText(text);
+        return normalized ? `text|${normalized}` : '';
+    }
+
+    function mergeTurnRecords(records) {
+        return records
+            .filter(Boolean)
+            .sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0))
+            .reduce((merged, record) => ({ ...merged, ...record }), {});
+    }
+
+    function patchCachedTurnRecord(turn, index, patch) {
+        if (!(turn instanceof Element) || !patch || typeof patch !== 'object') return;
+        const rec = readTurnInfoForCurrentConversation();
+        const now = Date.now();
+        const stableId = getTurnStableId(turn, index);
+        const contentKey = getTurnContentCacheKey(turn);
+        const merged = {
+            ...mergeTurnRecords([
+                rec.turns[stableId],
+                contentKey ? rec.turns[contentKey] : null
+            ]),
+            ...patch,
+            updatedAt: now
+        };
+
+        rec.turns[stableId] = merged;
+        if (contentKey && contentKey !== stableId) {
+            rec.turns[contentKey] = {
+                ...(rec.turns[contentKey] || {}),
+                ...merged
+            };
+        }
+        writeTurnInfoForCurrentConversation(rec);
     }
 
 
@@ -700,10 +743,10 @@
     function getCachedTurnRecord(turn, index) {
         const rec = readTurnInfoForCurrentConversation();
         const exact = rec.turns?.[getTurnStableId(turn, index)];
-        if (exact) return exact;
-        const prefix = getTurnIndexPrefix(index);
-        const legacyKey = Object.keys(rec.turns || {}).find(key => key.startsWith(prefix));
-        return legacyKey ? rec.turns[legacyKey] : null;
+        const contentKey = getTurnContentCacheKey(turn);
+        const content = contentKey ? rec.turns?.[contentKey] : null;
+        const merged = mergeTurnRecords([content, exact]);
+        return Object.keys(merged).length ? merged : null;
     }
 
     function isPlaceholderPreview(text) {
@@ -712,15 +755,22 @@
 
     function cacheTurnPreview(turn, index, text) {
         if (!text || isPlaceholderPreview(text)) return;
-        const rec = readTurnInfoForCurrentConversation();
-        const stableId = getTurnStableId(turn, index);
-        rec.turns[stableId] = {
-            ...(rec.turns[stableId] || {}),
+        patchCachedTurnRecord(turn, index, {
             preview: text,
             confirmed: true,
-            updatedAt: Date.now()
-        };
-        writeTurnInfoForCurrentConversation(rec);
+            role: 'user'
+        });
+    }
+
+    function cacheTurnRole(turn, index, role) {
+        if (!(turn instanceof Element) || !/^(user|assistant)$/.test(role || '')) return;
+        if (getCachedTurnRecord(turn, index)?.role === role) return;
+        patchCachedTurnRecord(turn, index, { role });
+    }
+
+    function getCachedTurnRole(turn, index) {
+        const role = getCachedTurnRecord(turn, index)?.role;
+        return /^(user|assistant)$/.test(role || '') ? role : '';
     }
 
     function getCachedTurnPreview(turn, index) {
@@ -729,19 +779,14 @@
 
     function cacheTurnBranchInfo(turn, index, branchInfo) {
         if (!(turn instanceof Element) || !branchInfo || !branchInfo.label) return;
-        const rec = readTurnInfoForCurrentConversation();
-        const stableId = getTurnStableId(turn, index);
-        rec.turns[stableId] = {
-            ...(rec.turns[stableId] || {}),
+        patchCachedTurnRecord(turn, index, {
             branch: {
                 current: branchInfo.current,
                 total: branchInfo.total,
                 label: branchInfo.label,
                 updatedAt: Date.now()
-            },
-            updatedAt: Date.now()
-        };
-        writeTurnInfoForCurrentConversation(rec);
+            }
+        });
     }
 
     function getCachedTurnBranchInfo(turn, index) {
@@ -752,19 +797,14 @@
 
     function cacheTurnAnswerBranchInfo(turn, index, branchInfo) {
         if (!(turn instanceof Element) || !branchInfo || !branchInfo.label) return;
-        const rec = readTurnInfoForCurrentConversation();
-        const stableId = getTurnStableId(turn, index);
-        rec.turns[stableId] = {
-            ...(rec.turns[stableId] || {}),
+        patchCachedTurnRecord(turn, index, {
             answerBranch: {
                 current: branchInfo.current,
                 total: branchInfo.total,
                 label: branchInfo.label,
                 updatedAt: Date.now()
-            },
-            updatedAt: Date.now()
-        };
-        writeTurnInfoForCurrentConversation(rec);
+            }
+        });
     }
 
     function getCachedTurnAnswerBranchInfo(turn, index) {
@@ -1530,12 +1570,11 @@
 
     function inferTimelineWrapperRole(wrapper, idx) {
         const explicitRole = (wrapper?.querySelector?.('[data-message-author-role]')?.getAttribute('data-message-author-role') || '').toLowerCase();
-        if (explicitRole === 'user' || explicitRole === 'assistant') return explicitRole;
-        const tid = wrapper?.getAttribute?.('data-testid') || '';
-        const m = tid.match(/conversation-turn-(\d+)/);
-        const turnNumber = m ? parseInt(m[1], 10) : (idx + 1);
-        if (!Number.isInteger(turnNumber)) return '';
-        return turnNumber % 2 === 1 ? 'user' : 'assistant';
+        if (explicitRole === 'user' || explicitRole === 'assistant') {
+            cacheTurnRole(wrapper, idx, explicitRole);
+            return explicitRole;
+        }
+        return getCachedTurnRole(wrapper, idx);
     }
 
     function getAssistantTurnForUserTurn(userTurn) {
@@ -1734,7 +1773,7 @@
         const timelineScrollHeight = container.scrollHeight;
         const timelineRatio = timelineScrollHeight > 0 ? (timelineScrollTop / timelineScrollHeight) : 0;
         const signature = trackedTurns
-            .map((turn, idx) => `${idx}:${turn.getAttribute('data-testid') || ''}:${turn.getAttribute('data-message-id') || ''}`)
+            .map((turn, idx) => `${idx}:${getTurnStableId(turn, idx)}:${getTurnContentCacheKey(turn)}`)
             .join('|');
 
         // 保存黄点标记状态（持久化）
@@ -1850,28 +1889,56 @@
         scheduleActiveSync();
     }
 
+    function getUserTurnDedupKey(turn) {
+        if (!(turn instanceof Element)) return '';
+        const messageId = getTurnMessageId(turn);
+        if (messageId) return `msg|${messageId}`;
+        const text = normalizeTurnKeyText(extractUserPreviewText(turn));
+        return text ? `text|${text}` : '';
+    }
+
+    function scoreUserTurnCandidate(turn) {
+        if (!(turn instanceof Element)) return 0;
+        const rect = turn.getBoundingClientRect();
+        const hasMessageId = !!getTurnMessageId(turn);
+        const hasUserRole = !!turn.querySelector('[data-message-author-role="user"]');
+        const hasText = !!extractUserPreviewText(turn);
+        const hasSize = rect.height > 1;
+        const nearViewport = rect.bottom >= -300 && rect.top <= window.innerHeight + 300;
+        return (hasMessageId ? 2000 : 0)
+            + (hasText ? 1000 : 0)
+            + (hasUserRole ? 250 : 0)
+            + (hasSize ? 80 : 0)
+            + (nearViewport ? 40 : 0);
+    }
+
     function getUserTurnsRobust() {
         const wrappers = getConversationTurnWrappersCached();
         const users = [];
+        const userByIdentity = new Map();
+
+        function addUserTurn(wrapper) {
+            const key = getUserTurnDedupKey(wrapper);
+            if (!key) {
+                users.push(wrapper);
+                return;
+            }
+
+            const existingIndex = userByIdentity.get(key);
+            if (existingIndex === undefined) {
+                userByIdentity.set(key, users.length);
+                users.push(wrapper);
+                return;
+            }
+
+            if (scoreUserTurnCandidate(wrapper) > scoreUserTurnCandidate(users[existingIndex])) {
+                users[existingIndex] = wrapper;
+            }
+        }
 
         wrappers.forEach((wrapper, idx) => {
             if (!(wrapper instanceof Element)) return;
-            const explicitRoleNode = wrapper.querySelector('[data-message-author-role]');
-            const explicitRole = (explicitRoleNode?.getAttribute('data-message-author-role') || '').toLowerCase();
-
-            let isUser = false;
-            if (explicitRole === 'user') {
-                isUser = true;
-            } else if (explicitRole === 'assistant') {
-                isUser = false;
-            } else {
-                const tid = wrapper.getAttribute('data-testid') || '';
-                const m = tid.match(/conversation-turn-(\d+)/);
-                const turnNumber = m ? parseInt(m[1], 10) : (idx + 1);
-                isUser = Number.isInteger(turnNumber) && (turnNumber % 2 === 1);
-            }
-
-            if (isUser) users.push(wrapper);
+            if (inferTimelineWrapperRole(wrapper, idx) === 'user') addUserTurn(wrapper);
         });
 
         return users;

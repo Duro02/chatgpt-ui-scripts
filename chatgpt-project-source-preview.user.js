@@ -366,7 +366,25 @@
 
     function getElementLabel(element) {
         if (!(element instanceof Element)) return '';
-        return `${getSmallElementText(element)} ${element.getAttribute('aria-label') || ''} ${element.getAttribute('title') || ''}`;
+        return `${getSmallElementText(element)} ${element.getAttribute('aria-label') || ''} ${element.getAttribute('title') || ''} ${element.getAttribute('data-testid') || ''}`;
+    }
+
+    function isExplicitDownloadClick(event) {
+        const path = event.composedPath ? event.composedPath() : [];
+        return path.some(node => {
+            if (!(node instanceof Element)) return false;
+            if (node.matches?.('a[download], [download]')) return true;
+            const label = getElementLabel(node).replace(/\s+/g, ' ').trim();
+            const role = node.getAttribute('role') || '';
+            return /\bdownload\b|下载/i.test(label)
+                && /^(A|BUTTON|DIV|SPAN)$/.test(node.tagName)
+                && (!role || /^(button|menuitem|option|link)$/.test(role));
+        });
+    }
+
+    function bypassPreviewForNativeDownload() {
+        lastTextSourceClick = null;
+        nativeDownloadBypassUntil = Date.now() + NATIVE_DOWNLOAD_BYPASS_MS;
     }
 
     function getNearbyTextSourceLabel(event) {
@@ -506,7 +524,7 @@
     }
 
     function triggerNativeDownload(url) {
-        nativeDownloadBypassUntil = Date.now() + NATIVE_DOWNLOAD_BYPASS_MS;
+        bypassPreviewForNativeDownload();
         const link = document.createElement('a');
         link.href = url;
         link.target = '_blank';
@@ -555,6 +573,12 @@
 
     document.addEventListener('click', (event) => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        if (isExplicitDownloadClick(event)) {
+            bypassPreviewForNativeDownload();
+            return;
+        }
+        if (Date.now() < nativeDownloadBypassUntil) return;
+
         const estuaryUrl = getEstuaryContentClickUrl(event);
         if (estuaryUrl) {
             const recent = consumeRecentTextSourceClick();
