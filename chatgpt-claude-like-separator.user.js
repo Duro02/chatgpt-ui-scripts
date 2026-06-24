@@ -35,7 +35,7 @@
   function isSeparatorText(text) {
     const normalized = String(text || '').trim().replace(/\s+/g, '');
 
-    if (normalized.length < 3 || normalized.length > 80) {
+    if (normalized.length < 2 || normalized.length > 80) {
       return false;
     }
 

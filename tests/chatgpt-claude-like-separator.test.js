@@ -27,6 +27,7 @@ function createParagraph(textContent, hasBlockedInline = false) {
 assert.strictEqual(isSeparatorText('━━━━━━━━━━━━'), true);
 assert.strictEqual(isSeparatorText('────────────'), true);
 assert.strictEqual(isSeparatorText('---'), true);
+assert.strictEqual(isSeparatorText('——'), true);
 assert.strictEqual(isSeparatorText('———'), true);
 assert.strictEqual(isSeparatorText('━ ━ ━ ━'), true);
 
@@ -36,16 +37,18 @@ assert.strictEqual(isSeparatorText(''), false);
 assert.strictEqual(isSeparatorText('━━ ok ━━'), false);
 
 const separatorParagraph = createParagraph('━━━━━━━━━━━━');
+const shortSeparatorParagraph = createParagraph('——');
 const normalParagraph = createParagraph('这是普通段落');
 const codeParagraph = createParagraph('---', true);
 
 assert.strictEqual(
   markSeparatorParagraphs({
-    querySelectorAll: () => [separatorParagraph, normalParagraph, codeParagraph],
+    querySelectorAll: () => [separatorParagraph, shortSeparatorParagraph, normalParagraph, codeParagraph],
   }),
-  1
+  2
 );
 assert.strictEqual(separatorParagraph.classList.contains('claude-like-separator'), true);
+assert.strictEqual(shortSeparatorParagraph.classList.contains('claude-like-separator'), true);
 assert.strictEqual(normalParagraph.classList.contains('claude-like-separator'), false);
 assert.strictEqual(codeParagraph.classList.contains('claude-like-separator'), false);
 
