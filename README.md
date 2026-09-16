@@ -8,7 +8,6 @@
 | --- | --- | --- |
 | `GPT Claude-like Style.css` | Stylus/UserStyle | ChatGPT 深色界面样式，让页面更接近 Claude 的窄版、暖灰、低干扰阅读体验。 |
 | `chatgpt-claude-like-separator.user.js` | Tampermonkey userscript | 配合上面的样式使用，识别纯文本分隔符段落并添加 class，方便样式渲染为更自然的分割线。 |
-| `chatgpt-conversation-navigator.user.js` | Tampermonkey userscript | 基于 YukonKong 原脚本修改，修复长对话节点跳转，增加 Prompt 管理、对话备份、虚拟化 DOM 适配等功能。 |
 
 仓库里也包含一个附加脚本：
 
@@ -36,7 +35,6 @@
 
 - 只想改外观：安装 `GPT Claude-like Style.css`。
 - 想让外观里的分隔线更稳定：再安装 `chatgpt-claude-like-separator.user.js`。
-- 想要长对话导航、Prompt 管理和备份：安装 `chatgpt-conversation-navigator.user.js`。
 - 想预览项目源 Markdown/text 文件：安装 `chatgpt-project-source-preview.user.js`。
 
 ## 主要功能
@@ -54,9 +52,13 @@
 - 给匹配段落添加 `claude-like-separator` class。
 - 由 Stylus 样式负责最终视觉渲染。
 
-### ChatGPT Conversation Navigator
+### ChatGPT Conversation Navigator（已归档）
 
-这是对 YukonKong 原始 `ChatGPT体验增强插件` 的修改版，重点改动包括：
+文件在 `archived/chatgpt-conversation-navigator.user.js`，是 YukonKong 原始 `ChatGPT体验增强插件` 的修改版，提供长对话时间线导航、Prompt 管理器、会话备份等功能。
+
+当前状态：ChatGPT 官方已自行更新对话定位节点，该脚本的更新优先级后调，**不保证可用性**，仅留档供需要时自行取用。
+
+原修改版相对原脚本的改动：
 
 - 使用 `conversation-turn-*` wrapper 作为长对话时间线锚点。
 - 适配 ChatGPT 虚拟化 DOM，减少长对话跳转错位。
@@ -66,7 +68,7 @@
 
 ## 许可证与署名
 
-- `chatgpt-conversation-navigator.user.js` 基于 YukonKong 的原始脚本修改，原脚本许可证为 `CC-BY-NC-4.0`。本修改版继续保留原作者署名和同一许可证限制，仅可在许可证允许范围内使用和再发布，尤其注意非商业限制。
+- `archived/chatgpt-conversation-navigator.user.js`（已归档）基于 YukonKong 的原始脚本修改，原脚本许可证为 `CC-BY-NC-4.0`。本修改版继续保留原作者署名和同一许可证限制，仅可在许可证允许范围内使用和再发布，尤其注意非商业限制。
 - `GPT Claude-like Style.css`、`chatgpt-claude-like-separator.user.js`、`chatgpt-project-source-preview.user.js` 由 duro 编写。除非单个文件另有说明，按 `MIT` 许可发布。
 
 原始脚本来源：
