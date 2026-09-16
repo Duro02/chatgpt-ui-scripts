@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Project Source Text Preview
 // @namespace    http://tampermonkey.net/
-// @version      0.4.0
+// @version      0.4.1
 // @description  Preview ChatGPT project source Markdown/text files in-page instead of downloading them.
 // @author       duro
 // @match        https://chatgpt.com/*
@@ -19,7 +19,7 @@
     const STYLE_ID = 'cgpt-source-preview-style';
     const TEXT_FILE_RE = /\.(?:md|txt)(?:$|[?#])/i;
     const ESTUARY_CONTENT_RE = /\/backend-api\/estuary\/content\b/i;
-    const SOURCE_CLICK_MAX_AGE_MS = 2000;
+    const SOURCE_CLICK_MAX_AGE_MS = 15000;
     const NATIVE_DOWNLOAD_BYPASS_MS = 1500;
 
     let activeController = null;
