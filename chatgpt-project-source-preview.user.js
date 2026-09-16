@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Project Source Text Preview
 // @namespace    http://tampermonkey.net/
-// @version      0.2.0
+// @version      0.2.1
 // @description  Preview ChatGPT project source Markdown/text files in-page instead of downloading them.
 // @author       duro
 // @match        https://chatgpt.com/*
@@ -17,7 +17,7 @@
     const STYLE_ID = 'cgpt-source-preview-style';
     const TEXT_FILE_RE = /\.(?:md|txt)(?:$|[?#])/i;
     const ESTUARY_CONTENT_RE = /\/backend-api\/estuary\/content\b/i;
-    const SOURCE_CLICK_MAX_AGE_MS = 2000;
+    const SOURCE_CLICK_MAX_AGE_MS = 15000;
 
     let activeController = null;
     let lastTextSourceClick = null;
@@ -422,6 +422,10 @@
         rememberTextSourceClick(event);
         const info = findTextSourceClickTarget(event);
         if (!info) return;
+        // Newer ChatGPT source rows are <button> without an href: the app resolves the
+        // download URL itself and then calls window.open(estuary...). Blocking the click
+        // here would kill that flow, so only intercept when a URL is directly available.
+        if (!getFileUrl(info)) return;
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
