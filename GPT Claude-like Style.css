@@ -1,15 +1,15 @@
 /* ==UserStyle==
 @name           ChatGPT Claude-like Dark Theme
 @namespace      codex.local
-@version        0.3.0
-@description    Low-intrusion Stylus theme that makes ChatGPT dark mode feel closer to Claude's calm, narrow, warm dark layout.
+@version        0.4.2
+@description    Low-intrusion Stylus theme that makes ChatGPT dark mode feel closer to Claude's calm, narrow, warm dark layout. Supports the legacy web app (html.dark), the new web app (html[data-color-scheme="dark"]), and the logged-in app (html[data-theme="dark"]).
 @author         duro
 @match          https://chatgpt.com/*
 @match          https://chat.openai.com/*
 ==/UserStyle== */
 
 @-moz-document domain("chatgpt.com"), domain("chat.openai.com") {
-:root {
+  :root {
     --claude-page: #1F1F1E;
     --claude-sidebar: #181817;
     --claude-panel: #171716;
@@ -33,52 +33,98 @@
     --claude-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, "Noto Serif CJK SC", "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, monospace;
   }
 
-  html.dark,
+  /* ============ Shared base: works on both frontends ============ */
+  /* The new web app marks dark mode with html[data-color-scheme="dark"];
+     the legacy app uses html.dark. No bare `body` selector — it must not
+     fire while the page is in light mode. */
   html.dark body,
-  body {
+  html[data-color-scheme="dark"] body,
+  html[data-theme="dark"] body {
     background: var(--claude-page) !important;
     color: var(--claude-text) !important;
     font-family: var(--claude-font) !important;
     letter-spacing: 0 !important;
   }
 
-  /* App shell: keep layout intact so other ChatGPT extensions can still attach to the original nodes. */
+  /* ============ App shell backgrounds ============ */
   html.dark main,
   html.dark [role="main"],
   html.dark .composer-parent,
   html.dark .isolate,
   html.dark #page-header,
   html.dark .bg-token-main-surface-primary,
-  html.dark .bg-token-sidebar-surface-primary {
+  html.dark .bg-token-sidebar-surface-primary,
+  html[data-color-scheme="dark"] main,
+  html[data-theme="dark"] main,
+  html[data-color-scheme="dark"] [role="main"],
+  html[data-theme="dark"] [role="main"],
+  html[data-color-scheme="dark"] [data-app-shell],
+  html[data-theme="dark"] [data-app-shell],
+  html[data-color-scheme="dark"] [data-testid="desktop-app-shell"],
+  html[data-theme="dark"] [data-testid="desktop-app-shell"],
+  html[data-color-scheme="dark"] [data-mobile-shell],
+  html[data-theme="dark"] [data-mobile-shell],
+  html[data-color-scheme="dark"] [data-desktop-layout],
+  html[data-theme="dark"] [data-desktop-layout],
+  html[data-color-scheme="dark"] [data-swipe-scroll-container],
+  html[data-theme="dark"] [data-swipe-scroll-container],
+  html[data-color-scheme="dark"] [data-centered-home-layout],
+  html[data-theme="dark"] [data-centered-home-layout],
+  html[data-color-scheme="dark"] [data-new-conversation],
+  html[data-theme="dark"] [data-new-conversation] {
     background-color: var(--claude-page) !important;
   }
 
-  html.dark #page-header {
+  /* ============ Header bar ============ */
+  html.dark #page-header,
+  html[data-color-scheme="dark"] main header:not([data-app-shell-titlebar]),
+  html[data-theme="dark"] main header:not([data-app-shell-titlebar]),
+  html[data-color-scheme="dark"] [role="main"] header:not([data-app-shell-titlebar]),
+  html[data-theme="dark"] [role="main"] header:not([data-app-shell-titlebar]),
+  html[data-color-scheme="dark"] section > header:not([data-app-shell-titlebar]),
+  html[data-theme="dark"] section > header:not([data-app-shell-titlebar]) {
     color: var(--claude-text-soft) !important;
     border-bottom: 1px solid var(--claude-border-soft) !important;
     box-shadow: none !important;
     font-family: var(--claude-prose-font) !important;
+    background-color: var(--claude-page) !important;
   }
 
-  html.dark #page-header :where(a, button, span, div):not(pre):not(code) {
+  html.dark #page-header :where(a, button, span, div):not(pre):not(code),
+  html[data-color-scheme="dark"] main header :where(a, button, span, div):not(pre):not(code),
+  html[data-theme="dark"] main header :where(a, button, span, div):not(pre):not(code),
+  html[data-color-scheme="dark"] section > header :where(a, button, span, div):not(pre):not(code),
+  html[data-theme="dark"] section > header :where(a, button, span, div):not(pre):not(code) {
     font-family: var(--claude-prose-font) !important;
   }
 
   html.dark #page-header a:hover,
-  html.dark #page-header button:hover {
+  html.dark #page-header button:hover,
+  html[data-color-scheme="dark"] main header a:hover,
+  html[data-theme="dark"] main header a:hover,
+  html[data-color-scheme="dark"] main header button:hover,
+  html[data-theme="dark"] main header button:hover {
     background-color: rgba(255, 255, 255, 0.055) !important;
   }
 
-  html.dark main :where(h1, h2, h3, h4, p, a, button, span, div, li):not(pre):not(code) {
+  html.dark main :where(h1, h2, h3, h4, p, a, button, span, div, li):not(pre):not(code),
+  html[data-color-scheme="dark"] main :where(h1, h2, h3, h4, p, a, button, span, div, li):not(pre):not(code),
+  html[data-theme="dark"] main :where(h1, h2, h3, h4, p, a, button, span, div, li):not(pre):not(code) {
     font-family: var(--claude-prose-font) !important;
   }
 
   html.dark main :where([role="tab"], button[aria-selected], button[data-state], a[aria-current]),
-  html.dark main :where([role="tab"], button[aria-selected], button[data-state], a[aria-current]) :where(span, div) {
+  html.dark main :where([role="tab"], button[aria-selected], button[data-state], a[aria-current]) :where(span, div),
+  html[data-color-scheme="dark"] main :where([role="tab"], button[aria-selected], button[data-state], a[aria-current]),
+  html[data-theme="dark"] main :where([role="tab"], button[aria-selected], button[data-state], a[aria-current]),
+  html[data-color-scheme="dark"] main :where([role="tab"], button[aria-selected], button[data-state], a[aria-current]) :where(span, div),
+  html[data-theme="dark"] main :where([role="tab"], button[aria-selected], button[data-state], a[aria-current]) :where(span, div) {
     font-family: var(--claude-prose-font) !important;
   }
 
-  html.dark main :where([role="tab"], button[aria-selected], button[data-state], a[aria-current]):hover {
+  html.dark main :where([role="tab"], button[aria-selected], button[data-state]:not([data-state="closed"]):not([data-state="delayed-open"]):not([data-state="instant-open"]), a[aria-current]):hover,
+  html[data-color-scheme="dark"] main :where([role="tab"], button[aria-selected], button[data-state]:not([data-state="closed"]):not([data-state="delayed-open"]):not([data-state="instant-open"]), a[aria-current]):hover,
+  html[data-theme="dark"] main :where([role="tab"], button[aria-selected], button[data-state]:not([data-state="closed"]):not([data-state="delayed-open"]):not([data-state="instant-open"]), a[aria-current]):hover {
     background: #000000 !important;
     background-color: #000000 !important;
     border-color: transparent !important;
@@ -86,7 +132,9 @@
     color: var(--claude-text) !important;
   }
 
-  html.dark main :where([role="tab"][aria-selected="true"], button[aria-selected="true"], button[data-state="active"], a[aria-current="page"]) {
+  html.dark main :where([role="tab"][aria-selected="true"], button[aria-selected="true"], button[data-state="active"], a[aria-current="page"]),
+  html[data-color-scheme="dark"] main :where([role="tab"][aria-selected="true"], button[aria-selected="true"], button[data-state="active"], a[aria-current="page"]),
+  html[data-theme="dark"] main :where([role="tab"][aria-selected="true"], button[aria-selected="true"], button[data-state="active"], a[aria-current="page"]) {
     background: #000000 !important;
     background-color: #000000 !important;
     border-color: transparent !important;
@@ -94,10 +142,25 @@
     color: var(--claude-text) !important;
   }
 
+  /* ============ Sidebar ============ */
   html.dark nav,
   html.dark aside,
   html.dark [class*="sidebar"],
-  html.dark .bg-token-sidebar-surface-primary {
+  html.dark .bg-token-sidebar-surface-primary,
+  html[data-color-scheme="dark"] nav,
+  html[data-theme="dark"] nav,
+  html[data-color-scheme="dark"] aside,
+  html[data-theme="dark"] aside,
+  html[data-color-scheme="dark"] [class*="sidebar"],
+  html[data-theme="dark"] [class*="sidebar"],
+  html[data-color-scheme="dark"] [data-desktop-sidebar],
+  html[data-theme="dark"] [data-desktop-sidebar],
+  html[data-color-scheme="dark"] [data-octane-sidebar-pane],
+  html[data-theme="dark"] [data-octane-sidebar-pane],
+  html[data-color-scheme="dark"] [data-sidebar-shell-version],
+  html[data-theme="dark"] [data-sidebar-shell-version],
+  html[data-color-scheme="dark"] [data-sidebar-scrollport],
+  html[data-theme="dark"] [data-sidebar-scrollport] {
     background-color: var(--claude-sidebar) !important;
     border-color: var(--claude-border-soft) !important;
   }
@@ -105,7 +168,15 @@
   html.dark nav a,
   html.dark aside a,
   html.dark nav button,
-  html.dark aside button {
+  html.dark aside button,
+  html[data-color-scheme="dark"] nav a,
+  html[data-theme="dark"] nav a,
+  html[data-color-scheme="dark"] aside a,
+  html[data-theme="dark"] aside a,
+  html[data-color-scheme="dark"] nav button,
+  html[data-theme="dark"] nav button,
+  html[data-color-scheme="dark"] aside button,
+  html[data-theme="dark"] aside button {
     color: var(--claude-text-soft) !important;
     font-family: var(--claude-prose-font) !important;
     border-radius: 7px !important;
@@ -114,28 +185,54 @@
   html.dark nav,
   html.dark aside,
   html.dark nav :where(a, button, span, div, p):not(pre):not(code),
-  html.dark aside :where(a, button, span, div, p):not(pre):not(code) {
+  html.dark aside :where(a, button, span, div, p):not(pre):not(code),
+  html[data-color-scheme="dark"] nav :where(a, button, span, div, p):not(pre):not(code),
+  html[data-theme="dark"] nav :where(a, button, span, div, p):not(pre):not(code),
+  html[data-color-scheme="dark"] aside :where(a, button, span, div, p):not(pre):not(code),
+  html[data-theme="dark"] aside :where(a, button, span, div, p):not(pre):not(code) {
     font-family: var(--claude-prose-font) !important;
   }
 
   html.dark nav a:hover,
   html.dark aside a:hover,
   html.dark nav button:hover,
-  html.dark aside button:hover {
+  html.dark aside button:hover,
+  html[data-color-scheme="dark"] nav a:hover,
+  html[data-theme="dark"] nav a:hover,
+  html[data-color-scheme="dark"] aside a:hover,
+  html[data-theme="dark"] aside a:hover,
+  html[data-color-scheme="dark"] nav button:hover,
+  html[data-theme="dark"] nav button:hover,
+  html[data-color-scheme="dark"] aside button:hover,
+  html[data-theme="dark"] aside button:hover {
     background-color: var(--claude-sidebar-soft) !important;
     color: var(--claude-text) !important;
   }
 
-  /* Conversation width and base prose rhythm. */
+  /* ============ Conversation width and base prose rhythm ============ */
   html.dark main article,
   html.dark [data-testid^="conversation-turn"],
-  html.dark [data-message-author-role] {
+  html.dark [data-message-author-role],
+  html[data-color-scheme="dark"] main article,
+  html[data-theme="dark"] main article,
+  html[data-color-scheme="dark"] [data-testid^="conversation-turn"],
+  html[data-theme="dark"] [data-testid^="conversation-turn"],
+  html[data-color-scheme="dark"] [data-message-author-role],
+  html[data-theme="dark"] [data-message-author-role],
+  html[data-color-scheme="dark"] [aria-label="Conversation"],
+  html[data-theme="dark"] [aria-label="Conversation"] {
     color: var(--claude-text) !important;
   }
 
   html.dark .markdown,
   html.dark .prose,
-  html.dark [data-message-author-role="assistant"] {
+  html.dark [data-message-author-role="assistant"],
+  html[data-color-scheme="dark"] .markdown,
+  html[data-theme="dark"] .markdown,
+  html[data-color-scheme="dark"] .prose,
+  html[data-theme="dark"] .prose,
+  html[data-color-scheme="dark"] [data-message-author-role="assistant"],
+  html[data-theme="dark"] [data-message-author-role="assistant"] {
     color: var(--claude-text) !important;
     font-family: var(--claude-prose-font) !important;
     font-size: 15px !important;
@@ -143,77 +240,63 @@
     line-height: 1.68 !important;
   }
 
-  html.dark [data-testid^="conversation-turn"] :where(p, span, div, button, summary, details):not(pre):not(code) {
+  html.dark [data-testid^="conversation-turn"] :where(p, span, div, button, summary, details):not(pre):not(code),
+  html[data-color-scheme="dark"] [data-testid^="conversation-turn"] :where(p, span, div, button, summary, details):not(pre):not(code),
+  html[data-theme="dark"] [data-testid^="conversation-turn"] :where(p, span, div, button, summary, details):not(pre):not(code),
+  html[data-color-scheme="dark"] [aria-label="Conversation"] :where(p, span, div, button, summary, details):not(pre):not(code),
+  html[data-theme="dark"] [aria-label="Conversation"] :where(p, span, div, button, summary, details):not(pre):not(code) {
     font-family: var(--claude-prose-font) !important;
   }
 
-  /* KaTeX relies on its own glyph fonts; broad prose font overrides can turn
-     symbols such as \ne / \neq into missing-glyph boxes. */
-  html.dark .katex,
-  html.dark .katex-display {
-    font-family: KaTeX_Main, "Times New Roman", serif !important;
-    line-height: 1.2 !important;
-    text-rendering: auto !important;
-  }
-
-  html.dark .katex :where(.mord, .mop, .mbin, .mrel, .mopen, .mclose, .mpunct, .minner, .base) {
-    font-family: KaTeX_Main, "Times New Roman", serif !important;
-  }
-
-  html.dark .katex .mathnormal {
-    font-family: KaTeX_Math, KaTeX_Main, "Times New Roman", serif !important;
-    font-style: italic !important;
-  }
-
-  html.dark .katex .mathrm,
-  html.dark .katex .mainrm {
-    font-family: KaTeX_Main, "Times New Roman", serif !important;
-    font-style: normal !important;
-  }
-
-  html.dark .katex .amsrm,
-  html.dark .katex .mathbb,
-  html.dark .katex .textbb {
-    font-family: KaTeX_AMS, KaTeX_Main, "Times New Roman", serif !important;
-  }
-
-  html.dark .katex .mathcal {
-    font-family: KaTeX_Caligraphic, KaTeX_Main, "Times New Roman", serif !important;
-  }
-
-  html.dark .katex .mathfrak {
-    font-family: KaTeX_Fraktur, KaTeX_Main, "Times New Roman", serif !important;
-  }
-
-  html.dark .katex .mathtt {
-    font-family: KaTeX_Typewriter, Consolas, monospace !important;
-  }
-
-  html.dark .katex .mathsf {
-    font-family: KaTeX_SansSerif, sans-serif !important;
-  }
-
-  html.dark .katex .mathscr {
-    font-family: KaTeX_Script, KaTeX_Main, "Times New Roman", serif !important;
-  }
-
   html.dark .markdown p,
-  html.dark .prose p {
+  html.dark .prose p,
+  html.dark main article p,
+  html.dark main [data-markdown-text-style] p,
+  html[data-color-scheme="dark"] .markdown p,
+  html[data-theme="dark"] .markdown p,
+  html[data-color-scheme="dark"] .prose p,
+  html[data-theme="dark"] .prose p,
+  html[data-color-scheme="dark"] main article p,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] p,
+  html[data-theme="dark"] main article p,
+  html[data-theme="dark"] main [data-markdown-text-style] p {
     margin-block: 0.7em !important;
   }
 
   html.dark .markdown > :first-child,
-  html.dark .prose > :first-child {
+  html.dark .prose > :first-child,
+  html.dark main article > :first-child,
+  html.dark main [data-markdown-text-style] > :first-child,
+  html[data-color-scheme="dark"] .markdown > :first-child,
+  html[data-theme="dark"] .markdown > :first-child,
+  html[data-color-scheme="dark"] .prose > :first-child,
+  html[data-theme="dark"] .prose > :first-child,
+  html[data-color-scheme="dark"] main article > :first-child,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] > :first-child,
+  html[data-theme="dark"] main article > :first-child,
+  html[data-theme="dark"] main [data-markdown-text-style] > :first-child {
     margin-top: 0 !important;
   }
 
   html.dark .markdown > :last-child,
-  html.dark .prose > :last-child {
+  html.dark .prose > :last-child,
+  html.dark main article > :last-child,
+  html.dark main [data-markdown-text-style] > :last-child,
+  html[data-color-scheme="dark"] .markdown > :last-child,
+  html[data-theme="dark"] .markdown > :last-child,
+  html[data-color-scheme="dark"] .prose > :last-child,
+  html[data-theme="dark"] .prose > :last-child,
+  html[data-color-scheme="dark"] main article > :last-child,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] > :last-child,
+  html[data-theme="dark"] main article > :last-child,
+  html[data-theme="dark"] main [data-markdown-text-style] > :last-child {
     margin-bottom: 0 !important;
   }
 
-  /* User bubbles: compact, dark, and visually quieter. */
-  html.dark [data-message-author-role="user"] {
+  /* ============ User bubbles ============ */
+  html.dark [data-message-author-role="user"],
+  html[data-color-scheme="dark"] [data-message-author-role="user"],
+  html[data-theme="dark"] [data-message-author-role="user"] {
     color: var(--claude-text) !important;
   }
 
@@ -222,7 +305,19 @@
   html.dark [data-message-author-role="user"] [class*="bg-token-bg"],
   html.dark [data-message-author-role="user"] [class*="bg-gray"],
   html.dark [data-message-author-role="user"] [class*="dark:bg"],
-  html.dark [data-message-author-role="user"] .user-message-bubble-color {
+  html.dark [data-message-author-role="user"] .user-message-bubble-color,
+  html[data-color-scheme="dark"] [data-message-author-role="user"] [class*="bg-token-message-surface"],
+  html[data-theme="dark"] [data-message-author-role="user"] [class*="bg-token-message-surface"],
+  html[data-color-scheme="dark"] [data-message-author-role="user"] [class*="bg-token-main-surface-secondary"],
+  html[data-theme="dark"] [data-message-author-role="user"] [class*="bg-token-main-surface-secondary"],
+  html[data-color-scheme="dark"] [data-message-author-role="user"] [class*="bg-token-bg"],
+  html[data-theme="dark"] [data-message-author-role="user"] [class*="bg-token-bg"],
+  html[data-color-scheme="dark"] [data-message-author-role="user"] [class*="bg-gray"],
+  html[data-theme="dark"] [data-message-author-role="user"] [class*="bg-gray"],
+  html[data-color-scheme="dark"] [data-message-author-role="user"] [class*="dark:bg"],
+  html[data-theme="dark"] [data-message-author-role="user"] [class*="dark:bg"],
+  html[data-color-scheme="dark"] [data-message-author-role="user"] .user-message-bubble-color,
+  html[data-theme="dark"] [data-message-author-role="user"] .user-message-bubble-color {
     background-color: var(--claude-user) !important;
     background: var(--claude-user) !important;
     color: var(--claude-text) !important;
@@ -235,7 +330,9 @@
     line-height: 1.52 !important;
   }
 
-  html.dark [data-message-author-role="user"] .whitespace-pre-wrap {
+  html.dark [data-message-author-role="user"] .whitespace-pre-wrap,
+  html[data-color-scheme="dark"] [data-message-author-role="user"] .whitespace-pre-wrap,
+  html[data-theme="dark"] [data-message-author-role="user"] .whitespace-pre-wrap {
     background-color: transparent !important;
     background: transparent !important;
     border: 0 !important;
@@ -247,31 +344,81 @@
     line-height: 1.52 !important;
   }
 
-  html.dark [data-message-author-role="user"] .whitespace-pre-wrap > * {
+  html.dark [data-message-author-role="user"] .whitespace-pre-wrap > *,
+  html[data-color-scheme="dark"] [data-message-author-role="user"] .whitespace-pre-wrap > *,
+  html[data-theme="dark"] [data-message-author-role="user"] .whitespace-pre-wrap > * {
     background-color: transparent !important;
     background: transparent !important;
   }
 
   html.dark [data-message-author-role="user"] :has(> p.line-clamp-3),
-  html.dark [data-message-author-role="user"] :has(p.line-clamp-3) {
+  html.dark [data-message-author-role="user"] :has(p.line-clamp-3),
+  html[data-color-scheme="dark"] [data-message-author-role="user"] :has(> p.line-clamp-3),
+  html[data-theme="dark"] [data-message-author-role="user"] :has(> p.line-clamp-3),
+  html[data-color-scheme="dark"] [data-message-author-role="user"] :has(p.line-clamp-3),
+  html[data-theme="dark"] [data-message-author-role="user"] :has(p.line-clamp-3) {
     background: transparent !important;
     box-shadow: none !important;
   }
 
   html.dark [data-message-author-role="user"] :has(> p.line-clamp-3):hover,
-  html.dark [data-message-author-role="user"] :has(p.line-clamp-3):hover {
+  html.dark [data-message-author-role="user"] :has(p.line-clamp-3):hover,
+  html[data-color-scheme="dark"] [data-message-author-role="user"] :has(> p.line-clamp-3):hover,
+  html[data-theme="dark"] [data-message-author-role="user"] :has(> p.line-clamp-3):hover,
+  html[data-color-scheme="dark"] [data-message-author-role="user"] :has(p.line-clamp-3):hover,
+  html[data-theme="dark"] [data-message-author-role="user"] :has(p.line-clamp-3):hover {
     background: transparent !important;
   }
 
-  /* Headings and emphasis: readable without ChatGPT's heavier visual weight. */
+  /* ============ Headings and emphasis ============ */
   html.dark .markdown h1,
   html.dark .markdown h2,
   html.dark .markdown h3,
   html.dark .markdown h4,
   html.dark .prose h1,
+  html.dark main article h1,
+  html.dark main [data-markdown-text-style] h1,
   html.dark .prose h2,
+  html.dark main article h2,
+  html.dark main [data-markdown-text-style] h2,
   html.dark .prose h3,
-  html.dark .prose h4 {
+  html.dark main article h3,
+  html.dark main [data-markdown-text-style] h3,
+  html.dark .prose h4,
+  html.dark main article h4,
+  html.dark main [data-markdown-text-style] h4,
+  html[data-color-scheme="dark"] .markdown h1,
+  html[data-theme="dark"] .markdown h1,
+  html[data-color-scheme="dark"] .markdown h2,
+  html[data-theme="dark"] .markdown h2,
+  html[data-color-scheme="dark"] .markdown h3,
+  html[data-theme="dark"] .markdown h3,
+  html[data-color-scheme="dark"] .markdown h4,
+  html[data-theme="dark"] .markdown h4,
+  html[data-color-scheme="dark"] .prose h1,
+  html[data-theme="dark"] .prose h1,
+  html[data-color-scheme="dark"] main article h1,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] h1,
+  html[data-theme="dark"] main article h1,
+  html[data-theme="dark"] main [data-markdown-text-style] h1,
+  html[data-color-scheme="dark"] .prose h2,
+  html[data-theme="dark"] .prose h2,
+  html[data-color-scheme="dark"] main article h2,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] h2,
+  html[data-theme="dark"] main article h2,
+  html[data-theme="dark"] main [data-markdown-text-style] h2,
+  html[data-color-scheme="dark"] .prose h3,
+  html[data-theme="dark"] .prose h3,
+  html[data-color-scheme="dark"] main article h3,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] h3,
+  html[data-theme="dark"] main article h3,
+  html[data-theme="dark"] main [data-markdown-text-style] h3,
+  html[data-color-scheme="dark"] .prose h4,
+  html[data-theme="dark"] .prose h4,
+  html[data-color-scheme="dark"] main article h4,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] h4,
+  html[data-theme="dark"] main article h4,
+  html[data-theme="dark"] main [data-markdown-text-style] h4 {
     color: #f6f1e8 !important;
     font-family: var(--claude-prose-font) !important;
     font-weight: 650 !important;
@@ -281,42 +428,112 @@
   }
 
   html.dark .markdown h1,
-  html.dark .prose h1 {
+  html.dark .prose h1,
+  html.dark main article h1,
+  html.dark main [data-markdown-text-style] h1,
+  html[data-color-scheme="dark"] .markdown h1,
+  html[data-theme="dark"] .markdown h1,
+  html[data-color-scheme="dark"] .prose h1,
+  html[data-theme="dark"] .prose h1,
+  html[data-color-scheme="dark"] main article h1,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] h1,
+  html[data-theme="dark"] main article h1,
+  html[data-theme="dark"] main [data-markdown-text-style] h1 {
     font-size: 1.45em !important;
   }
 
   html.dark .markdown h2,
-  html.dark .prose h2 {
+  html.dark .prose h2,
+  html.dark main article h2,
+  html.dark main [data-markdown-text-style] h2,
+  html[data-color-scheme="dark"] .markdown h2,
+  html[data-theme="dark"] .markdown h2,
+  html[data-color-scheme="dark"] .prose h2,
+  html[data-theme="dark"] .prose h2,
+  html[data-color-scheme="dark"] main article h2,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] h2,
+  html[data-theme="dark"] main article h2,
+  html[data-theme="dark"] main [data-markdown-text-style] h2 {
     font-size: 1.28em !important;
   }
 
   html.dark .markdown h3,
-  html.dark .prose h3 {
+  html.dark .prose h3,
+  html.dark main article h3,
+  html.dark main [data-markdown-text-style] h3,
+  html[data-color-scheme="dark"] .markdown h3,
+  html[data-theme="dark"] .markdown h3,
+  html[data-color-scheme="dark"] .prose h3,
+  html[data-theme="dark"] .prose h3,
+  html[data-color-scheme="dark"] main article h3,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] h3,
+  html[data-theme="dark"] main article h3,
+  html[data-theme="dark"] main [data-markdown-text-style] h3 {
     font-size: 1.12em !important;
   }
 
   html.dark .markdown strong,
-  html.dark .prose strong {
+  html.dark .prose strong,
+  html.dark main article strong,
+  html.dark main [data-markdown-text-style] strong,
+  html[data-color-scheme="dark"] .markdown strong,
+  html[data-theme="dark"] .markdown strong,
+  html[data-color-scheme="dark"] .prose strong,
+  html[data-theme="dark"] .prose strong,
+  html[data-color-scheme="dark"] main article strong,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] strong,
+  html[data-theme="dark"] main article strong,
+  html[data-theme="dark"] main [data-markdown-text-style] strong {
     color: #fff8ed !important;
     font-weight: 650 !important;
   }
 
   html.dark .markdown a,
-  html.dark .prose a {
+  html.dark .prose a,
+  html.dark main article a,
+  html.dark main [data-markdown-text-style] a,
+  html[data-color-scheme="dark"] .markdown a,
+  html[data-theme="dark"] .markdown a,
+  html[data-color-scheme="dark"] .prose a,
+  html[data-theme="dark"] .prose a,
+  html[data-color-scheme="dark"] main article a,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] a,
+  html[data-theme="dark"] main article a,
+  html[data-theme="dark"] main [data-markdown-text-style] a {
     color: #e4c99d !important;
     text-decoration-color: rgba(228, 201, 157, 0.45) !important;
     text-underline-offset: 2px !important;
   }
 
   html.dark .markdown hr,
-  html.dark .prose hr {
+  html.dark .prose hr,
+  html.dark main article hr,
+  html.dark main [data-markdown-text-style] hr,
+  html[data-color-scheme="dark"] .markdown hr,
+  html[data-theme="dark"] .markdown hr,
+  html[data-color-scheme="dark"] .prose hr,
+  html[data-theme="dark"] .prose hr,
+  html[data-color-scheme="dark"] main article hr,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] hr,
+  html[data-theme="dark"] main article hr,
+  html[data-theme="dark"] main [data-markdown-text-style] hr {
     border: 0 !important;
     border-top: 0.5px solid var(--claude-divider) !important;
     margin: 1.45em 0 !important;
   }
 
   html.dark .markdown p.claude-like-separator,
-  html.dark .prose p.claude-like-separator {
+  html.dark .prose p.claude-like-separator,
+  html.dark main article p.claude-like-separator,
+  html.dark main [data-markdown-text-style] p.claude-like-separator,
+  html[data-color-scheme="dark"] .markdown p.claude-like-separator,
+  html[data-theme="dark"] .markdown p.claude-like-separator,
+  html[data-color-scheme="dark"] .prose p.claude-like-separator,
+  html[data-theme="dark"] .prose p.claude-like-separator,
+  html[data-color-scheme="dark"] main article p.claude-like-separator,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] p.claude-like-separator,
+  html[data-theme="dark"] main article p.claude-like-separator,
+  html[data-theme="dark"] main [data-markdown-text-style] p.claude-like-separator {
     color: transparent !important;
     display: block !important;
     font-size: 0 !important;
@@ -331,30 +548,80 @@
   }
 
   html.dark .markdown p.claude-like-separator::before,
-  html.dark .prose p.claude-like-separator::before {
+  html.dark .prose p.claude-like-separator::before,
+  html.dark main article p.claude-like-separator::before,
+  html.dark main [data-markdown-text-style] p.claude-like-separator::before,
+  html[data-color-scheme="dark"] .markdown p.claude-like-separator::before,
+  html[data-theme="dark"] .markdown p.claude-like-separator::before,
+  html[data-color-scheme="dark"] .prose p.claude-like-separator::before,
+  html[data-theme="dark"] .prose p.claude-like-separator::before,
+  html[data-color-scheme="dark"] main article p.claude-like-separator::before,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] p.claude-like-separator::before,
+  html[data-theme="dark"] main article p.claude-like-separator::before,
+  html[data-theme="dark"] main [data-markdown-text-style] p.claude-like-separator::before {
     border-top: 0.5px solid var(--claude-divider) !important;
     content: "" !important;
     display: block !important;
     width: 100% !important;
   }
 
-  /* Lists, quotes, and tables. */
+  /* ============ Lists, quotes, and tables ============ */
   html.dark .markdown ul,
   html.dark .markdown ol,
   html.dark .prose ul,
-  html.dark .prose ol {
+  html.dark main article ul,
+  html.dark main [data-markdown-text-style] ul,
+  html.dark .prose ol,
+  html.dark main article ol,
+  html.dark main [data-markdown-text-style] ol,
+  html[data-color-scheme="dark"] .markdown ul,
+  html[data-theme="dark"] .markdown ul,
+  html[data-color-scheme="dark"] .markdown ol,
+  html[data-theme="dark"] .markdown ol,
+  html[data-color-scheme="dark"] .prose ul,
+  html[data-theme="dark"] .prose ul,
+  html[data-color-scheme="dark"] main article ul,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] ul,
+  html[data-theme="dark"] main article ul,
+  html[data-theme="dark"] main [data-markdown-text-style] ul,
+  html[data-color-scheme="dark"] .prose ol,
+  html[data-theme="dark"] .prose ol,
+  html[data-color-scheme="dark"] main article ol,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] ol,
+  html[data-theme="dark"] main article ol,
+  html[data-theme="dark"] main [data-markdown-text-style] ol {
     padding-inline-start: 1.35em !important;
     margin-block: 0.7em !important;
   }
 
   html.dark .markdown li,
-  html.dark .prose li {
+  html.dark .prose li,
+  html.dark main article li,
+  html.dark main [data-markdown-text-style] li,
+  html[data-color-scheme="dark"] .markdown li,
+  html[data-theme="dark"] .markdown li,
+  html[data-color-scheme="dark"] .prose li,
+  html[data-theme="dark"] .prose li,
+  html[data-color-scheme="dark"] main article li,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] li,
+  html[data-theme="dark"] main article li,
+  html[data-theme="dark"] main [data-markdown-text-style] li {
     margin-block: 0.25em !important;
     padding-inline-start: 0.15em !important;
   }
 
   html.dark .markdown blockquote,
-  html.dark .prose blockquote {
+  html.dark .prose blockquote,
+  html.dark main article blockquote,
+  html.dark main [data-markdown-text-style] blockquote,
+  html[data-color-scheme="dark"] .markdown blockquote,
+  html[data-theme="dark"] .markdown blockquote,
+  html[data-color-scheme="dark"] .prose blockquote,
+  html[data-theme="dark"] .prose blockquote,
+  html[data-color-scheme="dark"] main article blockquote,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] blockquote,
+  html[data-theme="dark"] main article blockquote,
+  html[data-theme="dark"] main [data-markdown-text-style] blockquote {
     color: var(--claude-text-soft) !important;
     border-left: 2px solid rgba(215, 185, 143, 0.45) !important;
     background: rgba(255, 255, 255, 0.035) !important;
@@ -364,7 +631,17 @@
   }
 
   html.dark .markdown table,
-  html.dark .prose table {
+  html.dark .prose table,
+  html.dark main article table,
+  html.dark main [data-markdown-text-style] table,
+  html[data-color-scheme="dark"] .markdown table,
+  html[data-theme="dark"] .markdown table,
+  html[data-color-scheme="dark"] .prose table,
+  html[data-theme="dark"] .prose table,
+  html[data-color-scheme="dark"] main article table,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] table,
+  html[data-theme="dark"] main article table,
+  html[data-theme="dark"] main [data-markdown-text-style] table {
     border-collapse: separate !important;
     border-spacing: 0 !important;
     border: 1px solid var(--claude-border) !important;
@@ -376,22 +653,62 @@
   html.dark .markdown th,
   html.dark .markdown td,
   html.dark .prose th,
-  html.dark .prose td {
+  html.dark main article th,
+  html.dark main [data-markdown-text-style] th,
+  html.dark .prose td,
+  html.dark main article td,
+  html.dark main [data-markdown-text-style] td,
+  html[data-color-scheme="dark"] .markdown th,
+  html[data-theme="dark"] .markdown th,
+  html[data-color-scheme="dark"] .markdown td,
+  html[data-theme="dark"] .markdown td,
+  html[data-color-scheme="dark"] .prose th,
+  html[data-theme="dark"] .prose th,
+  html[data-color-scheme="dark"] main article th,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] th,
+  html[data-theme="dark"] main article th,
+  html[data-theme="dark"] main [data-markdown-text-style] th,
+  html[data-color-scheme="dark"] .prose td,
+  html[data-theme="dark"] .prose td,
+  html[data-color-scheme="dark"] main article td,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] td,
+  html[data-theme="dark"] main article td,
+  html[data-theme="dark"] main [data-markdown-text-style] td {
     border-color: var(--claude-border-soft) !important;
     color: var(--claude-text-soft) !important;
     padding: 0.55em 0.75em !important;
   }
 
   html.dark .markdown th,
-  html.dark .prose th {
+  html.dark .prose th,
+  html.dark main article th,
+  html.dark main [data-markdown-text-style] th,
+  html[data-color-scheme="dark"] .markdown th,
+  html[data-theme="dark"] .markdown th,
+  html[data-color-scheme="dark"] .prose th,
+  html[data-theme="dark"] .prose th,
+  html[data-color-scheme="dark"] main article th,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] th,
+  html[data-theme="dark"] main article th,
+  html[data-theme="dark"] main [data-markdown-text-style] th {
     background: rgba(255, 255, 255, 0.045) !important;
     color: var(--claude-text) !important;
     font-weight: 600 !important;
   }
 
-  /* Inline code and code blocks. */
+  /* ============ Inline code and code blocks ============ */
   html.dark .markdown :not(pre) > code,
-  html.dark .prose :not(pre) > code {
+  html.dark .prose :not(pre) > code,
+  html.dark main article :not(pre) > code,
+  html.dark main [data-markdown-text-style] :not(pre) > code,
+  html[data-color-scheme="dark"] .markdown :not(pre) > code,
+  html[data-theme="dark"] .markdown :not(pre) > code,
+  html[data-color-scheme="dark"] .prose :not(pre) > code,
+  html[data-theme="dark"] .prose :not(pre) > code,
+  html[data-color-scheme="dark"] main article :not(pre) > code,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] :not(pre) > code,
+  html[data-theme="dark"] main article :not(pre) > code,
+  html[data-theme="dark"] main [data-markdown-text-style] :not(pre) > code {
     background: var(--claude-inline-code-bg) !important;
     color: #ffcab8 !important;
     border: 1px solid rgba(255, 255, 255, 0.06) !important;
@@ -404,7 +721,19 @@
 
   html.dark .markdown div[class*="bg-token-main-surface-secondary"]:has(pre),
   html.dark .prose div[class*="bg-token-main-surface-secondary"]:has(pre),
-  html.dark div[class*="bg-token-main-surface-secondary"]:has(pre) {
+  html.dark main article div[class*="bg-token-main-surface-secondary"]:has(pre),
+  html.dark main [data-markdown-text-style] div[class*="bg-token-main-surface-secondary"]:has(pre),
+  html.dark div[class*="bg-token-main-surface-secondary"]:has(pre),
+  html[data-color-scheme="dark"] .markdown div[class*="bg-token-main-surface-secondary"]:has(pre),
+  html[data-theme="dark"] .markdown div[class*="bg-token-main-surface-secondary"]:has(pre),
+  html[data-color-scheme="dark"] .prose div[class*="bg-token-main-surface-secondary"]:has(pre),
+  html[data-theme="dark"] .prose div[class*="bg-token-main-surface-secondary"]:has(pre),
+  html[data-color-scheme="dark"] main article div[class*="bg-token-main-surface-secondary"]:has(pre),
+  html[data-color-scheme="dark"] main [data-markdown-text-style] div[class*="bg-token-main-surface-secondary"]:has(pre),
+  html[data-theme="dark"] main article div[class*="bg-token-main-surface-secondary"]:has(pre),
+  html[data-theme="dark"] main [data-markdown-text-style] div[class*="bg-token-main-surface-secondary"]:has(pre),
+  html[data-color-scheme="dark"] div[class*="bg-token-main-surface-secondary"]:has(pre),
+  html[data-theme="dark"] div[class*="bg-token-main-surface-secondary"]:has(pre) {
     background: var(--claude-code-surface) !important;
     color: var(--claude-code) !important;
     border: 1px solid rgba(255, 255, 255, 0.18) !important;
@@ -415,7 +744,19 @@
 
   html.dark .markdown div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
   html.dark .prose div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
-  html.dark div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child {
+  html.dark main article div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
+  html.dark main [data-markdown-text-style] div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
+  html.dark div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
+  html[data-color-scheme="dark"] .markdown div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
+  html[data-theme="dark"] .markdown div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
+  html[data-color-scheme="dark"] .prose div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
+  html[data-theme="dark"] .prose div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
+  html[data-color-scheme="dark"] main article div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
+  html[data-theme="dark"] main article div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
+  html[data-theme="dark"] main [data-markdown-text-style] div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
+  html[data-color-scheme="dark"] div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
+  html[data-theme="dark"] div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child {
     background: var(--claude-code-surface) !important;
     color: #a9a397 !important;
     border-bottom: 0 !important;
@@ -423,7 +764,13 @@
 
   html.dark .markdown pre,
   html.dark .prose pre,
-  html.dark [class*="bg-token-main-surface-secondary"] pre {
+  html.dark [class*="bg-token-main-surface-secondary"] pre,
+  html[data-color-scheme="dark"] .markdown pre,
+  html[data-theme="dark"] .markdown pre,
+  html[data-color-scheme="dark"] .prose pre,
+  html[data-theme="dark"] .prose pre,
+  html[data-color-scheme="dark"] [class*="bg-token-main-surface-secondary"] pre,
+  html[data-theme="dark"] [class*="bg-token-main-surface-secondary"] pre {
     background: transparent !important;
     color: var(--claude-code) !important;
     border: 0 !important;
@@ -433,8 +780,56 @@
     padding-top: 0.35rem !important;
   }
 
+  /* The new app has no bg-token code wrapper — style pre as the card itself.
+     Scoped to data-color-scheme so the legacy app keeps its wrapper styling. */
+  html[data-color-scheme="dark"] main article pre,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] pre,
+  html[data-theme="dark"] main article pre,
+  html[data-theme="dark"] main [data-markdown-text-style] pre {
+    background: var(--claude-code-surface) !important;
+    color: var(--claude-code) !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    border-radius: 6px !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+    line-height: 1.55 !important;
+    padding: 0.75rem 1rem !important;
+  }
+
+  /* Rendered code blocks are CodeMirror viewers, not .markdown pre */
+  html.dark div[class*="bg-(--code-block-surface)"],
+  html[data-color-scheme="dark"] div[class*="bg-(--code-block-surface)"],
+  html[data-theme="dark"] div[class*="bg-(--code-block-surface)"] {
+    background: var(--claude-code-surface) !important;
+    color: var(--claude-code) !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    border-radius: 6px !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+  }
+
+  html.dark div[class*="bg-(--code-block-surface)"] .cm-content,
+  html[data-color-scheme="dark"] div[class*="bg-(--code-block-surface)"] .cm-content,
+  html[data-theme="dark"] div[class*="bg-(--code-block-surface)"] .cm-content {
+    background: transparent !important;
+    color: var(--claude-code) !important;
+    font-family: var(--claude-mono) !important;
+    font-size: 13px !important;
+    line-height: 1.55 !important;
+  }
+
   html.dark .markdown pre code,
-  html.dark .prose pre code {
+  html.dark .prose pre code,
+  html.dark main article pre code,
+  html.dark main [data-markdown-text-style] pre code,
+  html[data-color-scheme="dark"] .markdown pre code,
+  html[data-theme="dark"] .markdown pre code,
+  html[data-color-scheme="dark"] .prose pre code,
+  html[data-theme="dark"] .prose pre code,
+  html[data-color-scheme="dark"] main article pre code,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] pre code,
+  html[data-theme="dark"] main article pre code,
+  html[data-theme="dark"] main [data-markdown-text-style] pre code {
     color: inherit !important;
     background: transparent !important;
     border: 0 !important;
@@ -444,47 +839,106 @@
   }
 
   html.dark .markdown .bg-token-bg-elevated-secondary,
-  html.dark .prose .bg-token-bg-elevated-secondary {
+  html.dark .prose .bg-token-bg-elevated-secondary,
+  html.dark main article .bg-token-bg-elevated-secondary,
+  html.dark main [data-markdown-text-style] .bg-token-bg-elevated-secondary,
+  html[data-color-scheme="dark"] .markdown .bg-token-bg-elevated-secondary,
+  html[data-theme="dark"] .markdown .bg-token-bg-elevated-secondary,
+  html[data-color-scheme="dark"] .prose .bg-token-bg-elevated-secondary,
+  html[data-theme="dark"] .prose .bg-token-bg-elevated-secondary,
+  html[data-color-scheme="dark"] main article .bg-token-bg-elevated-secondary,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] .bg-token-bg-elevated-secondary,
+  html[data-theme="dark"] main article .bg-token-bg-elevated-secondary,
+  html[data-theme="dark"] main [data-markdown-text-style] .bg-token-bg-elevated-secondary {
     background-color: var(--claude-code-surface) !important;
   }
 
-
   html.dark .markdown div[class*="overflow-y-auto"],
   html.dark .prose div[class*="overflow-y-auto"],
+  html.dark main article div[class*="overflow-y-auto"],
+  html.dark main [data-markdown-text-style] div[class*="overflow-y-auto"],
   html.dark .markdown div[class*="contain-inline-size"],
-  html.dark .prose div[class*="contain-inline-size"] {
+  html.dark .prose div[class*="contain-inline-size"],
+  html.dark main article div[class*="contain-inline-size"],
+  html.dark main [data-markdown-text-style] div[class*="contain-inline-size"],
+  html[data-color-scheme="dark"] .markdown div[class*="overflow-y-auto"],
+  html[data-theme="dark"] .markdown div[class*="overflow-y-auto"],
+  html[data-color-scheme="dark"] .prose div[class*="overflow-y-auto"],
+  html[data-theme="dark"] .prose div[class*="overflow-y-auto"],
+  html[data-color-scheme="dark"] main article div[class*="overflow-y-auto"],
+  html[data-color-scheme="dark"] main [data-markdown-text-style] div[class*="overflow-y-auto"],
+  html[data-theme="dark"] main article div[class*="overflow-y-auto"],
+  html[data-theme="dark"] main [data-markdown-text-style] div[class*="overflow-y-auto"],
+  html[data-color-scheme="dark"] .markdown div[class*="contain-inline-size"],
+  html[data-theme="dark"] .markdown div[class*="contain-inline-size"],
+  html[data-color-scheme="dark"] .prose div[class*="contain-inline-size"],
+  html[data-theme="dark"] .prose div[class*="contain-inline-size"],
+  html[data-color-scheme="dark"] main article div[class*="contain-inline-size"],
+  html[data-color-scheme="dark"] main [data-markdown-text-style] div[class*="contain-inline-size"],
+  html[data-theme="dark"] main article div[class*="contain-inline-size"],
+  html[data-theme="dark"] main [data-markdown-text-style] div[class*="contain-inline-size"] {
     scrollbar-color: rgba(255, 255, 255, 0.24) transparent !important;
   }
 
   html.dark .markdown button,
-  html.dark .prose button {
+  html.dark .prose button,
+  html.dark main article button,
+  html.dark main [data-markdown-text-style] button,
+  html[data-color-scheme="dark"] .markdown button,
+  html[data-theme="dark"] .markdown button,
+  html[data-color-scheme="dark"] .prose button,
+  html[data-theme="dark"] .prose button,
+  html[data-color-scheme="dark"] main article button,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] button,
+  html[data-theme="dark"] main article button,
+  html[data-theme="dark"] main [data-markdown-text-style] button {
     color: var(--claude-text-soft) !important;
   }
 
   html.dark .markdown button:hover,
-  html.dark .prose button:hover {
+  html.dark .prose button:hover,
+  html.dark main article button:hover,
+  html.dark main [data-markdown-text-style] button:hover,
+  html[data-color-scheme="dark"] .markdown button:hover,
+  html[data-theme="dark"] .markdown button:hover,
+  html[data-color-scheme="dark"] .prose button:hover,
+  html[data-theme="dark"] .prose button:hover,
+  html[data-color-scheme="dark"] main article button:hover,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] button:hover,
+  html[data-theme="dark"] main article button:hover,
+  html[data-theme="dark"] main [data-markdown-text-style] button:hover {
     background-color: rgba(255, 255, 255, 0.055) !important;
     color: var(--claude-text) !important;
   }
 
-  /* Assistant action buttons: keep them usable, but visually quiet until hover like Claude. */
-  html.dark [data-testid^="conversation-turn"] button[aria-label] {
+  /* ============ Assistant action buttons ============ */
+  html.dark [data-testid^="conversation-turn"] button[aria-label],
+  html[data-color-scheme="dark"] [data-testid^="conversation-turn"] button[aria-label],
+  html[data-theme="dark"] [data-testid^="conversation-turn"] button[aria-label] {
     background-color: transparent !important;
     border-color: transparent !important;
     box-shadow: none !important;
     color: rgba(240, 238, 230, 0.46) !important;
   }
 
-  html.dark [data-testid^="conversation-turn"] button[aria-label]:hover {
+  html.dark [data-testid^="conversation-turn"] button[aria-label]:hover,
+  html[data-color-scheme="dark"] [data-testid^="conversation-turn"] button[aria-label]:hover,
+  html[data-theme="dark"] [data-testid^="conversation-turn"] button[aria-label]:hover {
     background-color: rgba(255, 255, 255, 0.055) !important;
     border-color: rgba(255, 255, 255, 0.045) !important;
     color: var(--claude-text) !important;
   }
 
-  /* Thinking/activity side panel and sources. */
+  /* ============ Thinking/activity side panel and sources ============ */
   html.dark [role="complementary"],
   html.dark [class*="right-0"][class*="border-l"],
-  html.dark [class*="border-l"][class*="overflow"] {
+  html.dark [class*="border-l"][class*="overflow"],
+  html[data-color-scheme="dark"] [role="complementary"],
+  html[data-theme="dark"] [role="complementary"],
+  html[data-color-scheme="dark"] [class*="right-0"][class*="border-l"],
+  html[data-theme="dark"] [class*="right-0"][class*="border-l"],
+  html[data-color-scheme="dark"] [class*="border-l"][class*="overflow"],
+  html[data-theme="dark"] [class*="border-l"][class*="overflow"] {
     background-color: var(--claude-panel) !important;
     color: var(--claude-text-soft) !important;
     border-color: var(--claude-border-soft) !important;
@@ -493,29 +947,53 @@
 
   html.dark [role="complementary"] *,
   html.dark [class*="right-0"][class*="border-l"] *,
-  html.dark [class*="border-l"][class*="overflow"] * {
+  html.dark [class*="border-l"][class*="overflow"] *,
+  html[data-color-scheme="dark"] [role="complementary"] *,
+  html[data-theme="dark"] [role="complementary"] *,
+  html[data-color-scheme="dark"] [class*="right-0"][class*="border-l"] *,
+  html[data-theme="dark"] [class*="right-0"][class*="border-l"] *,
+  html[data-color-scheme="dark"] [class*="border-l"][class*="overflow"] *,
+  html[data-theme="dark"] [class*="border-l"][class*="overflow"] * {
     font-family: var(--claude-prose-font) !important;
   }
 
   html.dark [role="complementary"] :where(p, span, div, button, h1, h2, h3, h4, li):not(pre):not(code),
   html.dark [class*="right-0"][class*="border-l"] :where(p, span, div, button, h1, h2, h3, h4, li):not(pre):not(code),
-  html.dark [class*="border-l"][class*="overflow"] :where(p, span, div, button, h1, h2, h3, h4, li):not(pre):not(code) {
+  html.dark [class*="border-l"][class*="overflow"] :where(p, span, div, button, h1, h2, h3, h4, li):not(pre):not(code),
+  html[data-color-scheme="dark"] [role="complementary"] :where(p, span, div, button, h1, h2, h3, h4, li):not(pre):not(code),
+  html[data-theme="dark"] [role="complementary"] :where(p, span, div, button, h1, h2, h3, h4, li):not(pre):not(code),
+  html[data-color-scheme="dark"] [class*="right-0"][class*="border-l"] :where(p, span, div, button, h1, h2, h3, h4, li):not(pre):not(code),
+  html[data-theme="dark"] [class*="right-0"][class*="border-l"] :where(p, span, div, button, h1, h2, h3, h4, li):not(pre):not(code),
+  html[data-color-scheme="dark"] [class*="border-l"][class*="overflow"] :where(p, span, div, button, h1, h2, h3, h4, li):not(pre):not(code),
+  html[data-theme="dark"] [class*="border-l"][class*="overflow"] :where(p, span, div, button, h1, h2, h3, h4, li):not(pre):not(code) {
     font-family: var(--claude-prose-font) !important;
   }
 
   html.dark [role="complementary"] [class*="bg-black"],
   html.dark [class*="right-0"][class*="border-l"] [class*="bg-black"],
-  html.dark [class*="border-l"][class*="overflow"] [class*="bg-black"] {
+  html.dark [class*="border-l"][class*="overflow"] [class*="bg-black"],
+  html[data-color-scheme="dark"] [role="complementary"] [class*="bg-black"],
+  html[data-theme="dark"] [role="complementary"] [class*="bg-black"],
+  html[data-color-scheme="dark"] [class*="right-0"][class*="border-l"] [class*="bg-black"],
+  html[data-theme="dark"] [class*="right-0"][class*="border-l"] [class*="bg-black"],
+  html[data-color-scheme="dark"] [class*="border-l"][class*="overflow"] [class*="bg-black"],
+  html[data-theme="dark"] [class*="border-l"][class*="overflow"] [class*="bg-black"] {
     background-color: var(--claude-panel) !important;
   }
 
   html.dark [role="complementary"] [class*="bg-token"],
   html.dark [class*="right-0"][class*="border-l"] [class*="bg-token"],
-  html.dark [class*="border-l"][class*="overflow"] [class*="bg-token"] {
+  html.dark [class*="border-l"][class*="overflow"] [class*="bg-token"],
+  html[data-color-scheme="dark"] [role="complementary"] [class*="bg-token"],
+  html[data-theme="dark"] [role="complementary"] [class*="bg-token"],
+  html[data-color-scheme="dark"] [class*="right-0"][class*="border-l"] [class*="bg-token"],
+  html[data-theme="dark"] [class*="right-0"][class*="border-l"] [class*="bg-token"],
+  html[data-color-scheme="dark"] [class*="border-l"][class*="overflow"] [class*="bg-token"],
+  html[data-theme="dark"] [class*="border-l"][class*="overflow"] [class*="bg-token"] {
     background-color: var(--claude-surface) !important;
   }
 
-  /* Composer: Claude-like dark rounded input without changing behavior. */
+  /* ============ Composer ============ */
   html.dark .composer-parent,
   html.dark .composer-parent::before,
   html.dark .composer-parent::after,
@@ -527,13 +1005,39 @@
   html.dark .composer-parent div:has(form[data-type="unified-composer"])::after,
   html.dark .composer-parent [class*="bg-gradient"],
   html.dark .composer-parent [class*="from-token"],
-  html.dark .composer-parent [class*="to-token"] {
+  html.dark .composer-parent [class*="to-token"],
+  html[data-color-scheme="dark"] .composer-parent,
+  html[data-theme="dark"] .composer-parent,
+  html[data-color-scheme="dark"] .composer-parent::before,
+  html[data-theme="dark"] .composer-parent::before,
+  html[data-color-scheme="dark"] .composer-parent::after,
+  html[data-theme="dark"] .composer-parent::after,
+  html[data-color-scheme="dark"] .composer-parent > *,
+  html[data-theme="dark"] .composer-parent > *,
+  html[data-color-scheme="dark"] .composer-parent > *::before,
+  html[data-theme="dark"] .composer-parent > *::before,
+  html[data-color-scheme="dark"] .composer-parent > *::after,
+  html[data-theme="dark"] .composer-parent > *::after,
+  html[data-color-scheme="dark"] .composer-parent div:has(form[data-type="unified-composer"]),
+  html[data-theme="dark"] .composer-parent div:has(form[data-type="unified-composer"]),
+  html[data-color-scheme="dark"] .composer-parent div:has(form[data-type="unified-composer"])::before,
+  html[data-theme="dark"] .composer-parent div:has(form[data-type="unified-composer"])::before,
+  html[data-color-scheme="dark"] .composer-parent div:has(form[data-type="unified-composer"])::after,
+  html[data-theme="dark"] .composer-parent div:has(form[data-type="unified-composer"])::after,
+  html[data-color-scheme="dark"] .composer-parent [class*="bg-gradient"],
+  html[data-theme="dark"] .composer-parent [class*="bg-gradient"],
+  html[data-color-scheme="dark"] .composer-parent [class*="from-token"],
+  html[data-theme="dark"] .composer-parent [class*="from-token"],
+  html[data-color-scheme="dark"] .composer-parent [class*="to-token"],
+  html[data-theme="dark"] .composer-parent [class*="to-token"] {
     background: transparent !important;
     background-image: none !important;
     box-shadow: none !important;
   }
 
-  html.dark form[data-type="unified-composer"] {
+  html.dark form[data-type="unified-composer"],
+  html[data-color-scheme="dark"] form[data-type="unified-composer"],
+  html[data-theme="dark"] form[data-type="unified-composer"] {
     background: transparent !important;
     background-image: none !important;
     box-shadow: none !important;
@@ -543,12 +1047,30 @@
   html.dark textarea,
   html.dark [contenteditable="true"],
   html.dark [data-testid="composer-speech-button"],
-  html.dark [data-testid="send-button"] {
+  html.dark [data-testid="send-button"],
+  html[data-color-scheme="dark"] form,
+  html[data-theme="dark"] form,
+  html[data-color-scheme="dark"] textarea,
+  html[data-theme="dark"] textarea,
+  html[data-color-scheme="dark"] [contenteditable="true"],
+  html[data-theme="dark"] [contenteditable="true"],
+  html[data-color-scheme="dark"] [data-testid="composer-speech-button"],
+  html[data-theme="dark"] [data-testid="composer-speech-button"],
+  html[data-color-scheme="dark"] [data-testid="send-button"],
+  html[data-theme="dark"] [data-testid="send-button"] {
     font-family: var(--claude-prose-font) !important;
   }
 
   html.dark .composer-parent form:has(textarea),
-  html.dark .composer-parent form:has([contenteditable="true"]) {
+  html.dark .composer-parent form:has([contenteditable="true"]),
+  html[data-color-scheme="dark"] .composer-parent form:has(textarea),
+  html[data-theme="dark"] .composer-parent form:has(textarea),
+  html[data-color-scheme="dark"] .composer-parent form:has([contenteditable="true"]),
+  html[data-theme="dark"] .composer-parent form:has([contenteditable="true"]),
+  html[data-color-scheme="dark"] main form:has(textarea),
+  html[data-theme="dark"] main form:has(textarea),
+  html[data-color-scheme="dark"] main form:has([contenteditable="true"]),
+  html[data-theme="dark"] main form:has([contenteditable="true"]) {
     background: transparent !important;
     border: 0 !important;
     border-radius: 0 !important;
@@ -556,7 +1078,13 @@
     min-height: 58px !important;
   }
 
-  html.dark [data-composer-surface="true"] {
+  html.dark [data-composer-surface="true"],
+  html[data-color-scheme="dark"] [data-composer-surface="true"],
+  html[data-theme="dark"] [data-composer-surface="true"],
+  html[data-color-scheme="dark"] form:has(textarea) > div:first-of-type,
+  html[data-theme="dark"] form:has(textarea) > div:first-of-type,
+  html[data-color-scheme="dark"] form:has([contenteditable="true"]) > div:first-of-type,
+  html[data-theme="dark"] form:has([contenteditable="true"]) > div:first-of-type {
     background: var(--claude-surface-raised) !important;
     background-color: var(--claude-surface-raised) !important;
     border: 1px solid var(--claude-border-soft) !important;
@@ -567,15 +1095,26 @@
   html.dark .composer-parent form:has(textarea) [class*="bg-token"],
   html.dark .composer-parent form:has([contenteditable="true"]) [class*="bg-token"],
   html.dark .composer-parent form:has(textarea) [class*="bg-gray"],
-  html.dark .composer-parent form:has([contenteditable="true"]) [class*="bg-gray"] {
+  html.dark .composer-parent form:has([contenteditable="true"]) [class*="bg-gray"],
+  html[data-color-scheme="dark"] .composer-parent form:has(textarea) [class*="bg-token"],
+  html[data-theme="dark"] .composer-parent form:has(textarea) [class*="bg-token"],
+  html[data-color-scheme="dark"] .composer-parent form:has([contenteditable="true"]) [class*="bg-token"],
+  html[data-theme="dark"] .composer-parent form:has([contenteditable="true"]) [class*="bg-token"],
+  html[data-color-scheme="dark"] .composer-parent form:has(textarea) [class*="bg-gray"],
+  html[data-theme="dark"] .composer-parent form:has(textarea) [class*="bg-gray"],
+  html[data-color-scheme="dark"] .composer-parent form:has([contenteditable="true"]) [class*="bg-gray"],
+  html[data-theme="dark"] .composer-parent form:has([contenteditable="true"]) [class*="bg-gray"] {
     background: var(--claude-surface-raised) !important;
     background-color: var(--claude-surface-raised) !important;
-    box-shadow: none !important;
   }
 
   html.dark textarea,
-  html.dark [contenteditable="true"] {
-    background-color: var(--claude-surface-raised) !important;
+  html.dark [contenteditable="true"],
+  html[data-color-scheme="dark"] textarea,
+  html[data-theme="dark"] textarea,
+  html[data-color-scheme="dark"] [contenteditable="true"],
+  html[data-theme="dark"] [contenteditable="true"] {
+    background-color: transparent !important;
     color: var(--claude-text) !important;
     border-color: transparent !important;
     box-shadow: none !important;
@@ -584,102 +1123,187 @@
   }
 
   html.dark textarea::placeholder,
-  html.dark [contenteditable="true"][data-placeholder]::before {
+  html.dark [contenteditable="true"][data-placeholder]::before,
+  html[data-color-scheme="dark"] textarea::placeholder,
+  html[data-theme="dark"] textarea::placeholder,
+  html[data-color-scheme="dark"] [contenteditable="true"][data-placeholder]::before,
+  html[data-theme="dark"] [contenteditable="true"][data-placeholder]::before {
     color: var(--claude-muted) !important;
   }
 
   html.dark form button,
-  html.dark .composer-parent button {
+  html.dark .composer-parent button,
+  html[data-color-scheme="dark"] form button,
+  html[data-theme="dark"] form button,
+  html[data-color-scheme="dark"] .composer-parent button,
+  html[data-theme="dark"] .composer-parent button {
     color: var(--claude-text-soft) !important;
     border-radius: 12px !important;
   }
 
   html.dark form button:hover,
-  html.dark .composer-parent button:hover {
+  html.dark .composer-parent button:hover,
+  html[data-color-scheme="dark"] form button:hover,
+  html[data-theme="dark"] form button:hover,
+  html[data-color-scheme="dark"] .composer-parent button:hover,
+  html[data-theme="dark"] .composer-parent button:hover {
     background-color: rgba(255, 255, 255, 0.055) !important;
     color: var(--claude-text) !important;
   }
 
-  /* Small UI chrome. */
+  /* ============ Small UI chrome ============ */
   html.dark [class*="border-token"],
-  html.dark [class*="border-token-border"] {
+  html.dark [class*="border-token-border"],
+  html[data-color-scheme="dark"] [class*="border-token"],
+  html[data-theme="dark"] [class*="border-token"],
+  html[data-color-scheme="dark"] [class*="border-token-border"],
+  html[data-theme="dark"] [class*="border-token-border"] {
     border-color: var(--claude-border-soft) !important;
   }
 
   html.dark [class*="text-token-text-secondary"],
-  html.dark [class*="text-token-text-tertiary"] {
+  html.dark [class*="text-token-text-tertiary"],
+  html[data-color-scheme="dark"] [class*="text-token-text-secondary"],
+  html[data-theme="dark"] [class*="text-token-text-secondary"],
+  html[data-color-scheme="dark"] [class*="text-token-text-tertiary"],
+  html[data-theme="dark"] [class*="text-token-text-tertiary"] {
     color: var(--claude-muted) !important;
   }
 
-  html.dark ::selection {
+  html.dark ::selection,
+  html[data-color-scheme="dark"] ::selection,
+  html[data-theme="dark"] ::selection {
     background: rgba(215, 185, 143, 0.28) !important;
     color: #fff8ed !important;
   }
 
-  /* Final KaTeX guard: keep this near the end so broad ChatGPT/prose font
-     overrides cannot break private-use math glyphs such as not/neq/nexists. */
-  html.dark .katex,
-  html.dark .katex * {
-    font-family: KaTeX_Main, "Times New Roman", serif !important;
+  /* ============ Logged-in app surfaces ============ */
+  /* The app-shell titlebar is a full-width fixed overlay: never paint it,
+     it would cover the sidebar header (logo + collapse trigger). */
+  html[data-color-scheme="dark"] [data-app-shell-titlebar],
+  html[data-theme="dark"] [data-app-shell-titlebar] {
+    background: transparent !important;
+    background-color: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
   }
 
-  html.dark .katex .mathnormal,
-  html.dark .katex .mathnormal * {
-    font-family: KaTeX_Math, KaTeX_Main, "Times New Roman", serif !important;
-    font-style: italic !important;
+  /* Scroll-edge fades above/below the message column */
+  html[data-color-scheme="dark"] div[class*="MainContentTopFade"],
+  html[data-theme="dark"] div[class*="MainContentTopFade"] {
+    background-image: linear-gradient(to bottom, var(--claude-page), rgba(31, 31, 30, 0)) !important;
   }
 
-  html.dark .katex .mathrm,
-  html.dark .katex .mathrm *,
-  html.dark .katex .mainrm,
-  html.dark .katex .mainrm * {
-    font-family: KaTeX_Main, "Times New Roman", serif !important;
-    font-style: normal !important;
+  html[data-color-scheme="dark"] div.pointer-events-none[class*="inset-x-0"][class*="bottom-0"][class*="-top-8"],
+  html[data-theme="dark"] div.pointer-events-none[class*="inset-x-0"][class*="bottom-0"][class*="-top-8"] {
+    background-image: linear-gradient(to top, var(--claude-page) 0%, var(--claude-page) 55%, rgba(31, 31, 30, 0) 100%) !important;
   }
 
-  html.dark .katex .amsrm,
-  html.dark .katex .amsrm *,
-  html.dark .katex .mathbb,
-  html.dark .katex .mathbb *,
-  html.dark .katex .textbb,
-  html.dark .katex .textbb * {
-    font-family: KaTeX_AMS, KaTeX_Main, "Times New Roman", serif !important;
+  /* Composer pill on the new frontends: paint the outer shell
+     [data-composer-dark] and keep the same-size inner layer
+     [data-composer-body] transparent. Which layer carries the
+     border-radius varies by frontend variant (26px on the shell in
+     some, 28px on the body in others) — so force the radius on the
+     painted shell to keep the pill rounded in both layouts. */
+  html[data-color-scheme="dark"] [data-composer-dark],
+  html[data-theme="dark"] [data-composer-dark] {
+    background: var(--claude-surface-raised) !important;
+    background-color: var(--claude-surface-raised) !important;
+    border-color: var(--claude-border-soft) !important;
+    border-radius: 26px !important;
+    box-shadow: none !important;
   }
 
-  html.dark .katex .mathcal,
-  html.dark .katex .mathcal * {
-    font-family: KaTeX_Caligraphic, KaTeX_Main, "Times New Roman", serif !important;
+  html[data-color-scheme="dark"] [data-composer-body],
+  html[data-theme="dark"] [data-composer-body] {
+    background: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
   }
 
-  html.dark .katex .mathfrak,
-  html.dark .katex .mathfrak * {
-    font-family: KaTeX_Fraktur, KaTeX_Main, "Times New Roman", serif !important;
+  html[data-color-scheme="dark"] [data-user-message-bubble],
+  html[data-theme="dark"] [data-user-message-bubble] {
+    background: var(--claude-user) !important;
+    background-color: var(--claude-user) !important;
+    color: var(--claude-text) !important;
+    border: 1px solid rgba(255, 255, 255, 0.035) !important;
+    border-radius: 13px !important;
+    box-shadow: none !important;
+    font-family: var(--claude-font) !important;
+    font-size: 16px !important;
+    font-weight: 450 !important;
+    line-height: 1.52 !important;
   }
 
-  html.dark .katex .mathtt,
-  html.dark .katex .mathtt * {
-    font-family: KaTeX_Typewriter, Consolas, monospace !important;
+  html[data-color-scheme="dark"] [data-user-message-bubble] :where(p, span, div),
+  html[data-theme="dark"] [data-user-message-bubble] :where(p, span, div) {
+    color: var(--claude-text) !important;
   }
 
-  html.dark .katex .mathsf,
-  html.dark .katex .mathsf * {
-    font-family: KaTeX_SansSerif, sans-serif !important;
+  /* Rendered code blocks on the new frontends */
+  html[data-color-scheme="dark"] [data-markdown-copy="code-block"],
+  html[data-theme="dark"] [data-markdown-copy="code-block"] {
+    background: var(--claude-code-surface) !important;
+    background-color: var(--claude-code-surface) !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    box-shadow: none !important;
+    color: var(--claude-code) !important;
   }
 
-  html.dark .katex .mathscr,
-  html.dark .katex .mathscr * {
-    font-family: KaTeX_Script, KaTeX_Main, "Times New Roman", serif !important;
+  html[data-color-scheme="dark"] [data-markdown-copy="code-block"] [data-markdown-copy="exclude"],
+  html[data-theme="dark"] [data-markdown-copy="code-block"] [data-markdown-copy="exclude"] {
+    background: transparent !important;
+    background-image: none !important;
+    color: #a9a397 !important;
   }
 
-  /* KaTeX renders \not/\neq by overlaying a private-use glyph inside .mrel.
-     If any prose font leaks into this nested vbox/rlap path, the glyph becomes
-     a square. Keep relation symbols strictly on KaTeX_Main. */
-  html.dark [data-testid^="conversation-turn"] .katex-html .mrel,
-  html.dark [data-testid^="conversation-turn"] .katex-html .mrel *,
-  html.dark .katex-html .mrel,
-  html.dark .katex-html .mrel * {
-    font-family: KaTeX_Main, "Times New Roman", serif !important;
-    font-style: normal !important;
-    font-weight: 400 !important;
+  /* The logged-in frontend defines pure-black / neutral-gray surface
+     tokens for every elevated layer (menus, popovers, modals, cards,
+     pickers). Remap them to the warm Claude palette so portaled
+     surfaces — which live under body, outside main — are themed too. */
+  html.dark,
+  html[data-color-scheme="dark"],
+  html[data-theme="dark"] {
+    --color-background-panel: var(--claude-surface);
+    --color-surface-elevated: var(--claude-surface);
+    --color-surface-elevated-secondary: var(--claude-surface-raised);
+    --app-color-background-elevated-primary: var(--claude-surface);
+    --app-color-background-elevated-primary-opaque: var(--claude-surface);
+    --app-color-background-elevated-secondary: var(--claude-surface-raised);
+    --app-color-background-elevated-secondary-opaque: var(--claude-surface-raised);
+    --app-color-background-application-menu: var(--claude-surface);
+    --app-color-background-card: var(--claude-surface);
+    --app-color-background-control: var(--claude-surface-raised);
+    --color-background-control-opaque: var(--claude-surface-raised);
+    --color-background-callout-surface: var(--claude-surface-raised);
+    --app-color-background-editor-opaque: var(--claude-code-surface);
+    --color-background-mode-toggle-track: var(--claude-panel);
+    --color-background-mode-toggle-selected: var(--claude-surface-raised);
+    --color-background-button-outline-hover: var(--claude-surface-raised);
+    --app-color-background-button-secondary: var(--claude-surface-raised);
+  }
+
+  /* Neutralize hard-black token surfaces inside the main column
+     (e.g. the settings page wraps its content in electron:bg-surface) */
+  html[data-color-scheme="dark"] main [class*="bg-surface"],
+  html[data-theme="dark"] main [class*="bg-surface"] {
+    background-color: var(--claude-page) !important;
+    background-image: none !important;
+  }
+
+  /* Per-message action icon row */
+  html[data-color-scheme="dark"] [data-chatgpt-selection-message-id] button[aria-label],
+  html[data-theme="dark"] [data-chatgpt-selection-message-id] button[aria-label] {
+    background-color: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    color: rgba(240, 238, 230, 0.46) !important;
+  }
+
+  html[data-color-scheme="dark"] [data-chatgpt-selection-message-id] button[aria-label]:hover,
+  html[data-theme="dark"] [data-chatgpt-selection-message-id] button[aria-label]:hover {
+    background-color: rgba(255, 255, 255, 0.055) !important;
+    border-color: rgba(255, 255, 255, 0.045) !important;
+    color: var(--claude-text) !important;
   }
 }
