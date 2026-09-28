@@ -2,11 +2,17 @@
 
 个人自用的 ChatGPT 网页增强脚本集合，作者：duro。
 
+中文 | [English](README_en.md)
+
+## 预览
+
+![登录态会话页应用 Claude 风格主题的效果](assets/chatgpt-claude-style-demo.png)
+
 这个仓库主要包含三类增强：
 
 | 文件 | 类型 | 用途 |
 | --- | --- | --- |
-| `GPT Claude-like Style.css` | Stylus/UserStyle | ChatGPT 深色界面样式，让页面更接近 Claude 的窄版、暖灰、低干扰阅读体验。 |
+| `GPT Claude-like Style.user.css` | Stylus/UserStyle | ChatGPT 深色界面样式，让页面更接近 Claude 的窄版、暖灰、低干扰阅读体验。兼容 `html.dark`、`data-color-scheme`、`data-theme` 三套前端标记。 |
 | `chatgpt-claude-like-separator.user.js` | Tampermonkey userscript | 配合上面的样式使用，识别纯文本分隔符段落并添加 class，方便样式渲染为更自然的分割线。 |
 
 仓库里也包含一个附加脚本：
@@ -19,9 +25,17 @@
 
 ### Stylus 样式
 
+推荐方式（可从 GitHub 自动更新）：
+
+1. 安装浏览器扩展 Stylus。
+2. 打开原始文件地址：`https://raw.githubusercontent.com/Duro02/chatgpt-ui-scripts/main/GPT%20Claude-like%20Style.user.css`
+3. Stylus 会弹出安装页，点击安装即可；以后在管理页对该样式点“检查更新”即可同步最新版本。
+
+手动方式：
+
 1. 安装浏览器扩展 Stylus。
 2. 新建样式。
-3. 粘贴 `GPT Claude-like Style.css` 的内容。
+3. 粘贴 `GPT Claude-like Style.user.css` 的内容。
 4. 打开 `https://chatgpt.com/`。
 
 ### Tampermonkey 脚本
@@ -33,7 +47,7 @@
 
 建议组合：
 
-- 只想改外观：安装 `GPT Claude-like Style.css`。
+- 只想改外观：安装 `GPT Claude-like Style.user.css`。
 - 想让外观里的分隔线更稳定：再安装 `chatgpt-claude-like-separator.user.js`。
 - 想预览项目源 Markdown/text 文件：安装 `chatgpt-project-source-preview.user.js`。
 
@@ -91,7 +105,7 @@
 ## 许可证与署名
 
 - `archived/chatgpt-conversation-navigator.user.js`（已归档）基于 YukonKong 的原始脚本修改，原脚本许可证为 `CC-BY-NC-4.0`。本修改版继续保留原作者署名和同一许可证限制，仅可在许可证允许范围内使用和再发布，尤其注意非商业限制。
-- `GPT Claude-like Style.css`、`chatgpt-claude-like-separator.user.js`、`chatgpt-project-source-preview.user.js` 由 duro 编写。除非单个文件另有说明，按 `MIT` 许可发布。
+- `GPT Claude-like Style.user.css`、`chatgpt-claude-like-separator.user.js`、`chatgpt-project-source-preview.user.js` 由 duro 编写。除非单个文件另有说明，按 `MIT` 许可发布。
 
 原始脚本来源：
 
