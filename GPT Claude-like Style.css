@@ -122,9 +122,9 @@
     font-family: var(--claude-prose-font) !important;
   }
 
-  html.dark main :where([role="tab"], button[aria-selected], button[data-state], a[aria-current]):hover,
-  html[data-color-scheme="dark"] main :where([role="tab"], button[aria-selected], button[data-state], a[aria-current]):hover,
-  html[data-theme="dark"] main :where([role="tab"], button[aria-selected], button[data-state], a[aria-current]):hover {
+  html.dark main :where([role="tab"], button[aria-selected], button[data-state]:not([data-state="closed"]):not([data-state="delayed-open"]):not([data-state="instant-open"]), a[aria-current]):hover,
+  html[data-color-scheme="dark"] main :where([role="tab"], button[aria-selected], button[data-state]:not([data-state="closed"]):not([data-state="delayed-open"]):not([data-state="instant-open"]), a[aria-current]):hover,
+  html[data-theme="dark"] main :where([role="tab"], button[aria-selected], button[data-state]:not([data-state="closed"]):not([data-state="delayed-open"]):not([data-state="instant-open"]), a[aria-current]):hover {
     background: #000000 !important;
     background-color: #000000 !important;
     border-color: transparent !important;
