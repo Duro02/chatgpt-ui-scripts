@@ -1199,14 +1199,23 @@
     background-image: linear-gradient(to top, var(--claude-page) 0%, var(--claude-page) 55%, rgba(31, 31, 30, 0) 100%) !important;
   }
 
-  /* Composer pill on the new frontends */
-  html[data-color-scheme="dark"] [data-composer-body],
-  html[data-theme="dark"] [data-composer-body],
+  /* Composer pill on the new frontends: the rounded shell is
+     [data-composer-dark] (border-radius lives there, overflow visible);
+     [data-composer-body] is a same-size sharp-cornered inner layer —
+     paint the shell, keep the inner layer transparent so the pill
+     stays rounded instead of a sharp rectangle. */
   html[data-color-scheme="dark"] [data-composer-dark],
   html[data-theme="dark"] [data-composer-dark] {
     background: var(--claude-surface-raised) !important;
     background-color: var(--claude-surface-raised) !important;
     border-color: var(--claude-border-soft) !important;
+    box-shadow: none !important;
+  }
+
+  html[data-color-scheme="dark"] [data-composer-body],
+  html[data-theme="dark"] [data-composer-body] {
+    background: transparent !important;
+    background-color: transparent !important;
     box-shadow: none !important;
   }
 
