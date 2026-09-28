@@ -1257,13 +1257,30 @@
     color: #a9a397 !important;
   }
 
-  /* The logged-in frontend defines pure-black surface tokens
-     (--color-surface, --color-background-panel); remap the panel token
-     so cards/panels (settings cards, menus) take the theme surface. */
+  /* The logged-in frontend defines pure-black / neutral-gray surface
+     tokens for every elevated layer (menus, popovers, modals, cards,
+     pickers). Remap them to the warm Claude palette so portaled
+     surfaces — which live under body, outside main — are themed too. */
   html.dark,
   html[data-color-scheme="dark"],
   html[data-theme="dark"] {
     --color-background-panel: var(--claude-surface);
+    --color-surface-elevated: var(--claude-surface);
+    --color-surface-elevated-secondary: var(--claude-surface-raised);
+    --app-color-background-elevated-primary: var(--claude-surface);
+    --app-color-background-elevated-primary-opaque: var(--claude-surface);
+    --app-color-background-elevated-secondary: var(--claude-surface-raised);
+    --app-color-background-elevated-secondary-opaque: var(--claude-surface-raised);
+    --app-color-background-application-menu: var(--claude-surface);
+    --app-color-background-card: var(--claude-surface);
+    --app-color-background-control: var(--claude-surface-raised);
+    --color-background-control-opaque: var(--claude-surface-raised);
+    --color-background-callout-surface: var(--claude-surface-raised);
+    --app-color-background-editor-opaque: var(--claude-code-surface);
+    --color-background-mode-toggle-track: var(--claude-panel);
+    --color-background-mode-toggle-selected: var(--claude-surface-raised);
+    --color-background-button-outline-hover: var(--claude-surface-raised);
+    --app-color-background-button-secondary: var(--claude-surface-raised);
   }
 
   /* Neutralize hard-black token surfaces inside the main column
