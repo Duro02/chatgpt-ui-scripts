@@ -1,7 +1,7 @@
 /* ==UserStyle==
 @name           ChatGPT Claude-like Dark Theme
 @namespace      codex.local
-@version        0.4.1
+@version        0.4.2
 @description    Low-intrusion Stylus theme that makes ChatGPT dark mode feel closer to Claude's calm, narrow, warm dark layout. Supports the legacy web app (html.dark), the new web app (html[data-color-scheme="dark"]), and the logged-in app (html[data-theme="dark"]).
 @author         duro
 @match          https://chatgpt.com/*
@@ -77,12 +77,12 @@
 
   /* ============ Header bar ============ */
   html.dark #page-header,
-  html[data-color-scheme="dark"] main header,
-  html[data-theme="dark"] main header,
-  html[data-color-scheme="dark"] [role="main"] header,
-  html[data-theme="dark"] [role="main"] header,
-  html[data-color-scheme="dark"] section > header,
-  html[data-theme="dark"] section > header {
+  html[data-color-scheme="dark"] main header:not([data-app-shell-titlebar]),
+  html[data-theme="dark"] main header:not([data-app-shell-titlebar]),
+  html[data-color-scheme="dark"] [role="main"] header:not([data-app-shell-titlebar]),
+  html[data-theme="dark"] [role="main"] header:not([data-app-shell-titlebar]),
+  html[data-color-scheme="dark"] section > header:not([data-app-shell-titlebar]),
+  html[data-theme="dark"] section > header:not([data-app-shell-titlebar]) {
     color: var(--claude-text-soft) !important;
     border-bottom: 1px solid var(--claude-border-soft) !important;
     box-shadow: none !important;
@@ -251,36 +251,45 @@
   html.dark .markdown p,
   html.dark .prose p,
   html.dark main article p,
+  html.dark main [data-markdown-text-style] p,
   html[data-color-scheme="dark"] .markdown p,
   html[data-theme="dark"] .markdown p,
   html[data-color-scheme="dark"] .prose p,
   html[data-theme="dark"] .prose p,
   html[data-color-scheme="dark"] main article p,
-  html[data-theme="dark"] main article p {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] p,
+  html[data-theme="dark"] main article p,
+  html[data-theme="dark"] main [data-markdown-text-style] p {
     margin-block: 0.7em !important;
   }
 
   html.dark .markdown > :first-child,
   html.dark .prose > :first-child,
   html.dark main article > :first-child,
+  html.dark main [data-markdown-text-style] > :first-child,
   html[data-color-scheme="dark"] .markdown > :first-child,
   html[data-theme="dark"] .markdown > :first-child,
   html[data-color-scheme="dark"] .prose > :first-child,
   html[data-theme="dark"] .prose > :first-child,
   html[data-color-scheme="dark"] main article > :first-child,
-  html[data-theme="dark"] main article > :first-child {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] > :first-child,
+  html[data-theme="dark"] main article > :first-child,
+  html[data-theme="dark"] main [data-markdown-text-style] > :first-child {
     margin-top: 0 !important;
   }
 
   html.dark .markdown > :last-child,
   html.dark .prose > :last-child,
   html.dark main article > :last-child,
+  html.dark main [data-markdown-text-style] > :last-child,
   html[data-color-scheme="dark"] .markdown > :last-child,
   html[data-theme="dark"] .markdown > :last-child,
   html[data-color-scheme="dark"] .prose > :last-child,
   html[data-theme="dark"] .prose > :last-child,
   html[data-color-scheme="dark"] main article > :last-child,
-  html[data-theme="dark"] main article > :last-child {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] > :last-child,
+  html[data-theme="dark"] main article > :last-child,
+  html[data-theme="dark"] main [data-markdown-text-style] > :last-child {
     margin-bottom: 0 !important;
   }
 
@@ -368,12 +377,16 @@
   html.dark .markdown h4,
   html.dark .prose h1,
   html.dark main article h1,
+  html.dark main [data-markdown-text-style] h1,
   html.dark .prose h2,
   html.dark main article h2,
+  html.dark main [data-markdown-text-style] h2,
   html.dark .prose h3,
   html.dark main article h3,
+  html.dark main [data-markdown-text-style] h3,
   html.dark .prose h4,
   html.dark main article h4,
+  html.dark main [data-markdown-text-style] h4,
   html[data-color-scheme="dark"] .markdown h1,
   html[data-theme="dark"] .markdown h1,
   html[data-color-scheme="dark"] .markdown h2,
@@ -385,19 +398,27 @@
   html[data-color-scheme="dark"] .prose h1,
   html[data-theme="dark"] .prose h1,
   html[data-color-scheme="dark"] main article h1,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] h1,
   html[data-theme="dark"] main article h1,
+  html[data-theme="dark"] main [data-markdown-text-style] h1,
   html[data-color-scheme="dark"] .prose h2,
   html[data-theme="dark"] .prose h2,
   html[data-color-scheme="dark"] main article h2,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] h2,
   html[data-theme="dark"] main article h2,
+  html[data-theme="dark"] main [data-markdown-text-style] h2,
   html[data-color-scheme="dark"] .prose h3,
   html[data-theme="dark"] .prose h3,
   html[data-color-scheme="dark"] main article h3,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] h3,
   html[data-theme="dark"] main article h3,
+  html[data-theme="dark"] main [data-markdown-text-style] h3,
   html[data-color-scheme="dark"] .prose h4,
   html[data-theme="dark"] .prose h4,
   html[data-color-scheme="dark"] main article h4,
-  html[data-theme="dark"] main article h4 {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] h4,
+  html[data-theme="dark"] main article h4,
+  html[data-theme="dark"] main [data-markdown-text-style] h4 {
     color: #f6f1e8 !important;
     font-family: var(--claude-prose-font) !important;
     font-weight: 650 !important;
@@ -409,48 +430,60 @@
   html.dark .markdown h1,
   html.dark .prose h1,
   html.dark main article h1,
+  html.dark main [data-markdown-text-style] h1,
   html[data-color-scheme="dark"] .markdown h1,
   html[data-theme="dark"] .markdown h1,
   html[data-color-scheme="dark"] .prose h1,
   html[data-theme="dark"] .prose h1,
   html[data-color-scheme="dark"] main article h1,
-  html[data-theme="dark"] main article h1 {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] h1,
+  html[data-theme="dark"] main article h1,
+  html[data-theme="dark"] main [data-markdown-text-style] h1 {
     font-size: 1.45em !important;
   }
 
   html.dark .markdown h2,
   html.dark .prose h2,
   html.dark main article h2,
+  html.dark main [data-markdown-text-style] h2,
   html[data-color-scheme="dark"] .markdown h2,
   html[data-theme="dark"] .markdown h2,
   html[data-color-scheme="dark"] .prose h2,
   html[data-theme="dark"] .prose h2,
   html[data-color-scheme="dark"] main article h2,
-  html[data-theme="dark"] main article h2 {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] h2,
+  html[data-theme="dark"] main article h2,
+  html[data-theme="dark"] main [data-markdown-text-style] h2 {
     font-size: 1.28em !important;
   }
 
   html.dark .markdown h3,
   html.dark .prose h3,
   html.dark main article h3,
+  html.dark main [data-markdown-text-style] h3,
   html[data-color-scheme="dark"] .markdown h3,
   html[data-theme="dark"] .markdown h3,
   html[data-color-scheme="dark"] .prose h3,
   html[data-theme="dark"] .prose h3,
   html[data-color-scheme="dark"] main article h3,
-  html[data-theme="dark"] main article h3 {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] h3,
+  html[data-theme="dark"] main article h3,
+  html[data-theme="dark"] main [data-markdown-text-style] h3 {
     font-size: 1.12em !important;
   }
 
   html.dark .markdown strong,
   html.dark .prose strong,
   html.dark main article strong,
+  html.dark main [data-markdown-text-style] strong,
   html[data-color-scheme="dark"] .markdown strong,
   html[data-theme="dark"] .markdown strong,
   html[data-color-scheme="dark"] .prose strong,
   html[data-theme="dark"] .prose strong,
   html[data-color-scheme="dark"] main article strong,
-  html[data-theme="dark"] main article strong {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] strong,
+  html[data-theme="dark"] main article strong,
+  html[data-theme="dark"] main [data-markdown-text-style] strong {
     color: #fff8ed !important;
     font-weight: 650 !important;
   }
@@ -458,12 +491,15 @@
   html.dark .markdown a,
   html.dark .prose a,
   html.dark main article a,
+  html.dark main [data-markdown-text-style] a,
   html[data-color-scheme="dark"] .markdown a,
   html[data-theme="dark"] .markdown a,
   html[data-color-scheme="dark"] .prose a,
   html[data-theme="dark"] .prose a,
   html[data-color-scheme="dark"] main article a,
-  html[data-theme="dark"] main article a {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] a,
+  html[data-theme="dark"] main article a,
+  html[data-theme="dark"] main [data-markdown-text-style] a {
     color: #e4c99d !important;
     text-decoration-color: rgba(228, 201, 157, 0.45) !important;
     text-underline-offset: 2px !important;
@@ -472,12 +508,15 @@
   html.dark .markdown hr,
   html.dark .prose hr,
   html.dark main article hr,
+  html.dark main [data-markdown-text-style] hr,
   html[data-color-scheme="dark"] .markdown hr,
   html[data-theme="dark"] .markdown hr,
   html[data-color-scheme="dark"] .prose hr,
   html[data-theme="dark"] .prose hr,
   html[data-color-scheme="dark"] main article hr,
-  html[data-theme="dark"] main article hr {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] hr,
+  html[data-theme="dark"] main article hr,
+  html[data-theme="dark"] main [data-markdown-text-style] hr {
     border: 0 !important;
     border-top: 0.5px solid var(--claude-divider) !important;
     margin: 1.45em 0 !important;
@@ -486,12 +525,15 @@
   html.dark .markdown p.claude-like-separator,
   html.dark .prose p.claude-like-separator,
   html.dark main article p.claude-like-separator,
+  html.dark main [data-markdown-text-style] p.claude-like-separator,
   html[data-color-scheme="dark"] .markdown p.claude-like-separator,
   html[data-theme="dark"] .markdown p.claude-like-separator,
   html[data-color-scheme="dark"] .prose p.claude-like-separator,
   html[data-theme="dark"] .prose p.claude-like-separator,
   html[data-color-scheme="dark"] main article p.claude-like-separator,
-  html[data-theme="dark"] main article p.claude-like-separator {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] p.claude-like-separator,
+  html[data-theme="dark"] main article p.claude-like-separator,
+  html[data-theme="dark"] main [data-markdown-text-style] p.claude-like-separator {
     color: transparent !important;
     display: block !important;
     font-size: 0 !important;
@@ -508,12 +550,15 @@
   html.dark .markdown p.claude-like-separator::before,
   html.dark .prose p.claude-like-separator::before,
   html.dark main article p.claude-like-separator::before,
+  html.dark main [data-markdown-text-style] p.claude-like-separator::before,
   html[data-color-scheme="dark"] .markdown p.claude-like-separator::before,
   html[data-theme="dark"] .markdown p.claude-like-separator::before,
   html[data-color-scheme="dark"] .prose p.claude-like-separator::before,
   html[data-theme="dark"] .prose p.claude-like-separator::before,
   html[data-color-scheme="dark"] main article p.claude-like-separator::before,
-  html[data-theme="dark"] main article p.claude-like-separator::before {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] p.claude-like-separator::before,
+  html[data-theme="dark"] main article p.claude-like-separator::before,
+  html[data-theme="dark"] main [data-markdown-text-style] p.claude-like-separator::before {
     border-top: 0.5px solid var(--claude-divider) !important;
     content: "" !important;
     display: block !important;
@@ -525,8 +570,10 @@
   html.dark .markdown ol,
   html.dark .prose ul,
   html.dark main article ul,
+  html.dark main [data-markdown-text-style] ul,
   html.dark .prose ol,
   html.dark main article ol,
+  html.dark main [data-markdown-text-style] ol,
   html[data-color-scheme="dark"] .markdown ul,
   html[data-theme="dark"] .markdown ul,
   html[data-color-scheme="dark"] .markdown ol,
@@ -534,11 +581,15 @@
   html[data-color-scheme="dark"] .prose ul,
   html[data-theme="dark"] .prose ul,
   html[data-color-scheme="dark"] main article ul,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] ul,
   html[data-theme="dark"] main article ul,
+  html[data-theme="dark"] main [data-markdown-text-style] ul,
   html[data-color-scheme="dark"] .prose ol,
   html[data-theme="dark"] .prose ol,
   html[data-color-scheme="dark"] main article ol,
-  html[data-theme="dark"] main article ol {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] ol,
+  html[data-theme="dark"] main article ol,
+  html[data-theme="dark"] main [data-markdown-text-style] ol {
     padding-inline-start: 1.35em !important;
     margin-block: 0.7em !important;
   }
@@ -546,12 +597,15 @@
   html.dark .markdown li,
   html.dark .prose li,
   html.dark main article li,
+  html.dark main [data-markdown-text-style] li,
   html[data-color-scheme="dark"] .markdown li,
   html[data-theme="dark"] .markdown li,
   html[data-color-scheme="dark"] .prose li,
   html[data-theme="dark"] .prose li,
   html[data-color-scheme="dark"] main article li,
-  html[data-theme="dark"] main article li {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] li,
+  html[data-theme="dark"] main article li,
+  html[data-theme="dark"] main [data-markdown-text-style] li {
     margin-block: 0.25em !important;
     padding-inline-start: 0.15em !important;
   }
@@ -559,12 +613,15 @@
   html.dark .markdown blockquote,
   html.dark .prose blockquote,
   html.dark main article blockquote,
+  html.dark main [data-markdown-text-style] blockquote,
   html[data-color-scheme="dark"] .markdown blockquote,
   html[data-theme="dark"] .markdown blockquote,
   html[data-color-scheme="dark"] .prose blockquote,
   html[data-theme="dark"] .prose blockquote,
   html[data-color-scheme="dark"] main article blockquote,
-  html[data-theme="dark"] main article blockquote {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] blockquote,
+  html[data-theme="dark"] main article blockquote,
+  html[data-theme="dark"] main [data-markdown-text-style] blockquote {
     color: var(--claude-text-soft) !important;
     border-left: 2px solid rgba(215, 185, 143, 0.45) !important;
     background: rgba(255, 255, 255, 0.035) !important;
@@ -576,12 +633,15 @@
   html.dark .markdown table,
   html.dark .prose table,
   html.dark main article table,
+  html.dark main [data-markdown-text-style] table,
   html[data-color-scheme="dark"] .markdown table,
   html[data-theme="dark"] .markdown table,
   html[data-color-scheme="dark"] .prose table,
   html[data-theme="dark"] .prose table,
   html[data-color-scheme="dark"] main article table,
-  html[data-theme="dark"] main article table {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] table,
+  html[data-theme="dark"] main article table,
+  html[data-theme="dark"] main [data-markdown-text-style] table {
     border-collapse: separate !important;
     border-spacing: 0 !important;
     border: 1px solid var(--claude-border) !important;
@@ -594,8 +654,10 @@
   html.dark .markdown td,
   html.dark .prose th,
   html.dark main article th,
+  html.dark main [data-markdown-text-style] th,
   html.dark .prose td,
   html.dark main article td,
+  html.dark main [data-markdown-text-style] td,
   html[data-color-scheme="dark"] .markdown th,
   html[data-theme="dark"] .markdown th,
   html[data-color-scheme="dark"] .markdown td,
@@ -603,11 +665,15 @@
   html[data-color-scheme="dark"] .prose th,
   html[data-theme="dark"] .prose th,
   html[data-color-scheme="dark"] main article th,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] th,
   html[data-theme="dark"] main article th,
+  html[data-theme="dark"] main [data-markdown-text-style] th,
   html[data-color-scheme="dark"] .prose td,
   html[data-theme="dark"] .prose td,
   html[data-color-scheme="dark"] main article td,
-  html[data-theme="dark"] main article td {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] td,
+  html[data-theme="dark"] main article td,
+  html[data-theme="dark"] main [data-markdown-text-style] td {
     border-color: var(--claude-border-soft) !important;
     color: var(--claude-text-soft) !important;
     padding: 0.55em 0.75em !important;
@@ -616,12 +682,15 @@
   html.dark .markdown th,
   html.dark .prose th,
   html.dark main article th,
+  html.dark main [data-markdown-text-style] th,
   html[data-color-scheme="dark"] .markdown th,
   html[data-theme="dark"] .markdown th,
   html[data-color-scheme="dark"] .prose th,
   html[data-theme="dark"] .prose th,
   html[data-color-scheme="dark"] main article th,
-  html[data-theme="dark"] main article th {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] th,
+  html[data-theme="dark"] main article th,
+  html[data-theme="dark"] main [data-markdown-text-style] th {
     background: rgba(255, 255, 255, 0.045) !important;
     color: var(--claude-text) !important;
     font-weight: 600 !important;
@@ -631,12 +700,15 @@
   html.dark .markdown :not(pre) > code,
   html.dark .prose :not(pre) > code,
   html.dark main article :not(pre) > code,
+  html.dark main [data-markdown-text-style] :not(pre) > code,
   html[data-color-scheme="dark"] .markdown :not(pre) > code,
   html[data-theme="dark"] .markdown :not(pre) > code,
   html[data-color-scheme="dark"] .prose :not(pre) > code,
   html[data-theme="dark"] .prose :not(pre) > code,
   html[data-color-scheme="dark"] main article :not(pre) > code,
-  html[data-theme="dark"] main article :not(pre) > code {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] :not(pre) > code,
+  html[data-theme="dark"] main article :not(pre) > code,
+  html[data-theme="dark"] main [data-markdown-text-style] :not(pre) > code {
     background: var(--claude-inline-code-bg) !important;
     color: #ffcab8 !important;
     border: 1px solid rgba(255, 255, 255, 0.06) !important;
@@ -650,13 +722,16 @@
   html.dark .markdown div[class*="bg-token-main-surface-secondary"]:has(pre),
   html.dark .prose div[class*="bg-token-main-surface-secondary"]:has(pre),
   html.dark main article div[class*="bg-token-main-surface-secondary"]:has(pre),
+  html.dark main [data-markdown-text-style] div[class*="bg-token-main-surface-secondary"]:has(pre),
   html.dark div[class*="bg-token-main-surface-secondary"]:has(pre),
   html[data-color-scheme="dark"] .markdown div[class*="bg-token-main-surface-secondary"]:has(pre),
   html[data-theme="dark"] .markdown div[class*="bg-token-main-surface-secondary"]:has(pre),
   html[data-color-scheme="dark"] .prose div[class*="bg-token-main-surface-secondary"]:has(pre),
   html[data-theme="dark"] .prose div[class*="bg-token-main-surface-secondary"]:has(pre),
   html[data-color-scheme="dark"] main article div[class*="bg-token-main-surface-secondary"]:has(pre),
+  html[data-color-scheme="dark"] main [data-markdown-text-style] div[class*="bg-token-main-surface-secondary"]:has(pre),
   html[data-theme="dark"] main article div[class*="bg-token-main-surface-secondary"]:has(pre),
+  html[data-theme="dark"] main [data-markdown-text-style] div[class*="bg-token-main-surface-secondary"]:has(pre),
   html[data-color-scheme="dark"] div[class*="bg-token-main-surface-secondary"]:has(pre),
   html[data-theme="dark"] div[class*="bg-token-main-surface-secondary"]:has(pre) {
     background: var(--claude-code-surface) !important;
@@ -670,13 +745,16 @@
   html.dark .markdown div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
   html.dark .prose div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
   html.dark main article div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
+  html.dark main [data-markdown-text-style] div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
   html.dark div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
   html[data-color-scheme="dark"] .markdown div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
   html[data-theme="dark"] .markdown div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
   html[data-color-scheme="dark"] .prose div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
   html[data-theme="dark"] .prose div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
   html[data-color-scheme="dark"] main article div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
+  html[data-color-scheme="dark"] main [data-markdown-text-style] div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
   html[data-theme="dark"] main article div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
+  html[data-theme="dark"] main [data-markdown-text-style] div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
   html[data-color-scheme="dark"] div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child,
   html[data-theme="dark"] div[class*="bg-token-main-surface-secondary"]:has(pre) > div:first-child {
     background: var(--claude-code-surface) !important;
@@ -705,7 +783,9 @@
   /* The new app has no bg-token code wrapper — style pre as the card itself.
      Scoped to data-color-scheme so the legacy app keeps its wrapper styling. */
   html[data-color-scheme="dark"] main article pre,
-  html[data-theme="dark"] main article pre {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] pre,
+  html[data-theme="dark"] main article pre,
+  html[data-theme="dark"] main [data-markdown-text-style] pre {
     background: var(--claude-code-surface) !important;
     color: var(--claude-code) !important;
     border: 1px solid rgba(255, 255, 255, 0.18) !important;
@@ -741,12 +821,15 @@
   html.dark .markdown pre code,
   html.dark .prose pre code,
   html.dark main article pre code,
+  html.dark main [data-markdown-text-style] pre code,
   html[data-color-scheme="dark"] .markdown pre code,
   html[data-theme="dark"] .markdown pre code,
   html[data-color-scheme="dark"] .prose pre code,
   html[data-theme="dark"] .prose pre code,
   html[data-color-scheme="dark"] main article pre code,
-  html[data-theme="dark"] main article pre code {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] pre code,
+  html[data-theme="dark"] main article pre code,
+  html[data-theme="dark"] main [data-markdown-text-style] pre code {
     color: inherit !important;
     background: transparent !important;
     border: 0 !important;
@@ -758,57 +841,72 @@
   html.dark .markdown .bg-token-bg-elevated-secondary,
   html.dark .prose .bg-token-bg-elevated-secondary,
   html.dark main article .bg-token-bg-elevated-secondary,
+  html.dark main [data-markdown-text-style] .bg-token-bg-elevated-secondary,
   html[data-color-scheme="dark"] .markdown .bg-token-bg-elevated-secondary,
   html[data-theme="dark"] .markdown .bg-token-bg-elevated-secondary,
   html[data-color-scheme="dark"] .prose .bg-token-bg-elevated-secondary,
   html[data-theme="dark"] .prose .bg-token-bg-elevated-secondary,
   html[data-color-scheme="dark"] main article .bg-token-bg-elevated-secondary,
-  html[data-theme="dark"] main article .bg-token-bg-elevated-secondary {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] .bg-token-bg-elevated-secondary,
+  html[data-theme="dark"] main article .bg-token-bg-elevated-secondary,
+  html[data-theme="dark"] main [data-markdown-text-style] .bg-token-bg-elevated-secondary {
     background-color: var(--claude-code-surface) !important;
   }
 
   html.dark .markdown div[class*="overflow-y-auto"],
   html.dark .prose div[class*="overflow-y-auto"],
   html.dark main article div[class*="overflow-y-auto"],
+  html.dark main [data-markdown-text-style] div[class*="overflow-y-auto"],
   html.dark .markdown div[class*="contain-inline-size"],
   html.dark .prose div[class*="contain-inline-size"],
   html.dark main article div[class*="contain-inline-size"],
+  html.dark main [data-markdown-text-style] div[class*="contain-inline-size"],
   html[data-color-scheme="dark"] .markdown div[class*="overflow-y-auto"],
   html[data-theme="dark"] .markdown div[class*="overflow-y-auto"],
   html[data-color-scheme="dark"] .prose div[class*="overflow-y-auto"],
   html[data-theme="dark"] .prose div[class*="overflow-y-auto"],
   html[data-color-scheme="dark"] main article div[class*="overflow-y-auto"],
+  html[data-color-scheme="dark"] main [data-markdown-text-style] div[class*="overflow-y-auto"],
   html[data-theme="dark"] main article div[class*="overflow-y-auto"],
+  html[data-theme="dark"] main [data-markdown-text-style] div[class*="overflow-y-auto"],
   html[data-color-scheme="dark"] .markdown div[class*="contain-inline-size"],
   html[data-theme="dark"] .markdown div[class*="contain-inline-size"],
   html[data-color-scheme="dark"] .prose div[class*="contain-inline-size"],
   html[data-theme="dark"] .prose div[class*="contain-inline-size"],
   html[data-color-scheme="dark"] main article div[class*="contain-inline-size"],
-  html[data-theme="dark"] main article div[class*="contain-inline-size"] {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] div[class*="contain-inline-size"],
+  html[data-theme="dark"] main article div[class*="contain-inline-size"],
+  html[data-theme="dark"] main [data-markdown-text-style] div[class*="contain-inline-size"] {
     scrollbar-color: rgba(255, 255, 255, 0.24) transparent !important;
   }
 
   html.dark .markdown button,
   html.dark .prose button,
   html.dark main article button,
+  html.dark main [data-markdown-text-style] button,
   html[data-color-scheme="dark"] .markdown button,
   html[data-theme="dark"] .markdown button,
   html[data-color-scheme="dark"] .prose button,
   html[data-theme="dark"] .prose button,
   html[data-color-scheme="dark"] main article button,
-  html[data-theme="dark"] main article button {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] button,
+  html[data-theme="dark"] main article button,
+  html[data-theme="dark"] main [data-markdown-text-style] button {
     color: var(--claude-text-soft) !important;
   }
 
   html.dark .markdown button:hover,
   html.dark .prose button:hover,
   html.dark main article button:hover,
+  html.dark main [data-markdown-text-style] button:hover,
   html[data-color-scheme="dark"] .markdown button:hover,
   html[data-theme="dark"] .markdown button:hover,
   html[data-color-scheme="dark"] .prose button:hover,
   html[data-theme="dark"] .prose button:hover,
   html[data-color-scheme="dark"] main article button:hover,
-  html[data-theme="dark"] main article button:hover {
+  html[data-color-scheme="dark"] main [data-markdown-text-style] button:hover,
+  html[data-theme="dark"] main article button:hover,
+  html[data-theme="dark"] main [data-markdown-text-style] button:hover {
     background-color: rgba(255, 255, 255, 0.055) !important;
     color: var(--claude-text) !important;
   }
@@ -1077,5 +1175,90 @@
   html[data-theme="dark"] ::selection {
     background: rgba(215, 185, 143, 0.28) !important;
     color: #fff8ed !important;
+  }
+
+  /* ============ Logged-in app surfaces ============ */
+  /* The app-shell titlebar is a full-width fixed overlay: never paint it,
+     it would cover the sidebar header (logo + collapse trigger). */
+  html[data-color-scheme="dark"] [data-app-shell-titlebar],
+  html[data-theme="dark"] [data-app-shell-titlebar] {
+    background: transparent !important;
+    background-color: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* Scroll-edge fades above/below the message column */
+  html[data-color-scheme="dark"] div[class*="MainContentTopFade"],
+  html[data-theme="dark"] div[class*="MainContentTopFade"] {
+    background-image: linear-gradient(to bottom, var(--claude-page), rgba(31, 31, 30, 0)) !important;
+  }
+
+  html[data-color-scheme="dark"] div.pointer-events-none[class*="inset-x-0"][class*="bottom-0"][class*="-top-8"],
+  html[data-theme="dark"] div.pointer-events-none[class*="inset-x-0"][class*="bottom-0"][class*="-top-8"] {
+    background-image: linear-gradient(to top, var(--claude-page) 0%, var(--claude-page) 55%, rgba(31, 31, 30, 0) 100%) !important;
+  }
+
+  /* Composer pill on the new frontends */
+  html[data-color-scheme="dark"] [data-composer-body],
+  html[data-theme="dark"] [data-composer-body],
+  html[data-color-scheme="dark"] [data-composer-dark],
+  html[data-theme="dark"] [data-composer-dark] {
+    background: var(--claude-surface-raised) !important;
+    background-color: var(--claude-surface-raised) !important;
+    border-color: var(--claude-border-soft) !important;
+    box-shadow: none !important;
+  }
+
+  html[data-color-scheme="dark"] [data-user-message-bubble],
+  html[data-theme="dark"] [data-user-message-bubble] {
+    background: var(--claude-user) !important;
+    background-color: var(--claude-user) !important;
+    color: var(--claude-text) !important;
+    border: 1px solid rgba(255, 255, 255, 0.035) !important;
+    border-radius: 13px !important;
+    box-shadow: none !important;
+    font-family: var(--claude-font) !important;
+    font-size: 16px !important;
+    font-weight: 450 !important;
+    line-height: 1.52 !important;
+  }
+
+  html[data-color-scheme="dark"] [data-user-message-bubble] :where(p, span, div),
+  html[data-theme="dark"] [data-user-message-bubble] :where(p, span, div) {
+    color: var(--claude-text) !important;
+  }
+
+  /* Rendered code blocks on the new frontends */
+  html[data-color-scheme="dark"] [data-markdown-copy="code-block"],
+  html[data-theme="dark"] [data-markdown-copy="code-block"] {
+    background: var(--claude-code-surface) !important;
+    background-color: var(--claude-code-surface) !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    box-shadow: none !important;
+    color: var(--claude-code) !important;
+  }
+
+  html[data-color-scheme="dark"] [data-markdown-copy="code-block"] [data-markdown-copy="exclude"],
+  html[data-theme="dark"] [data-markdown-copy="code-block"] [data-markdown-copy="exclude"] {
+    background: transparent !important;
+    background-image: none !important;
+    color: #a9a397 !important;
+  }
+
+  /* Per-message action icon row */
+  html[data-color-scheme="dark"] [data-chatgpt-selection-message-id] button[aria-label],
+  html[data-theme="dark"] [data-chatgpt-selection-message-id] button[aria-label] {
+    background-color: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    color: rgba(240, 238, 230, 0.46) !important;
+  }
+
+  html[data-color-scheme="dark"] [data-chatgpt-selection-message-id] button[aria-label]:hover,
+  html[data-theme="dark"] [data-chatgpt-selection-message-id] button[aria-label]:hover {
+    background-color: rgba(255, 255, 255, 0.055) !important;
+    border-color: rgba(255, 255, 255, 0.045) !important;
+    color: var(--claude-text) !important;
   }
 }
