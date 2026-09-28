@@ -1255,6 +1255,23 @@
     color: #a9a397 !important;
   }
 
+  /* The logged-in frontend defines pure-black surface tokens
+     (--color-surface, --color-background-panel); remap the panel token
+     so cards/panels (settings cards, menus) take the theme surface. */
+  html.dark,
+  html[data-color-scheme="dark"],
+  html[data-theme="dark"] {
+    --color-background-panel: var(--claude-surface);
+  }
+
+  /* Neutralize hard-black token surfaces inside the main column
+     (e.g. the settings page wraps its content in electron:bg-surface) */
+  html[data-color-scheme="dark"] main [class*="bg-surface"],
+  html[data-theme="dark"] main [class*="bg-surface"] {
+    background-color: var(--claude-page) !important;
+    background-image: none !important;
+  }
+
   /* Per-message action icon row */
   html[data-color-scheme="dark"] [data-chatgpt-selection-message-id] button[aria-label],
   html[data-theme="dark"] [data-chatgpt-selection-message-id] button[aria-label] {
