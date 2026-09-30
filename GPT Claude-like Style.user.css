@@ -1,7 +1,7 @@
 /* ==UserStyle==
 @name           ChatGPT Claude-like Dark Theme
 @namespace      codex.local
-@version        0.4.2
+@version        0.4.4
 @description    Low-intrusion Stylus theme that makes ChatGPT dark mode feel closer to Claude's calm, narrow, warm dark layout. Supports the legacy web app (html.dark), the new web app (html[data-color-scheme="dark"]), and the logged-in app (html[data-theme="dark"]).
 @author         duro
 @match          https://chatgpt.com/*
@@ -145,14 +145,14 @@
   /* ============ Sidebar ============ */
   html.dark nav,
   html.dark aside,
-  html.dark [class*="sidebar"],
+  html.dark [class*="sidebar"]:not([class*="sidebar-open"]):not([class*="sidebar-trigger"]):not([class*="data-app-shell-sidebar"]):not([class*="group/sidebar"]),
   html.dark .bg-token-sidebar-surface-primary,
   html[data-color-scheme="dark"] nav,
   html[data-theme="dark"] nav,
   html[data-color-scheme="dark"] aside,
   html[data-theme="dark"] aside,
-  html[data-color-scheme="dark"] [class*="sidebar"],
-  html[data-theme="dark"] [class*="sidebar"],
+  html[data-color-scheme="dark"] [class*="sidebar"]:not([class*="sidebar-open"]):not([class*="sidebar-trigger"]):not([class*="data-app-shell-sidebar"]):not([class*="group/sidebar"]),
+  html[data-theme="dark"] [class*="sidebar"]:not([class*="sidebar-open"]):not([class*="sidebar-trigger"]):not([class*="data-app-shell-sidebar"]):not([class*="group/sidebar"]),
   html[data-color-scheme="dark"] [data-desktop-sidebar],
   html[data-theme="dark"] [data-desktop-sidebar],
   html[data-color-scheme="dark"] [data-octane-sidebar-pane],
@@ -1305,5 +1305,100 @@
     background-color: rgba(255, 255, 255, 0.055) !important;
     border-color: rgba(255, 255, 255, 0.045) !important;
     color: var(--claude-text) !important;
+  }
+
+  /* Dots surface (chatgpt.com/dots): the embedded messaging app paints
+     near-black layers (html root included) under the transparent
+     composer area, and the selected rail button's ::before uses a
+     cold 10%-white tint. */
+  html.dark,
+  html[data-color-scheme="dark"],
+  html[data-theme="dark"] {
+    background: var(--claude-page) !important;
+    background-color: var(--claude-page) !important;
+  }
+
+  html.dark .messaging-root,
+  html[data-color-scheme="dark"] .messaging-root,
+  html[data-theme="dark"] .messaging-root,
+  html.dark [class*="FullHeightPageSurfaceLayout"],
+  html[data-color-scheme="dark"] [class*="FullHeightPageSurfaceLayout"],
+  html[data-theme="dark"] [class*="FullHeightPageSurfaceLayout"] {
+    background: var(--claude-page) !important;
+    background-color: var(--claude-page) !important;
+    background-image: none !important;
+  }
+
+  html.dark nav[class*="sidebar-rail"] button[data-selected]::before,
+  html[data-color-scheme="dark"] nav[class*="sidebar-rail"] button[data-selected]::before,
+  html[data-theme="dark"] nav[class*="sidebar-rail"] button[data-selected]::before,
+  html.dark button::before,
+  html[data-color-scheme="dark"] button::before,
+  html[data-theme="dark"] button::before {
+    background: rgba(255, 250, 240, 0.07) !important;
+    background-color: rgba(255, 250, 240, 0.07) !important;
+  }
+
+  /* Dots messaging app: the page-shell underlay is a near-black ::before
+     layer; the dot avatar's backdrop is another. */
+  html.dark [class*="FullHeightPageSurfaceLayout"] > div::before,
+  html[data-color-scheme="dark"] [class*="FullHeightPageSurfaceLayout"] > div::before,
+  html[data-theme="dark"] [class*="FullHeightPageSurfaceLayout"] > div::before,
+  html.dark .messaging-root span[class*="size-14"]::before,
+  html[data-color-scheme="dark"] .messaging-root span[class*="size-14"]::before,
+  html[data-theme="dark"] .messaging-root span[class*="size-14"]::before {
+    background-color: var(--claude-page) !important;
+    background-image: none !important;
+  }
+
+  html.dark .messaging-root div.pointer-events-none[class*="top-0"],
+  html[data-color-scheme="dark"] .messaging-root div.pointer-events-none[class*="top-0"],
+  html[data-theme="dark"] .messaging-root div.pointer-events-none[class*="top-0"] {
+    background: linear-gradient(to bottom, var(--claude-page), rgba(31, 31, 30, 0)) !important;
+    background-image: linear-gradient(to bottom, var(--claude-page), rgba(31, 31, 30, 0)) !important;
+  }
+
+  html.dark a[class*="no-drag"],
+  html[data-color-scheme="dark"] a[class*="no-drag"],
+  html[data-theme="dark"] a[class*="no-drag"] {
+    background-color: var(--claude-surface-raised) !important;
+  }
+
+  /* bg-surface/<alpha> wrappers are meant as subtle dark veils (e.g. the
+     header button tiles); the blanket bg-surface rule would paint them
+     opaque, leaving a hard light patch. */
+  html.dark [class*="bg-surface/"],
+  html[data-color-scheme="dark"] [class*="bg-surface/"],
+  html[data-theme="dark"] [class*="bg-surface/"],
+  html.dark main [class*="bg-surface/"],
+  html[data-color-scheme="dark"] main [class*="bg-surface/"],
+  html[data-theme="dark"] main [class*="bg-surface/"] {
+    background-color: rgba(255, 250, 240, 0.05) !important;
+  }
+
+  html.dark .file-drop-overlay,
+  html[data-color-scheme="dark"] .file-drop-overlay,
+  html[data-theme="dark"] .file-drop-overlay {
+    background: rgba(31, 31, 30, 0.94) !important;
+    background-color: rgba(31, 31, 30, 0.94) !important;
+  }
+
+  /* Dots messaging app: the composer's cosmetic horizontal overflow paints
+     a 12px native dark scrollbar along the bottom edge (color-scheme: dark
+     makes it near-black), and the app also gives .composer-wrap a 12px
+     solid #0e0e0e bottom border acting as a dark gap strip. */
+  html.dark .composer-wrap,
+  html[data-color-scheme="dark"] .composer-wrap,
+  html[data-theme="dark"] .composer-wrap {
+    overflow-x: hidden !important;
+    border-bottom-color: transparent !important;
+  }
+  html.dark .messaging-root,
+  html[data-color-scheme="dark"] .messaging-root,
+  html[data-theme="dark"] .messaging-root,
+  html.dark .messaging-root *,
+  html[data-color-scheme="dark"] .messaging-root *,
+  html[data-theme="dark"] .messaging-root * {
+    scrollbar-color: rgba(255, 250, 240, 0.22) transparent !important;
   }
 }
