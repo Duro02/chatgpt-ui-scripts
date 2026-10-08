@@ -1,7 +1,7 @@
 /* ==UserStyle==
 @name           ChatGPT Claude-like Dark Theme
 @namespace      codex.local
-@version        0.4.4
+@version        0.4.5
 @description    Low-intrusion Stylus theme that makes ChatGPT dark mode feel closer to Claude's calm, narrow, warm dark layout. Supports the legacy web app (html.dark), the new web app (html[data-color-scheme="dark"]), and the logged-in app (html[data-theme="dark"]).
 @author         duro
 @match          https://chatgpt.com/*
@@ -107,6 +107,25 @@
     background-color: rgba(255, 255, 255, 0.055) !important;
   }
 
+  /* Share/menu and panel-toggle wrappers carry browser-only surface
+     backgrounds. Clear the wrappers while retaining button hover states. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    [data-app-shell-main-titlebar] [class~="browser:bg-surface"] {
+    background: transparent !important;
+  }
+
+  /* The mode switch has its own sliding selected indicator. Keep the
+     buttons transparent so header hover styles cannot add a second pill. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    [role="group"]:has(> .bg-background-mode-toggle-track) > button[aria-pressed] {
+    background: transparent !important;
+  }
+
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    [role="group"]:has(> .bg-background-mode-toggle-track) > button[aria-pressed]:is(:hover, :focus-visible) {
+    color: var(--claude-text) !important;
+  }
+
   html.dark main :where(h1, h2, h3, h4, p, a, button, span, div, li):not(pre):not(code),
   html[data-color-scheme="dark"] main :where(h1, h2, h3, h4, p, a, button, span, div, li):not(pre):not(code),
   html[data-theme="dark"] main :where(h1, h2, h3, h4, p, a, button, span, div, li):not(pre):not(code) {
@@ -163,6 +182,13 @@
   html[data-theme="dark"] [data-sidebar-scrollport] {
     background-color: var(--claude-sidebar) !important;
     border-color: var(--claude-border-soft) !important;
+  }
+
+  /* Project breadcrumbs also use nav, but belong to the header rather
+     than the sidebar. Keep their wrapper transparent to avoid a dark tile. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    [data-app-shell-header-toolbar] nav {
+    background: transparent !important;
   }
 
   html.dark nav a,
@@ -1194,9 +1220,19 @@
     background-image: linear-gradient(to bottom, var(--claude-page), rgba(31, 31, 30, 0)) !important;
   }
 
-  html[data-color-scheme="dark"] div.pointer-events-none[class*="inset-x-0"][class*="bottom-0"][class*="-top-8"],
-  html[data-theme="dark"] div.pointer-events-none[class*="inset-x-0"][class*="bottom-0"][class*="-top-8"] {
-    background-image: linear-gradient(to top, var(--claude-page) 0%, var(--claude-page) 55%, rgba(31, 31, 30, 0) 100%) !important;
+  /* The thread fade is a separate h-8 layer, without bottom-0. Match
+     the actual gradient class so the solid composer underlay stays solid. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    div.pointer-events-none[class~="inset-x-0"][class~="bg-gradient-to-t"][class~="-top-8"] {
+    background-color: transparent !important;
+    background-image: linear-gradient(to top, var(--claude-page), rgba(31, 31, 30, 0)) !important;
+  }
+
+  /* The variant-class guard skips this bg-surface element because it
+     also has extension:bg-surface-secondary. It is the real footer base. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    [data-thread-scroll-footer] > div.pointer-events-none[class~="bg-surface"][class~="inset-x-0"][class~="bottom-0"] {
+    background: var(--claude-page) !important;
   }
 
   /* Composer pill on the new frontends: paint the outer shell
@@ -1284,11 +1320,51 @@
   }
 
   /* Neutralize hard-black token surfaces inside the main column
-     (e.g. the settings page wraps its content in electron:bg-surface) */
-  html[data-color-scheme="dark"] main [class*="bg-surface"],
-  html[data-theme="dark"] main [class*="bg-surface"] {
+     (e.g. the settings page wraps its content in electron:bg-surface).
+     Skip variant classes like hover:bg-surface / data-[..]:bg-surface:
+     matching them would paint a hover-only surface permanently. */
+  html[data-color-scheme="dark"] main [class*="bg-surface"]:not([class*=":bg-surface"]),
+  html[data-theme="dark"] main [class*="bg-surface"]:not([class*=":bg-surface"]) {
     background-color: var(--claude-page) !important;
     background-image: none !important;
+  }
+
+  /* Space page (chatgpt.com/space): ghost-hover surfaces (selected tab
+     pill carries real bg-primary-ghost-hover; unselected tabs hover via
+     hover:bg-primary-ghost-hover) resolve to pure black there.
+     Repaint both to the warm raised tone. */
+  html.dark [class*="bg-primary-ghost-hover"]:not([class*=":bg-primary-ghost-hover"]),
+  html[data-color-scheme="dark"] [class*="bg-primary-ghost-hover"]:not([class*=":bg-primary-ghost-hover"]),
+  html[data-theme="dark"] [class*="bg-primary-ghost-hover"]:not([class*=":bg-primary-ghost-hover"]) {
+    background-color: var(--claude-surface-raised) !important;
+    background-image: none !important;
+  }
+  html.dark [class*="hover:bg"][class*="primary-ghost-hover"]:hover,
+  html[data-color-scheme="dark"] [class*="hover:bg"][class*="primary-ghost-hover"]:hover,
+  html[data-theme="dark"] [class*="hover:bg"][class*="primary-ghost-hover"]:hover {
+    background-color: var(--claude-surface-raised) !important;
+    background-image: none !important;
+  }
+
+  /* The variant-class guard above intentionally skips hover surfaces,
+     but settings use electron:bg-surface as their actual page wrapper. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    main [class~="electron:bg-surface"]:has([class~="group/settings"]) {
+    background: var(--claude-page) !important;
+  }
+
+  /* Settings filters fade over the scrolling content through ::after;
+     the pseudo-element still uses the native near-black surface token. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    [class~="group/settings"] > .sticky::after {
+    background-image: linear-gradient(to bottom, var(--claude-page), rgba(31, 31, 30, 0)) !important;
+  }
+
+  /* Narrow settings pages move the title into a separate app-shell
+     titlebar surface, outside the main column's background rules. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"]):has([data-settings-mobile-header="true"])
+    [data-app-shell-main-titlebar] {
+    background: var(--claude-page) !important;
   }
 
   /* Per-message action icon row */
@@ -1319,8 +1395,11 @@
   }
 
   html.dark .messaging-root,
+  html.dark .messaging-root .thread-pane,
   html[data-color-scheme="dark"] .messaging-root,
+  html[data-color-scheme="dark"] .messaging-root .thread-pane,
   html[data-theme="dark"] .messaging-root,
+  html[data-theme="dark"] .messaging-root .thread-pane,
   html.dark [class*="FullHeightPageSurfaceLayout"],
   html[data-color-scheme="dark"] [class*="FullHeightPageSurfaceLayout"],
   html[data-theme="dark"] [class*="FullHeightPageSurfaceLayout"] {
@@ -1329,26 +1408,84 @@
     background-image: none !important;
   }
 
-  html.dark nav[class*="sidebar-rail"] button[data-selected]::before,
-  html[data-color-scheme="dark"] nav[class*="sidebar-rail"] button[data-selected]::before,
-  html[data-theme="dark"] nav[class*="sidebar-rail"] button[data-selected]::before,
-  html.dark button::before,
-  html[data-color-scheme="dark"] button::before,
-  html[data-theme="dark"] button::before {
+  /* The Button-* state layer (::before) uses a cold 10%-white tint; repaint
+     it warm — but only in chrome contexts (nav/header/rail/selected), not
+     globally: panel items (summary-panel rows, section toggles) implement
+     hover via ::before and a blanket rule would freeze them in the
+     hovered tint. */
+  html.dark nav button:not([class*="section-toggle"]):not([data-slot*="summary-panel"])::before,
+  html[data-color-scheme="dark"] nav button:not([class*="section-toggle"]):not([data-slot*="summary-panel"])::before,
+  html[data-theme="dark"] nav button:not([class*="section-toggle"]):not([data-slot*="summary-panel"])::before,
+  html.dark header button:not([class*="section-toggle"]):not([data-slot*="summary-panel"])::before,
+  html[data-color-scheme="dark"] header button:not([class*="section-toggle"]):not([data-slot*="summary-panel"])::before,
+  html[data-theme="dark"] header button:not([class*="section-toggle"]):not([data-slot*="summary-panel"])::before,
+  html.dark [class*="header"] button:not([class*="section-toggle"]):not([data-slot*="summary-panel"])::before,
+  html[data-color-scheme="dark"] [class*="header"] button:not([class*="section-toggle"]):not([data-slot*="summary-panel"])::before,
+  html[data-theme="dark"] [class*="header"] button:not([class*="section-toggle"]):not([data-slot*="summary-panel"])::before,
+  html.dark [class*="rail"] button:not([class*="section-toggle"]):not([data-slot*="summary-panel"])::before,
+  html[data-color-scheme="dark"] [class*="rail"] button:not([class*="section-toggle"]):not([data-slot*="summary-panel"])::before,
+  html[data-theme="dark"] [class*="rail"] button:not([class*="section-toggle"]):not([data-slot*="summary-panel"])::before,
+  html.dark button[data-selected]:not([class*="section-toggle"]):not([data-slot*="summary-panel"])::before,
+  html[data-color-scheme="dark"] button[data-selected]:not([class*="section-toggle"]):not([data-slot*="summary-panel"])::before,
+  html[data-theme="dark"] button[data-selected]:not([class*="section-toggle"]):not([data-slot*="summary-panel"])::before {
     background: rgba(255, 250, 240, 0.07) !important;
     background-color: rgba(255, 250, 240, 0.07) !important;
   }
 
   /* Dots messaging app: the page-shell underlay is a near-black ::before
-     layer; the dot avatar's backdrop is another. */
+     layer; the dot avatar's backdrop is another. On the space page the
+     shell-* header paints the same #0e0e0e ::before across the top ~77px
+     (the big black bar). */
   html.dark [class*="FullHeightPageSurfaceLayout"] > div::before,
   html[data-color-scheme="dark"] [class*="FullHeightPageSurfaceLayout"] > div::before,
   html[data-theme="dark"] [class*="FullHeightPageSurfaceLayout"] > div::before,
-  html.dark .messaging-root span[class*="size-14"]::before,
-  html[data-color-scheme="dark"] .messaging-root span[class*="size-14"]::before,
-  html[data-theme="dark"] .messaging-root span[class*="size-14"]::before {
+  html.dark main div[class*="shell-"]::before,
+  html[data-color-scheme="dark"] main div[class*="shell-"]::before,
+  html[data-theme="dark"] main div[class*="shell-"]::before,
+  html.dark [class~="group/orbit-profile"] [class~="before:mask-content-safe-area"]::before,
+  html[data-color-scheme="dark"] [class~="group/orbit-profile"] [class~="before:mask-content-safe-area"]::before,
+  html[data-theme="dark"] [class~="group/orbit-profile"] [class~="before:mask-content-safe-area"]::before {
     background-color: var(--claude-page) !important;
     background-image: none !important;
+  }
+
+  /* The floating Dot avatar lives outside .messaging-root. Its
+     before:bg-surface class must not paint the avatar's own square box. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    [class~="group/orbit-profile"] [class~="before:mask-content-safe-area"] {
+    background: transparent !important;
+  }
+
+  /* Dot's name and thinking status share a resizable surface plate.
+     Its group-hover variant makes the generic surface guard skip it. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    [class~="group/orbit-profile"] span[class~="bg-surface"][class~="shadow-hairline"] {
+    background-color: var(--claude-page) !important;
+  }
+
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    [class~="group/orbit-profile"]:is(:hover, :focus-within)
+    span[class~="bg-surface"][class~="shadow-hairline"] {
+    background-color: var(--claude-surface-raised) !important;
+  }
+
+  /* The portaled floating header fades into the same surface as the
+     thread. Keep the mask without introducing a cold-black top band. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"]):has(.messaging-root)
+    [class*="floatingHeader"] {
+    background: linear-gradient(to bottom, var(--claude-page), rgba(31, 31, 30, 0)) !important;
+  }
+
+  /* Activity/output rows use ::before as their hover layer. Painting all
+     button pseudo-elements made every row look selected permanently. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    .messaging-root [class~="group/summary-panel-item"]::before {
+    background: transparent !important;
+  }
+
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    .messaging-root [class~="group/summary-panel-item"]:is(:hover, :focus-visible)::before {
+    background: rgba(255, 250, 240, 0.07) !important;
   }
 
   html.dark .messaging-root div.pointer-events-none[class*="top-0"],
@@ -1358,10 +1495,31 @@
     background-image: linear-gradient(to bottom, var(--claude-page), rgba(31, 31, 30, 0)) !important;
   }
 
+  /* Dots summary panel (dot profile sidebar): each category header paints
+     an elevated band + a ::before gap filler (before:-top-2 h-2) — a
+     warmer strip over the darker panel reads as a light separator.
+     Inherit the panel bg so the strips blend; drop section ::after
+     hairlines entirely. */
+  html.dark section[class*="summary-panel"] header[class*="bg-surface-elevated"],
+  html[data-color-scheme="dark"] section[class*="summary-panel"] header[class*="bg-surface-elevated"],
+  html[data-theme="dark"] section[class*="summary-panel"] header[class*="bg-surface-elevated"],
+  html.dark section[class*="summary-panel"] header[class*="bg-surface-elevated"]::before,
+  html[data-color-scheme="dark"] section[class*="summary-panel"] header[class*="bg-surface-elevated"]::before,
+  html[data-theme="dark"] section[class*="summary-panel"] header[class*="bg-surface-elevated"]::before {
+    background-color: inherit !important;
+    background-image: none !important;
+  }
+  html.dark section[class*="summary-panel"]::after,
+  html[data-color-scheme="dark"] section[class*="summary-panel"]::after,
+  html[data-theme="dark"] section[class*="summary-panel"]::after {
+    background-color: transparent !important;
+    background-image: none !important;
+  }
+
   html.dark a[class*="no-drag"],
   html[data-color-scheme="dark"] a[class*="no-drag"],
   html[data-theme="dark"] a[class*="no-drag"] {
-    background-color: var(--claude-surface-raised) !important;
+    background-color: transparent !important;
   }
 
   /* bg-surface/<alpha> wrappers are meant as subtle dark veils (e.g. the
