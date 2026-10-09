@@ -1,7 +1,7 @@
 /* ==UserStyle==
 @name           ChatGPT Claude-like Dark Theme
 @namespace      codex.local
-@version        0.4.6
+@version        0.4.7
 @description    Low-intrusion Stylus theme that makes ChatGPT dark mode feel closer to Claude's calm, narrow, warm dark layout. Supports the legacy web app (html.dark), the new web app (html[data-color-scheme="dark"]), and the logged-in app (html[data-theme="dark"]).
 @author         duro
 @match          https://chatgpt.com/*
@@ -16,6 +16,8 @@
     --claude-sidebar-soft: #20201f;
     --claude-surface: #252522;
     --claude-code-surface: #262624;
+    --claude-card-header: rgba(255, 255, 255, 0.045);
+    --claude-card-radius: 8px;
     --claude-surface-raised: #292925;
     --claude-user: #000000;
     --claude-border: rgba(255, 255, 255, 0.18);
@@ -591,6 +593,79 @@
     width: 100% !important;
   }
 
+  /* ============ Mermaid previews ============ */
+  /* Recolor only the renderer's default flowchart node classes and
+     unstyled shapes. Custom node classes and explicit paint stay intact. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    svg[id^="chatgpt-mermaid-"]
+    :is([class="node default"], [class="node default mermaid-decision"], [class="node default  mermaid-decision"])
+    > .label-container:not([style*="fill:"]):not([style*="stroke:"]) {
+    fill: #302d28 !important;
+    stroke: none !important;
+  }
+
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    svg[id^="chatgpt-mermaid-"]
+    :is([class="node default mermaid-decision"], [class="node default  mermaid-decision"])
+    > .label-container:not([style*="fill:"]):not([style*="stroke:"]) {
+    fill: var(--claude-surface) !important;
+    stroke: none !important;
+  }
+
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    svg[id^="chatgpt-mermaid-"]
+    :is([class="node default"], [class="node default mermaid-decision"], [class="node default  mermaid-decision"])
+    .label rect:not([style*="fill:"]) {
+    fill: none !important;
+    stroke: none !important;
+  }
+
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    svg[id^="chatgpt-mermaid-"]
+    :is([class="node default"], [class="node default mermaid-decision"], [class="node default  mermaid-decision"])
+    .label text:not([style*="fill:"]) {
+    fill: var(--claude-text) !important;
+  }
+
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    svg[id^="chatgpt-mermaid-"] .edgeLabel .label rect:not([style*="fill:"]):not([style*="stroke:"]) {
+    fill: var(--claude-surface) !important;
+    stroke: none !important;
+  }
+
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    svg[id^="chatgpt-mermaid-"] .edgeLabels text:not([style*="fill:"]) {
+    fill: var(--claude-muted) !important;
+  }
+
+  /* Sequence actors use presentation attributes even for native defaults. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    svg[id^="chatgpt-mermaid-"][aria-roledescription="sequence"]
+    rect.actor:not([style*="fill:"]):not([style*="stroke:"]) {
+    fill: #302d28 !important;
+    stroke: none !important;
+  }
+
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    svg[id^="chatgpt-mermaid-"][aria-roledescription="sequence"]
+    :is(text.actor, text.actor > tspan, .messageText):not([style*="fill:"]) {
+    fill: var(--claude-text) !important;
+    stroke: none !important;
+  }
+
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    svg[id^="chatgpt-mermaid-"]
+    :is(.flowchart-link, .actor-line, .messageLine0, .messageLine1, .arrowMarkerPath):not([style*="stroke:"]) {
+    stroke: var(--claude-muted) !important;
+  }
+
+  /* Preserve open arrowheads: they explicitly use fill:none. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    svg[id^="chatgpt-mermaid-"]
+    :is(.arrowMarkerPath, [id$="-arrowhead"] path):not([style*="fill:"]) {
+    fill: var(--claude-muted) !important;
+  }
+
   /* ============ Lists, quotes, and tables ============ */
   html.dark .markdown ul,
   html.dark .markdown ol,
@@ -636,6 +711,32 @@
     padding-inline-start: 0.15em !important;
   }
 
+  /* List labels are paragraphs in both the legacy renderer and the
+     current wrapped renderer. Do not give each label the full prose
+     paragraph margins; retain a small gap between multiple paragraphs. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    :is(.markdown, .prose, main article, main [data-markdown-text-style])
+    :is(li, [data-d-list-item-content]) > p {
+    margin-block: 0.35em !important;
+  }
+
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    :is(.markdown, .prose, main article, main [data-markdown-text-style])
+    :is(li, [data-d-list-item-content]) > p:first-child {
+    margin-block-start: 0 !important;
+  }
+
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    :is(.markdown, .prose, main article, main [data-markdown-text-style])
+    :is(li, [data-d-list-item-content]) > p:last-child {
+    margin-block-end: 0 !important;
+  }
+
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    :is(.markdown, .prose, main article, main [data-markdown-text-style]) li :is(ul, ol) {
+    margin-block: 0.25em 0 !important;
+  }
+
   html.dark .markdown blockquote,
   html.dark .prose blockquote,
   html.dark main article blockquote,
@@ -656,8 +757,10 @@
     padding: 0.6em 0.9em !important;
   }
 
-  /* The current renderer draws its native quote rail with ::after.
+  /* Renderers draw the native quote rail with ::before or ::after.
      Keep only the warm border above, rather than two parallel rails. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    :is(.markdown, .prose, main article, main [data-markdown-text-style]) blockquote::before,
   :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
     :is(.markdown, .prose, main article, main [data-markdown-text-style]) blockquote::after {
     content: none !important;
@@ -678,7 +781,7 @@
     border-collapse: separate !important;
     border-spacing: 0 !important;
     border: 1px solid var(--claude-border) !important;
-    border-radius: 8px !important;
+    border-radius: var(--claude-card-radius) !important;
     overflow: hidden !important;
     font-size: 0.94em !important;
   }
@@ -724,7 +827,7 @@
   html[data-color-scheme="dark"] main [data-markdown-text-style] th,
   html[data-theme="dark"] main article th,
   html[data-theme="dark"] main [data-markdown-text-style] th {
-    background: rgba(255, 255, 255, 0.045) !important;
+    background: var(--claude-card-header) !important;
     color: var(--claude-text) !important;
     font-weight: 600 !important;
   }
@@ -1283,21 +1386,29 @@
     color: var(--claude-text) !important;
   }
 
-  /* Rendered code blocks on the new frontends */
-  html[data-color-scheme="dark"] [data-markdown-copy="code-block"],
-  html[data-theme="dark"] [data-markdown-copy="code-block"] {
-    background: var(--claude-code-surface) !important;
-    background-color: var(--claude-code-surface) !important;
-    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  /* Match the table's body, header wash, border, and small corners.
+     The surrounding shell owns the card border, not its nested pre. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    main div[data-markdown-copy="code-block"] {
+    background: var(--claude-page) !important;
+    border: 1px solid var(--claude-border) !important;
+    border-radius: var(--claude-card-radius) !important;
     box-shadow: none !important;
     color: var(--claude-code) !important;
   }
 
-  html[data-color-scheme="dark"] [data-markdown-copy="code-block"] [data-markdown-copy="exclude"],
-  html[data-theme="dark"] [data-markdown-copy="code-block"] [data-markdown-copy="exclude"] {
-    background: transparent !important;
-    background-image: none !important;
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    main div[data-markdown-copy="code-block"] > [data-markdown-copy="exclude"] {
+    background: var(--claude-card-header) !important;
     color: #a9a397 !important;
+  }
+
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    main div[data-markdown-copy="code-block"] pre {
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
   }
 
   /* The logged-in frontend defines pure-black / neutral-gray surface
@@ -1565,5 +1676,27 @@
   html[data-color-scheme="dark"] .messaging-root *,
   html[data-theme="dark"] .messaging-root * {
     scrollbar-color: rgba(255, 250, 240, 0.22) transparent !important;
+  }
+
+  /* Intelligent UI's transparent-mode Skybridge frame still paints a black
+     backdrop inside its cross-origin preview document. Blend that backdrop
+     with the page-colored host instead of clipping an arbitrary
+     component shape. Lighten also lifts component pixels darker than the
+     page background; brighter component colors are preserved. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    main [class*="WorkspaceContent-"]:has([class*="VisualizationBlock-"] iframe[src*=".web-sandbox.oaiusercontent.com/"][src*="backgroundMode=transparent"]),
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    main [class*="VisualizationBlock-"]:has(iframe[src*=".web-sandbox.oaiusercontent.com/"][src*="backgroundMode=transparent"]) {
+    background: var(--claude-page) !important;
+  }
+
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    main [class*="VisualizationBlock-"]:has(iframe[src*=".web-sandbox.oaiusercontent.com/"][src*="backgroundMode=transparent"]) {
+    mix-blend-mode: lighten;
+  }
+
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    main [class*="VisualizationBlock-"] iframe[src*=".web-sandbox.oaiusercontent.com/"][src*="backgroundMode=transparent"] {
+    background: transparent !important;
   }
 }
