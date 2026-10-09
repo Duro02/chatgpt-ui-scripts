@@ -1,7 +1,7 @@
 /* ==UserStyle==
 @name           ChatGPT Claude-like Dark Theme
 @namespace      codex.local
-@version        0.4.5
+@version        0.4.6
 @description    Low-intrusion Stylus theme that makes ChatGPT dark mode feel closer to Claude's calm, narrow, warm dark layout. Supports the legacy web app (html.dark), the new web app (html[data-color-scheme="dark"]), and the logged-in app (html[data-theme="dark"]).
 @author         duro
 @match          https://chatgpt.com/*
@@ -654,6 +654,13 @@
     border-radius: 0 7px 7px 0 !important;
     margin: 1em 0 !important;
     padding: 0.6em 0.9em !important;
+  }
+
+  /* The current renderer draws its native quote rail with ::after.
+     Keep only the warm border above, rather than two parallel rails. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    :is(.markdown, .prose, main article, main [data-markdown-text-style]) blockquote::after {
+    content: none !important;
   }
 
   html.dark .markdown table,
