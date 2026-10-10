@@ -1,7 +1,7 @@
 /* ==UserStyle==
 @name           ChatGPT Claude-like Dark Theme
 @namespace      codex.local
-@version        0.4.7
+@version        0.4.8
 @description    Low-intrusion Stylus theme that makes ChatGPT dark mode feel closer to Claude's calm, narrow, warm dark layout. Supports the legacy web app (html.dark), the new web app (html[data-color-scheme="dark"]), and the logged-in app (html[data-theme="dark"]).
 @author         duro
 @match          https://chatgpt.com/*
@@ -16,7 +16,6 @@
     --claude-sidebar-soft: #20201f;
     --claude-surface: #252522;
     --claude-code-surface: #262624;
-    --claude-card-header: rgba(255, 255, 255, 0.045);
     --claude-card-radius: 8px;
     --claude-surface-raised: #292925;
     --claude-user: #000000;
@@ -780,6 +779,7 @@
   html[data-theme="dark"] main [data-markdown-text-style] table {
     border-collapse: separate !important;
     border-spacing: 0 !important;
+    background: var(--claude-page) !important;
     border: 1px solid var(--claude-border) !important;
     border-radius: var(--claude-card-radius) !important;
     overflow: hidden !important;
@@ -832,19 +832,28 @@
     font-weight: 600 !important;
   }
 
+  /* Keep the table's outer frame, with no internal header/row rules. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    :is(.markdown, .prose, main article, main [data-markdown-text-style])
+    table :is(thead, tbody, tfoot, tr, th, td) {
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
   /* ============ Inline code and code blocks ============ */
-  html.dark .markdown :not(pre) > code,
-  html.dark .prose :not(pre) > code,
-  html.dark main article :not(pre) > code,
-  html.dark main [data-markdown-text-style] :not(pre) > code,
-  html[data-color-scheme="dark"] .markdown :not(pre) > code,
-  html[data-theme="dark"] .markdown :not(pre) > code,
-  html[data-color-scheme="dark"] .prose :not(pre) > code,
-  html[data-theme="dark"] .prose :not(pre) > code,
-  html[data-color-scheme="dark"] main article :not(pre) > code,
-  html[data-color-scheme="dark"] main [data-markdown-text-style] :not(pre) > code,
-  html[data-theme="dark"] main article :not(pre) > code,
-  html[data-theme="dark"] main [data-markdown-text-style] :not(pre) > code {
+  /* Some fenced blocks use div > code instead of pre > code. */
+  html.dark .markdown :not(pre) > code:not([data-markdown-copy="code-block"] *),
+  html.dark .prose :not(pre) > code:not([data-markdown-copy="code-block"] *),
+  html.dark main article :not(pre) > code:not([data-markdown-copy="code-block"] *),
+  html.dark main [data-markdown-text-style] :not(pre) > code:not([data-markdown-copy="code-block"] *),
+  html[data-color-scheme="dark"] .markdown :not(pre) > code:not([data-markdown-copy="code-block"] *),
+  html[data-theme="dark"] .markdown :not(pre) > code:not([data-markdown-copy="code-block"] *),
+  html[data-color-scheme="dark"] .prose :not(pre) > code:not([data-markdown-copy="code-block"] *),
+  html[data-theme="dark"] .prose :not(pre) > code:not([data-markdown-copy="code-block"] *),
+  html[data-color-scheme="dark"] main article :not(pre) > code:not([data-markdown-copy="code-block"] *),
+  html[data-color-scheme="dark"] main [data-markdown-text-style] :not(pre) > code:not([data-markdown-copy="code-block"] *),
+  html[data-theme="dark"] main article :not(pre) > code:not([data-markdown-copy="code-block"] *),
+  html[data-theme="dark"] main [data-markdown-text-style] :not(pre) > code:not([data-markdown-copy="code-block"] *) {
     background: var(--claude-inline-code-bg) !important;
     color: #ffcab8 !important;
     border: 1px solid rgba(255, 255, 255, 0.06) !important;
@@ -1386,7 +1395,7 @@
     color: var(--claude-text) !important;
   }
 
-  /* Match the table's body, header wash, border, and small corners.
+  /* Match the table's uniform body/header color, border, and small corners.
      The surrounding shell owns the card border, not its nested pre. */
   :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
     main div[data-markdown-copy="code-block"] {
@@ -1400,6 +1409,8 @@
   :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
     main div[data-markdown-copy="code-block"] > [data-markdown-copy="exclude"] {
     background: var(--claude-card-header) !important;
+    border: 0 !important;
+    box-shadow: none !important;
     color: #a9a397 !important;
   }
 
@@ -1411,6 +1422,31 @@
     box-shadow: none !important;
   }
 
+  /* Plain-text fences have no pre wrapper. Reset the inline-code decoration
+     explicitly, including when an older installed theme is still active. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    main div[data-markdown-copy="code-block"] code:not(pre code) {
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    color: inherit !important;
+    font-family: var(--claude-mono) !important;
+    font-size: 13px !important;
+    font-weight: 400 !important;
+    line-height: 1.55 !important;
+    padding: 0 !important;
+  }
+
+  /* Native Intelligent UI boxes select semantic surface tokens, rather than
+     literal colors. Theme those tokens locally so explicit component colors
+     and the rest of the app keep their own backgrounds. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    main div[data-d-component="box"] {
+    --color-surface-secondary: var(--claude-page);
+    --color-surface-tertiary: var(--claude-page);
+  }
+
   /* The logged-in frontend defines pure-black / neutral-gray surface
      tokens for every elevated layer (menus, popovers, modals, cards,
      pickers). Remap them to the warm Claude palette so portaled
@@ -1418,6 +1454,7 @@
   html.dark,
   html[data-color-scheme="dark"],
   html[data-theme="dark"] {
+    --claude-card-header: var(--claude-page);
     --color-background-panel: var(--claude-surface);
     --color-surface-elevated: var(--claude-surface);
     --color-surface-elevated-secondary: var(--claude-surface-raised);
