@@ -1,5 +1,11 @@
 # 更新记录
 
+## Conversation Rail 0.1.3 — 2026-10-12
+
+- Keep the clicked turn active throughout virtual mounting and position correction, even at a clamped bottom boundary.
+- Resume automatic active-turn inference on manual wheel, touch, keyboard or pointer interaction outside the rail.
+- Infer reading position from freshly measured mounted turns, avoiding outdated coordinates from unloaded history.
+
 ## Conversation Rail 0.1.2 — 2026-10-12
 
 - Keep discovered latest turns when an indexing pass misses delayed virtual mounts.

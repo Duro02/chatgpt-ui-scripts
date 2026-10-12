@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.1.2
+// @version      0.1.3
 // @description  Lightweight conversation navigation with short horizontal marks, previews and an optional history index.
 // @author       duro
 // @license      MIT
@@ -149,6 +149,7 @@
     const buttons = new Map();
     const indexes = new Map();
     let content = null, scroller = null, items = [], loaded = [], pending = [], mounted = [], route = threadIdentity(win.location.pathname);
+    let selectedKey = null, positioned = [];
     let chronology = [], transcriptEnd = null, tailKnown = false;
     let staleElements = null, staleUntil = 0, historyComplete = false, activeKey = null, hovered = false, stopped = false;
     let timer = 0, frame = 0, scan = null, jump = null, restoreJob = null, statusTimer = 0;
@@ -250,17 +251,24 @@
       }
     }
 
-    function syncActive() {
-      frame = 0;
-      if (doc.hidden || scan || !scroller || !items.length) return;
-      stats.scrollFrames += 1;
-      const i = activeAt(items, position() + Math.min(160, geometry.height * .25));
-      const key = items[i]?.key;
+    function setActive(key) {
       if (key === activeKey) return;
       buttons.get(activeKey)?.removeAttribute('aria-current');
       activeKey = key;
       buttons.get(key)?.setAttribute('aria-current', 'true');
       follow();
+    }
+
+    function syncActive() {
+      frame = 0;
+      if (doc.hidden || scan || !scroller || !items.length) return;
+      stats.scrollFrames += 1;
+      // An explicit navigation selection wins over viewport inference, including
+      // a final turn that cannot align to the top because the scrollport has ended.
+      if (selectedKey && cache.has(selectedKey)) { setActive(selectedKey); return; }
+      const current = positioned.length ? positioned : items;
+      const i = activeAt(current, position() + Math.min(160, geometry.height * .25));
+      setActive(current[i]?.key);
     }
     function onScroll() {
       if (!frame && !doc.hidden) frame = win.requestAnimationFrame(syncActive);
@@ -391,6 +399,7 @@
       // An overlapping anchor gives a better translation once it mounts again.
       const shift = overlapping ? overlapping.top - cache.get(overlapping.key).top
         : tailKnown && transcriptEnd !== null ? end - transcriptEnd : 0;
+      positioned = measured;
       const live = new Set(measured.map(item => item.key));
       if (Math.abs(shift) > 2) for (const item of cache.values()) {
         if (!live.has(item.key)) { item.top += shift; item.bottom += shift; }
@@ -446,7 +455,7 @@
       cache.clear();
       indexes.clear();
       items = [];
-      activeKey = null;
+      activeKey = selectedKey = null; positioned = [];
       hidePreview();
       toast('');
       render();
@@ -486,7 +495,7 @@
       lifecycle.disconnect();
       resize.disconnect();
       scroller?.removeEventListener('scroll', onScroll);
-      loaded = pending = mounted = [];
+      loaded = pending = mounted = positioned = [];
       content = scroller = null;
       nav.hidden = true;
     }
@@ -496,6 +505,9 @@
       hidePreview();
       const item = cache.get(key);
       if (!item || !scroller) return;
+      restoreJob = null;
+      selectedKey = key;
+      setActive(key);
       measure();
       jump = { key, attempts: 0, timer: 0, route };
       move(item.top - 24);
@@ -552,7 +564,7 @@
     async function buildIndex() {
       if (scan) { cancelScan(true); return; }
       if (!scroller || doc.hidden) return;
-      jump = null;
+      releaseSelection();
       measure();
       const first = loaded.find(element => element.getBoundingClientRect().bottom > viewport().top);
       const anchorKey = items.find(item => item.element === first)?.key;
@@ -674,9 +686,19 @@
     }
 
     function interrupt(event) {
-      if (!scan) return;
+      if (event.composedPath().includes(host) && event.key !== "Escape") return;
       if (event.type === 'keydown' && !['Escape', 'PageUp', 'PageDown', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+      releaseSelection();
       cancelScan(event.type === 'keydown' && event.key === 'Escape');
+    }
+    function releaseSelection() {
+      restoreJob = null;
+      selectedKey = null;
+      if (jump) win.clearTimeout(jump.timer);
+      jump = null;
+    }
+    function pointerIntent(event) {
+      if (!event.composedPath().includes(host)) releaseSelection();
     }
     function visible() {
       if (doc.hidden) { cancelScan(false); return; }
@@ -713,6 +735,7 @@
     doc.addEventListener('keydown', interrupt, true);
     doc.addEventListener('wheel', interrupt, { passive: true, capture: true });
     doc.addEventListener('touchstart', interrupt, { passive: true, capture: true });
+    doc.addEventListener('pointerdown', pointerIntent, true);
     doc.addEventListener('visibilitychange', visible);
     win.addEventListener('resize', schedule, { passive: true });
     win.addEventListener('popstate', bind);
@@ -725,7 +748,7 @@
     // Returned controller is used by the local browser fixture; no page globals or diagnostics loop.
     return {
       stats,
-      snapshot: () => ({ count: items.length, activeKey, mountedMarks: buttons.size, indexing: Boolean(scan), historyComplete,
+      snapshot: () => ({ count: items.length, activeKey, selectedKey, mountedMarks: buttons.size, indexing: Boolean(scan), historyComplete,
         entries: items.map(({ key, top, prompt }) => ({ key, top, prompt })) }),
       stop() {
         stopped = true;
@@ -739,6 +762,7 @@
         doc.removeEventListener('keydown', interrupt, true);
         doc.removeEventListener('wheel', interrupt, true);
         doc.removeEventListener('touchstart', interrupt, true);
+        doc.removeEventListener('pointerdown', pointerIntent, true);
         doc.removeEventListener('visibilitychange', visible);
         win.removeEventListener('resize', schedule);
         win.removeEventListener('popstate', bind);

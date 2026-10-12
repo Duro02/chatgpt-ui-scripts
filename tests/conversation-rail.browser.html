@@ -15,7 +15,7 @@
   #results{position:fixed;left:16px;top:80px;width:240px;background:#171715e8;padding:12px;font:12px/1.5 monospace;max-height:70vh;overflow:auto;z-index:60}
   #results:empty{display:none}.sr-only{display:none}
 </style>
-<header><h1>ChatGPT 横线导航 · 测试页面</h1><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="latest">验证最新节点保留</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button><button id="demo">展示长对话</button><button id="light">切换明暗</button></header>
+<header><h1>ChatGPT 横线导航 · 测试页面</h1><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="selection">验证跳转高亮</button><button id="latest">验证最新节点保留</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button><button id="demo">展示长对话</button><button id="light">切换明暗</button></header>
 <div id="scroll"><main id="content" data-thread-find-target="conversation"></main></div>
 <footer><textarea aria-label="草稿">测试草稿：索引和跳转应保留这段输入</textarea></footer><pre id="results"></pre>
 <script>window.module={exports:{}};</script><script src="../chatgpt-conversation-rail.user.js"></script>
@@ -104,6 +104,32 @@ async function run(virtualOnly=false){results.textContent='';document.querySelec
     log('ALL TESTS PASSED');
   }catch(e){log('FAIL '+e.stack);}finally{document.querySelector('#run').disabled=false;}
 }
+async function selectionRegression(){
+  results.textContent='';
+  try {
+    let c=setup(8);await sleep(300);
+    const last='turn:message-7';shadow().querySelector('.mark[data-key="'+last+'"]').click();await sleep(600);
+    check(c.snapshot().activeKey===last,'短末尾节点无法顶端对齐时仍高亮点击目标');
+    check(shadow().querySelector('[aria-current]').dataset.key===last,'可见白线与选择节点一致');
+    const rect=content.lastElementChild.querySelector('[data-user-message-bubble]').getBoundingClientRect();
+    check(rect.top>=scroll.getBoundingClientRect().top&&rect.bottom<=scroll.getBoundingClientRect().bottom,'最后一条用户消息完整可见');
+    const active=[];let capture=setInterval(()=>active.push(c.snapshot().activeKey),20);
+    shadow().querySelector('.mark[data-key="turn:message-0"]').click();await sleep(600);clearInterval(capture);
+    check(active.every(key=>key==='turn:message-0'),'跳转校准过程中不高亮经过的其他节点');
+    document.dispatchEvent(new WheelEvent('wheel',{bubbles:true}));scroll.scrollTop=scroll.scrollHeight;
+    for(let i=0;i<40&&c.snapshot().activeKey==='turn:message-0';i++)await sleep(50);
+    check(c.snapshot().selectedKey===null&&c.snapshot().activeKey!=='turn:message-0','用户手动滚动后恢复位置判断');
+    c=setup(20,{virtual:true,reverse:true});await sleep(400);shadow().querySelector('.index').click();
+    for(let i=0;i<160&&c.snapshot().indexing;i++)await sleep(120);await sleep(400);
+    shadow().querySelector('.mark[data-key]').focus();shadow().activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));
+    shadow().activeElement.click();await sleep(1500);
+    check(c.snapshot().activeKey==='turn:message-0','虚拟未挂载节点校准后保持目标高亮');
+    shadow().querySelector('.mark[data-key]').dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true}));shadow().activeElement.click();await sleep(1500);
+    check(c.snapshot().activeKey==='turn:message-19','负滚动列表点击末尾保持末尾高亮');
+    log('ALL SELECTION TESTS PASSED');
+  }catch(e){log('FAIL '+e.stack);}
+}
+document.querySelector('#selection').onclick=selectionRegression;
 async function latestRegression(){
   results.textContent='';
   try {
