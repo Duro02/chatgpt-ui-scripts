@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.1.3
+// @version      0.1.4
 // @description  Lightweight conversation navigation with short horizontal marks, previews and an optional history index.
 // @author       duro
 // @license      MIT
@@ -46,7 +46,9 @@
       transition:transform 140ms ease,opacity 140ms ease; }
     .mark[data-unloaded]::before { transform:scaleX(.4); opacity:.35; }
     .mark:hover::before { transform:scaleX(.9); opacity:.85; }
-    .mark[aria-current]::before { transform:scaleX(1); opacity:1; background:currentColor; }
+    .mark[aria-current]::before { transform:scaleX(1); opacity:1; background:transparent; }
+    .focus-line { position:absolute; right:0; top:4px; width:20px; height:2px; border-radius:2px;
+      background:currentColor; z-index:1; pointer-events:none; transition:transform 260ms cubic-bezier(.4,0,.2,1); }
     .mark:focus-visible { outline:1px solid currentColor; outline-offset:-1px; }
     .mark:focus-visible::before { transform:scaleX(1); opacity:1; }
     .index::before { background:#cf746b; opacity:.95; transform:scaleX(.75); }
@@ -61,7 +63,7 @@
       border-radius:8px; background:var(--rail-bg); color:inherit; box-shadow:0 4px 18px #0002; }
     [hidden] { display:none !important; }
     @media(max-width:760px) { nav { right:5px; } .preview { right:39px; } }
-    @media(prefers-reduced-motion:reduce) { .mark::before { transition:none; } }
+    @media(prefers-reduced-motion:reduce) { .mark::before,.focus-line { transition:none; } }
   `;
 
   // Binary search over cached content coordinates; no DOM reads in this function.
@@ -133,7 +135,7 @@
     host.id = 'duro-conversation-rail';
     const shadow = host.attachShadow({ mode: 'open' });
     shadow.innerHTML = `<style>${CSS}</style><nav aria-label="对话导航" hidden>
-      <div class="scroller"><div class="marks"><button class="mark index" type="button" style="top:0" aria-label="点击加载过去的对话" hidden></button></div></div></nav>
+      <div class="scroller"><div class="marks"><div class="focus-line" aria-hidden="true" hidden></div><button class="mark index" type="button" style="top:0" aria-label="点击加载过去的对话" hidden></button></div></div></nav>
       <div class="preview" role="tooltip" id="rail-preview" hidden><div class="prompt"></div><div class="answer"></div></div>
       <div class="status" role="status" hidden></div>`;
     doc.body.appendChild(host);
@@ -145,6 +147,7 @@
     const answer = shadow.querySelector('.answer');
     const status = shadow.querySelector('.status');
     const indexButton = shadow.querySelector('.index');
+    const focusLine = shadow.querySelector('.focus-line');
     const cache = new Map();
     const buttons = new Map();
     const indexes = new Map();
@@ -230,11 +233,21 @@
         if (item.key === activeKey) button.setAttribute('aria-current', 'true');
         else button.removeAttribute('aria-current');
       }
+      updateIndicator();
       for (const [key, button] of buttons) {
         if (!needed.has(key) && shadow.activeElement !== button) {
           button.remove();
           buttons.delete(key);
         }
+      }
+    }
+
+    function updateIndicator() {
+      const index = indexes.get(activeKey);
+      focusLine.hidden = index === undefined || !items.length;
+      if (!focusLine.hidden) {
+        const offset = indexButton.hidden ? 0 : 1;
+        focusLine.style.transform = `translateY(${(index + offset) * PITCH}px)`;
       }
     }
 
@@ -256,6 +269,7 @@
       buttons.get(activeKey)?.removeAttribute('aria-current');
       activeKey = key;
       buttons.get(key)?.setAttribute('aria-current', 'true');
+      updateIndicator();
       follow();
     }
 

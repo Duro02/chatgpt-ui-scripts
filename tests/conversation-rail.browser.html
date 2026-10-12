@@ -15,7 +15,7 @@
   #results{position:fixed;left:16px;top:80px;width:240px;background:#171715e8;padding:12px;font:12px/1.5 monospace;max-height:70vh;overflow:auto;z-index:60}
   #results:empty{display:none}.sr-only{display:none}
 </style>
-<header><h1>ChatGPT 横线导航 · 测试页面</h1><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="selection">验证跳转高亮</button><button id="latest">验证最新节点保留</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button><button id="demo">展示长对话</button><button id="light">切换明暗</button></header>
+<header><h1>ChatGPT 横线导航 · 测试页面</h1><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="animation">验证焦点动画</button><button id="selection">验证跳转高亮</button><button id="latest">验证最新节点保留</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button><button id="demo">展示长对话</button><button id="light">切换明暗</button></header>
 <div id="scroll"><main id="content" data-thread-find-target="conversation"></main></div>
 <footer><textarea aria-label="草稿">测试草稿：索引和跳转应保留这段输入</textarea></footer><pre id="results"></pre>
 <script>window.module={exports:{}};</script><script src="../chatgpt-conversation-rail.user.js"></script>
@@ -104,6 +104,30 @@ async function run(virtualOnly=false){results.textContent='';document.querySelec
     log('ALL TESTS PASSED');
   }catch(e){log('FAIL '+e.stack);}finally{document.querySelector('#run').disabled=false;}
 }
+async function animationRegression(){
+  results.textContent='';
+  try {
+    const c=setup(8);await sleep(400);
+    const line=shadow().querySelector('.focus-line');
+    const y=()=>new DOMMatrixReadOnly(getComputedStyle(line).transform).m42;
+    const before=y(), samples=[];
+    shadow().querySelector('.mark[data-key="turn:message-7"]').click();
+    for(let i=0;i<10;i++){await new Promise(requestAnimationFrame);samples.push(y());}
+    await sleep(350);
+    const reduced=matchMedia('(prefers-reduced-motion:reduce)').matches;
+    check(reduced||samples.some(value=>value>before+1&&value<69),'白色焦点连续经过中间位置');
+    check(Math.abs(y()-70)<1&&c.snapshot().activeKey==='turn:message-7','焦点动画结束与选中节点一致');
+    check(shadow().querySelectorAll('.focus-line').length===1,'单一白色焦点，不生成多个闪烁高亮');
+    shadow().querySelector('.mark[data-key="turn:message-0"]').click();await sleep(80);
+    shadow().querySelector('.mark[data-key="turn:message-5"]').click();
+    for(let i=0;i<40&&Math.abs(y()-50)>1;i++)await sleep(50);
+    check(Math.abs(y()-50)<1&&c.snapshot().activeKey==='turn:message-5','快速连续点击平滑转向最终目标');
+    const beforeStats={...c.stats};await sleep(500);
+    check(c.stats.refreshes===beforeStats.refreshes&&c.stats.geometryReads===beforeStats.geometryReads,'动画结束后无持续扫描或几何测量');
+    log('ALL ANIMATION TESTS PASSED');
+  }catch(e){log('FAIL '+e.stack);}
+}
+document.querySelector('#animation').onclick=animationRegression;
 async function selectionRegression(){
   results.textContent='';
   try {

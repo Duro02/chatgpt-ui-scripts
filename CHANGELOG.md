@@ -1,5 +1,11 @@
 # 更新记录
 
+## Conversation Rail 0.1.4 — 2026-10-12
+
+- Animate one white focus line between turns instead of toggling independent white marks.
+- Keep accessibility selection immediate while the visual focus transitions, including rapid repeat clicks.
+- Respect reduced-motion preferences; use CSS animation without a persistent JavaScript loop.
+
 ## Conversation Rail 0.1.3 — 2026-10-12
 
 - Keep the clicked turn active throughout virtual mounting and position correction, even at a clamped bottom boundary.
