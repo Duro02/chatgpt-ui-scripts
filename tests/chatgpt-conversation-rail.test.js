@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { activeAt, railRange, threadIdentity } = require('../chatgpt-conversation-rail.user.js');
+const { activeAt, railRange, threadIdentity, mergeTimeline } = require('../chatgpt-conversation-rail.user.js');
 
 assert.equal(activeAt([], 10), -1);
 const items = [0, 100, 400, 900].map(top => ({ top }));
@@ -19,3 +19,8 @@ console.log('Conversation rail: binary search and bounded rendering passed');
 assert.equal(threadIdentity('/c/thread-1'), threadIdentity('/g/project/c/thread-1'));
 assert.notEqual(threadIdentity('/c/thread-1'), threadIdentity('/c/thread-2'));
 assert.equal(threadIdentity('/g/project'), '/g/project');
+
+const cached = new Map([['latest-1', {top: 6000}], ['latest-2', {top: 6200}]]);
+assert.deepEqual(mergeTimeline(['latest-1','latest-2'], [{key:'older-1',top:0},{key:'older-2',top:220}], cached), ['older-1','older-2','latest-1','latest-2']);
+assert.deepEqual(mergeTimeline(['first','latest'], [{key:'middle',top:200}], new Map(), 'first'), ['first','middle','latest']);
+assert.deepEqual(mergeTimeline(['first','latest'], [{key:'new',top:0},{key:'latest',top:900}], new Map()), ['first','new','latest']);

@@ -1,5 +1,11 @@
 # 更新记录
 
+## Conversation Rail 0.1.2 — 2026-10-12
+
+- Keep discovered latest turns when an indexing pass misses delayed virtual mounts.
+- Preserve chronological order separately from shifting coordinates; translate cached positions when older history is prepended.
+- Verify delayed latest mounts and prepend ordering with focused browser regressions.
+
 ## Conversation Rail 0.1.1 — 2026-10-12
 
 - Fix disappearing navigation during hydration: identify threads by conversation ID, accept remounted nodes with existing message IDs, and rebind replaced transcript containers.

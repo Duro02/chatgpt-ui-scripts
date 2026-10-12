@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.1.1
+// @version      0.1.2
 // @description  Lightweight conversation navigation with short horizontal marks, previews and an optional history index.
 // @author       duro
 // @license      MIT
@@ -82,6 +82,33 @@
     };
   }
 
+  // Preserve chronology independently of coordinates that shift during history paging.
+  function mergeTimeline(previous, found, cache, scanAnchor, atStart = false) {
+    const order = previous.slice();
+    const known = new Set(previous);
+    let previousFound = null;
+    for (let i = 0; i < found.length;) {
+      if (known.has(found[i].key)) { previousFound = found[i++].key; continue; }
+      const start = i;
+      while (i < found.length && !known.has(found[i].key)) i++;
+      const next = found[i]?.key;
+      let index;
+      if (next) index = order.indexOf(next);
+      else if (previousFound) index = order.indexOf(previousFound) + 1;
+      else if (atStart) index = 0;
+      else if (scanAnchor && known.has(scanAnchor)) index = order.indexOf(scanAnchor) + 1;
+      else {
+        index = order.findIndex(key => cache.get(key)?.top > found[start].top);
+        if (index < 0) index = order.length;
+      }
+      const added = found.slice(start, i).map(item => item.key);
+      order.splice(index, 0, ...added);
+      added.forEach(key => known.add(key));
+      previousFound = added.at(-1);
+    }
+    return order;
+  }
+
   // A bounded prefix, not textContent/innerText of an entire answer or conversation.
   function prefix(element, limit) {
     if (!element) return '';
@@ -122,6 +149,7 @@
     const buttons = new Map();
     const indexes = new Map();
     let content = null, scroller = null, items = [], loaded = [], pending = [], mounted = [], route = threadIdentity(win.location.pathname);
+    let chronology = [], transcriptEnd = null, tailKnown = false;
     let staleElements = null, staleUntil = 0, historyComplete = false, activeKey = null, hovered = false, stopped = false;
     let timer = 0, frame = 0, scan = null, jump = null, restoreJob = null, statusTimer = 0;
     let geometry = { origin: 0, height: 0, max: 0, reverse: false };
@@ -356,11 +384,23 @@
         const rect = item.element.getBoundingClientRect();
         return { ...item, top: rect.top - scrollRect.top + position(), bottom: rect.bottom - scrollRect.top + position() };
       });
+      const rootRect = content.getBoundingClientRect();
+      const end = rootRect.bottom - scrollRect.top + position();
+      const overlapping = measured.find(item => cache.has(item.key));
+      // Older server pages prepend to a transcript whose latest end was known.
+      // An overlapping anchor gives a better translation once it mounts again.
+      const shift = overlapping ? overlapping.top - cache.get(overlapping.key).top
+        : tailKnown && transcriptEnd !== null ? end - transcriptEnd : 0;
       const live = new Set(measured.map(item => item.key));
+      if (Math.abs(shift) > 2) for (const item of cache.values()) {
+        if (!live.has(item.key)) { item.top += shift; item.bottom += shift; }
+      }
+      transcriptEnd = end;
+      if (measured.some(item => item.bottom >= end - 96)) tailKnown = true;
       for (const item of cache.values()) if (!live.has(item.key)) item.element = null;
       loaded = measured.map(item => item.element);
       for (const item of measured) {
-        scan?.seen.add(item.key);
+        scan?.pendingKeys.delete(item.key);
         const previous = cache.get(item.key);
         // User previews are read once per mounted element, never on every scroll frame.
         if (!previous || previous.element !== item.element || !previous.prompt) {
@@ -370,7 +410,15 @@
         const { user, ...record } = item;
         cache.set(item.key, { ...previous, ...record });
       }
-      items = [...cache.values()].sort((a, b) => a.top - b.top || a.key.localeCompare(b.key));
+      chronology = mergeTimeline(chronology, measured, cache, scan?.anchor, scan?.atStart);
+      items = chronology.map(key => cache.get(key));
+      if (scan) {
+        if (measured.length) scan.anchor = measured.at(-1).key;
+        for (const element of pending) {
+          const key = `turn:${element.getAttribute('data-turn-key')}`;
+          if (!cache.has(key)) scan.pendingKeys.add(key);
+        }
+      }
       updateHistoryState();
       indexes.clear();
       items.forEach((item, index) => indexes.set(item.key, index));
@@ -392,6 +440,7 @@
       staleElements = new Set(loaded);
       staleUntil = Date.now() + 1000;
       historyComplete = false;
+      chronology = []; transcriptEnd = null; tailKnown = false;
       cancelScan(false);
       jump = null;
       cache.clear();
@@ -509,7 +558,7 @@
       const anchorKey = items.find(item => item.element === first)?.key;
       const job = { route, container: scroller, saved: position(), anchorKey,
         offset: first ? first.getBoundingClientRect().top - viewport().top : 0,
-        cancelled: false, started: Date.now(), seen: new Set() };
+        cancelled: false, started: Date.now(), pendingKeys: new Set(), atStart: true, anchor: null };
       scan = job;
       indexButton.setAttribute('aria-busy', 'true');
       indexButton.setAttribute('aria-label', '正在加载过去的对话，点击取消');
@@ -518,6 +567,7 @@
       let y = 0, steps = 0, bottomPasses = 0, historyTimedOut = false;
       try {
         while (scan === job && !job.cancelled && job.route === threadIdentity(win.location.pathname) && job.container.isConnected && !doc.hidden) {
+          job.atStart = y === 0;
           measure();
           move(y);
           await pause(240);
@@ -543,14 +593,15 @@
           }
           // Scroll events and virtual DOM commits can lag behind scrollTop. Wait for
           // actual message content at this viewport before advancing (only while indexing).
-          for (let retry = 0; retry < 12; retry++) {
+          for (let retry = 0; retry < (y >= geometry.max - 2 ? 20 : 12); retry++) {
             const view = viewport();
             const ready = mounted.some(element => {
               if (!element.isConnected || !element.querySelector(`${USER}, ${RESPONSE}`)) return false;
               const rect = element.getBoundingClientRect();
               return rect.height > 0 && rect.bottom > view.top && rect.top < view.bottom;
             });
-            if (ready || scan !== job) break;
+            const missingTail = y >= geometry.max - 2 && pending.some(element => !cache.has(`turn:${element.getAttribute("data-turn-key")}`));
+            if (ready && !missingTail || scan !== job) break;
             await pause(150);
             if (scan !== job) break;
             refresh();
@@ -577,12 +628,13 @@
         if (scan === job) {
           scan = null;
           if (bottomPasses >= 2) {
-            historyComplete = !earlierLoading();
-            for (const key of cache.keys()) if (!job.seen.has(key)) cache.delete(key);
+            historyComplete = !earlierLoading() && !job.pendingKeys.size;
+            // Unmounting and delayed hydration are not proof that a turn was deleted.
+            // Retain discovered entries; a real conversation switch clears the cache.
             refresh();
           }
           restore(job);
-          toast(`已索引 ${items.length} 轮${historyTimedOut ? '（更早历史仍在加载，请稍后再次补全）' : steps >= 600 || Date.now() - job.started > 120000 ? '（达到扫描上限，可继续补全）' : ''}`);
+          toast(`已索引 ${items.length} 轮${historyTimedOut || job.pendingKeys.size ? '（部分历史仍在加载，请稍后再次补全）' : steps >= 600 || Date.now() - job.started > 120000 ? '（达到扫描上限，可继续补全）' : ''}`);
         }
       }
     }
@@ -695,5 +747,5 @@
       },
     };
   }
-  return { activeAt, railRange, prefix, threadIdentity, start };
+  return { activeAt, railRange, prefix, threadIdentity, mergeTimeline, start };
 });

@@ -15,7 +15,7 @@
   #results{position:fixed;left:16px;top:80px;width:240px;background:#171715e8;padding:12px;font:12px/1.5 monospace;max-height:70vh;overflow:auto;z-index:60}
   #results:empty{display:none}.sr-only{display:none}
 </style>
-<header><h1>ChatGPT 横线导航 · 测试页面</h1><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button><button id="demo">展示长对话</button><button id="light">切换明暗</button></header>
+<header><h1>ChatGPT 横线导航 · 测试页面</h1><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="latest">验证最新节点保留</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button><button id="demo">展示长对话</button><button id="light">切换明暗</button></header>
 <div id="scroll"><main id="content" data-thread-find-target="conversation"></main></div>
 <footer><textarea aria-label="草稿">测试草稿：索引和跳转应保留这段输入</textarea></footer><pre id="results"></pre>
 <script>window.module={exports:{}};</script><script src="../chatgpt-conversation-rail.user.js"></script>
@@ -28,15 +28,15 @@ function turn(i,legacy=false){const el=document.createElement('div');el.classNam
   if(legacy){el.dataset.testid='conversation-turn-'+(i*2);el.dataset.turn='user';}
   else el.dataset.turnKey='message-'+i;
   el.innerHTML='<h4 class="sr-only">你说：</h4><div data-user-message-bubble="true">第 '+(i+1)+' 轮：长期执行中，哪些变化需要重新理解任务？</div><div class="markdown"><p>常规步骤由固定规则执行。新的目标或授权超出原规则时，再重新确定方案。这是用于验证导航的示例内容。</p></div>';return el;}
-function setup(n,{virtual=false,reverse=false,legacy=false}={}){
+function setup(n,{virtual=false,reverse=false,legacy=false,omitTailWhileIndexing=false}={}){
   controller?.stop();if(virtualListener)scroll.removeEventListener('scroll',virtualListener);virtualListener=null;
   content.replaceChildren();content.dataset.audit='';scroll.style.display=reverse?'flex':'block';scroll.style.flexDirection=reverse?'column-reverse':'';
   content.style.flexShrink=reverse?'0':'';content.style.height='';scroll.scrollTop=0;
   if(virtual){content.style.height=(n*220)+'px';let first=-1;
     virtualListener=()=>{const max=scroll.scrollHeight-scroll.clientHeight;const pos=reverse?max+scroll.scrollTop:scroll.scrollTop;
-      const start=Math.max(0,Math.min(n-1,Math.floor(pos/220)-1));if(start===first)return;first=start;content.dataset.audit+=start+',';
+      const start=Math.max(0,Math.min(n-1,Math.floor(pos/220)-1));const signature=start+'-'+Boolean(omitTailWhileIndexing&&controller?.snapshot().indexing);if(signature===first)return;first=signature;content.dataset.audit+=start+',';
       const box=document.createElement('div');box.style.paddingTop=(start*220)+'px';
-      for(let i=start;i<Math.min(n,start+7);i++){const el=turn(i);el.style.height='220px';el.style.minHeight='220px';box.append(el);}content.replaceChildren(box);};
+      for(let i=start;i<Math.min(n,start+7);i++){const el=turn(i);el.style.height='220px';el.style.minHeight='220px';if(omitTailWhileIndexing&&controller?.snapshot().indexing&&i>=n-3)el.replaceChildren();box.append(el);}content.replaceChildren(box);};
     scroll.addEventListener('scroll',virtualListener);virtualListener();
   }else{for(let i=0;i<n;i++)content.append(turn(i,legacy));}
   controller=api.start(document);return controller;
@@ -104,6 +104,26 @@ async function run(virtualOnly=false){results.textContent='';document.querySelec
     log('ALL TESTS PASSED');
   }catch(e){log('FAIL '+e.stack);}finally{document.querySelector('#run').disabled=false;}
 }
+async function latestRegression(){
+  results.textContent='';
+  try {
+    let c=setup(40,{virtual:true,reverse:true,omitTailWhileIndexing:true});await sleep(400);
+    check(c.snapshot().entries.some(item=>item.key==='turn:message-39'),'扫描前已发现最新节点');
+    shadow().querySelector('.index').click();
+    for(let i=0;i<220&&c.snapshot().indexing;i++)await sleep(120);
+    await sleep(600);
+    check(c.snapshot().count===40,'完整扫描不误删底部延迟挂载的最新三轮');
+    check(c.snapshot().entries.at(-1).key==='turn:message-39','最新节点仍在时间线末端');
+    c=setup(5);await sleep(300);
+    content.style.height='6600px';const box=document.createElement('div');
+    for(let i=100;i<105;i++){const e=turn(i);e.style.height='220px';box.append(e);}content.replaceChildren(box);
+    await sleep(500);
+    check(c.snapshot().count===10,'加载更早历史时保留未挂载的最新五轮');
+    check(c.snapshot().entries.slice(-5).map(item=>item.key).join(',')===Array.from({length:5},(_,i)=>'turn:message-'+i).join(','),'历史前置造成坐标变化时最新节点顺序保持');
+    log('ALL LATEST TESTS PASSED');
+  }catch(e){log('FAIL '+e.stack);}
+}
+document.querySelector('#latest').onclick=latestRegression;
 async function hydrationRegression(){
   results.textContent='';
   const savedPath=location.pathname;
