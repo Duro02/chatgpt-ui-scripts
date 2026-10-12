@@ -15,11 +15,12 @@
 | `GPT Claude-like Style.user.css` | Stylus/UserStyle | ChatGPT 深色界面样式，让页面更接近 Claude 的窄版、暖灰、低干扰阅读体验。兼容 `html.dark`、`data-color-scheme`、`data-theme` 三套前端标记。 |
 | `chatgpt-claude-like-separator.user.js` | Tampermonkey userscript | 配合上面的样式使用，识别纯文本分隔符段落并添加 class，方便样式渲染为更自然的分割线。 |
 
-仓库里也包含一个附加脚本：
+仓库里也包含以下附加脚本：
 
 | 文件 | 类型 | 用途 |
 | --- | --- | --- |
 | `chatgpt-project-source-preview.user.js` | Tampermonkey userscript | 在 ChatGPT 项目源里预览 `.md` / `.txt` 文件，避免点击后直接下载。 |
+| `chatgpt-conversation-rail.user.js` | Tampermonkey userscript | 右侧短横线对话导航，支持预览、高亮、跳转和按需补全长对话索引。 |
 
 ## 安装
 
@@ -50,6 +51,7 @@
 - 只想改外观：安装 `GPT Claude-like Style.user.css`。
 - 想让外观里的分隔线更稳定：再安装 `chatgpt-claude-like-separator.user.js`。
 - 想预览项目源 Markdown/text 文件：安装 `chatgpt-project-source-preview.user.js`。
+- 想恢复右侧对话导航：安装 `chatgpt-conversation-rail.user.js`，可以单独使用。
 
 ## 主要功能
 
@@ -66,11 +68,30 @@
 - 给匹配段落添加 `claude-like-separator` class。
 - 由 Stylus 样式负责最终视觉渲染。
 
+### ChatGPT Conversation Rail
+
+新的独立导航脚本，视觉参考 DSH 的 `TurnNavigator`：右侧固定间距的短横线，当前轮变长、变亮，悬停或键盘聚焦显示提问与回答摘要。它不需要主题样式，也不包含旧版的备份和 Prompt 管理功能。
+
+- 点击横线跳到该轮；上下方向键、Home、End 选择节点，Enter 激活。
+- 尚有未发现的历史时，横线列表最顶端显示一条红线，悬停提示“点击加载过去的对话”。点击红线加载历史并补全索引；历史索引完整后自动隐藏红线。扫描会临时滚动，结束后恢复阅读位置；再次点击、Esc、鼠标滚轮或触摸可以中止。扫描期间请保持该标签页可见。
+- 加载过程中按会话 ID 保留索引，项目地址前缀变化和内容容器重新挂载不会丢失已发现节点。
+- 默认只索引已挂载、已访问的节点，不自动打断阅读。缓存仅保存在当前页面内存中，刷新页面后需要重新发现或补全。
+- 完整扫描结束会清除当前分支中未再出现的旧节点；编辑或切换分支后可再次补全。
+- 适配新版 `data-turn-key` 和旧版 `conversation-turn-*` 节点，支持 `column-reverse` 容器的负 `scrollTop`。
+
+性能设计：无定时轮询；滚动只读取滚动位置，用缓存坐标二分查询，并更新前后两个高亮。监听消息列表和祖先的直接结构变动，不持续监听回答内部文本；尺寸变化以 180ms 合并更新。摘要限制长度和遍历节点数；横线列表只渲染视口附近约 50 个按钮。完整历史扫描与点击后的定位校准有次数和时间上限。
+
+脚本只读取页面 DOM，不请求会话 API，不发送内容，不使用本地持久化存储。历史高度重新估计时，未挂载节点的位置可能暂时不精确；跳转后会尝试校准，必要时重新补全。
+
+开发验证：运行 `node tests/chatgpt-conversation-rail.test.js`。在仓库根目录启动本机 HTTP 服务，打开 `tests/conversation-rail.browser.html`，点击“运行浏览器验证”。页面覆盖千轮索引、滚动/流式更新开销、新旧结构、虚拟化历史、会话切换和释放资源。
+
+视觉参考：[DSH TurnNavigator](https://github.com/deepseek-ai/deepseek-harness/blob/main/packages/client/ui-chat/src/client/chat/TurnNavigator.tsx)。新脚本独立实现，按本仓库 MIT 许可发布。
+
 ### ChatGPT Conversation Navigator（已归档）
 
 文件在 `archived/chatgpt-conversation-navigator.user.js`，是 YukonKong 原始 `ChatGPT体验增强插件` 的修改版，提供长对话时间线导航、Prompt 管理器、会话备份等功能。
 
-当前状态：ChatGPT 官方已自行更新对话定位节点，该脚本的更新优先级后调，**不保证可用性**，仅留档供需要时自行取用。
+当时因 ChatGPT 自带导航而归档。该历史版本仍**不保证可用性**，仅留档供需要时自行取用；需要轻量导航请使用上面的 Conversation Rail。
 
 原修改版相对原脚本的改动：
 

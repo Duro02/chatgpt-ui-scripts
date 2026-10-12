@@ -15,11 +15,12 @@ This repository contains two main enhancements:
 | `GPT Claude-like Style.user.css` | Stylus/UserStyle | Dark UI theme for ChatGPT that brings the page closer to Claude's narrow, warm-gray, low-distraction reading experience. |
 | `chatgpt-claude-like-separator.user.js` | Tampermonkey userscript | Companion to the style: detects plain-text separator paragraphs in replies and adds a class so the style can render them as natural dividers. |
 
-The repo also includes one extra script:
+The repo also includes these extra scripts:
 
 | File | Type | Purpose |
 | --- | --- | --- |
 | `chatgpt-project-source-preview.user.js` | Tampermonkey userscript | Previews `.md` / `.txt` files inside ChatGPT project sources instead of downloading them on click. |
+| `chatgpt-conversation-rail.user.js` | Tampermonkey userscript | Short horizontal navigation marks with previews, active-turn highlighting, jumps, and optional history indexing. |
 
 ## Installation
 
@@ -50,6 +51,7 @@ Suggested combinations:
 - Appearance only: install `GPT Claude-like Style.user.css`.
 - More reliable divider lines inside the theme: also install `chatgpt-claude-like-separator.user.js`.
 - Preview project-source Markdown/text files: install `chatgpt-project-source-preview.user.js`.
+- Restore conversation navigation: install `chatgpt-conversation-rail.user.js`; it works independently of the theme.
 
 ## Features
 
@@ -67,11 +69,29 @@ Suggested combinations:
 - Adds the `claude-like-separator` class to matching paragraphs.
 - The Stylus style handles the final visual rendering.
 
+### ChatGPT Conversation Rail
+
+A standalone rail visually inspired by DSH's TurnNavigator: fixed-pitch horizontal marks, a longer/brighter active mark, and prompt/answer previews on hover or keyboard focus. It does not include the archived script's backup or Prompt manager.
+
+- Click a mark to jump. Arrow keys, Home and End select marks; Enter activates them.
+- When history is incomplete, the first mark is red. Hover to see “Click to load earlier conversation” (Chinese UI text); click to load and index history. The red mark disappears once all history is indexed. This temporarily scrolls the transcript and restores the reading position afterward. Click again or press Esc to cancel; wheel/touch input interrupts scanning. Keep the tab visible while indexing.
+- The index uses the conversation ID, retaining discovered turns across project-prefix changes and transcript container remounts.
+- Default discovery covers mounted or previously visited turns. The index stays in page memory only; reloading starts fresh. A completed scan removes obsolete branch entries.
+- Supports current `data-turn-key` and legacy `conversation-turn-*` wrappers, including negative `scrollTop` in a reversed scrollport.
+
+There is no polling loop. Scrolling uses cached coordinates and binary search, then updates the old and new active marks. Observers watch direct structural containers, not streamed answer text; size changes are coalesced at 180ms. Previews have bounded text/tree traversal, and the rail mounts only roughly 50 buttons regardless of history size. Scanning and post-jump correction have time/attempt limits.
+
+The script uses page DOM only, makes no conversation API requests, sends no content, and writes no persistent storage. Unmounted-turn coordinates may be approximate after lazy height changes; jumps attempt correction and the index can be rebuilt.
+
+Validation: run `node tests/chatgpt-conversation-rail.test.js`. Serve the repository locally, open `tests/conversation-rail.browser.html`, and choose “运行浏览器验证” to exercise a thousand turns, streaming/scrolling costs, current/legacy DOM, virtual history, navigation and cleanup.
+
+Visual reference: [DSH TurnNavigator](https://github.com/deepseek-ai/deepseek-harness/blob/main/packages/client/ui-chat/src/client/chat/TurnNavigator.tsx). The new script is independently implemented under this repository's MIT license.
+
 ### ChatGPT Conversation Navigator (archived)
 
 File lives at `archived/chatgpt-conversation-navigator.user.js`. It is a modified version of YukonKong's `ChatGPT体验增强插件`, offering long-conversation timeline navigation, a prompt manager, conversation backup, and more.
 
-Current status: ChatGPT has since shipped its own conversation-anchor nodes, so this script's update priority is lowered and **it is not guaranteed to work** — kept for archival purposes only.
+This version was archived when ChatGPT provided its own navigation. It remains **not guaranteed to work** and is kept for archival purposes. Use the new Conversation Rail for lightweight navigation.
 
 Changes in this modified version relative to the original:
 

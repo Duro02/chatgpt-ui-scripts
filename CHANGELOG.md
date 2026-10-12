@@ -1,5 +1,19 @@
 # 更新记录
 
+## Conversation Rail 0.1.1 — 2026-10-12
+
+- Fix disappearing navigation during hydration: identify threads by conversation ID, accept remounted nodes with existing message IDs, and rebind replaced transcript containers.
+- Replace the separate index button with a red first mark, using the same preview card with “点击加载过去的对话”. Hide it when all history is indexed.
+- Add browser regressions for route normalization, container replacement, reused DOM, and history mark visibility. Keep normal scrolling free of full index rebuilds and geometry scans.
+
+## Conversation Rail 0.1.0 — 2026-10-12
+
+- 新增独立的短横线对话导航，视觉参考 DSH 的 TurnNavigator。
+- 适配新版虚拟化消息节点及旧版消息 wrapper，处理反向容器的负滚动位置。
+- 缓存坐标、二分查询、直接结构观察和横线列表虚拟化，控制滚动及流式输出期间的持续开销。
+- 按需扫描历史，支持取消、阅读位置恢复和卸载节点跳转校准。
+- 添加 Node 算法检查和本机浏览器验证页面；旧版大型导航继续保留在 archived 中。
+
 ## 0.4.9 — 2026-10-10
 
 - 合并重复的暗色模式选择器，减少重复字体覆盖，并让部分面板文字继承容器字体。

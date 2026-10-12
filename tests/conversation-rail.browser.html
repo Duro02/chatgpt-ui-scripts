@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="zh-CN" class="dark"><meta charset="utf-8"><title>对话导航 · 浏览器验证</title>
+<style>
+  :root{--text-primary:#eeeae2;--text-tertiary:#969187;--bg-elevated-primary:#302f2c;--border-light:#ffffff22;color-scheme:dark}
+  *{box-sizing:border-box}body{margin:0;background:#20201e;color:#eeeae2;font:15px/1.7 system-ui}
+  header{height:64px;display:flex;align-items:center;gap:18px;padding:10px 28px;background:#181817}
+  button{cursor:pointer;font:inherit;padding:5px 12px}h1{font-size:16px;margin:0}
+  #scroll{height:calc(100vh - 160px);overflow-y:auto;position:relative;overflow-anchor:none}
+  #content{width:min(760px,calc(100% - 120px));margin:0 auto}
+  .turn{padding:24px 0;min-height:180px;border-bottom:1px solid #ffffff10}
+  [data-user-message-bubble]{background:#2e2c27;border-radius:18px;padding:12px 18px;margin-left:80px}
+  .markdown{font-family:Georgia,serif;padding:12px 0;color:#d6d1c5}
+  footer{height:96px;padding:12px max(80px,calc((100vw - 760px)/2));background:#20201e}
+  textarea{width:100%;height:55px;border:0;border-radius:20px;padding:15px;font:inherit;background:#30302b}
+  #results{position:fixed;left:16px;top:80px;width:240px;background:#171715e8;padding:12px;font:12px/1.5 monospace;max-height:70vh;overflow:auto;z-index:60}
+  #results:empty{display:none}.sr-only{display:none}
+</style>
+<header><h1>ChatGPT 横线导航 · 测试页面</h1><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button><button id="demo">展示长对话</button><button id="light">切换明暗</button></header>
+<div id="scroll"><main id="content" data-thread-find-target="conversation"></main></div>
+<footer><textarea aria-label="草稿">测试草稿：索引和跳转应保留这段输入</textarea></footer><pre id="results"></pre>
+<script>window.module={exports:{}};</script><script src="../chatgpt-conversation-rail.user.js"></script>
+<script>
+const api=window.module.exports;delete window.module;
+let controller, virtualListener;
+const scroll=document.querySelector('#scroll'), content=document.querySelector('#content'), results=document.querySelector('#results');
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function turn(i,legacy=false){const el=document.createElement('div');el.className='turn';
+  if(legacy){el.dataset.testid='conversation-turn-'+(i*2);el.dataset.turn='user';}
+  else el.dataset.turnKey='message-'+i;
+  el.innerHTML='<h4 class="sr-only">你说：</h4><div data-user-message-bubble="true">第 '+(i+1)+' 轮：长期执行中，哪些变化需要重新理解任务？</div><div class="markdown"><p>常规步骤由固定规则执行。新的目标或授权超出原规则时，再重新确定方案。这是用于验证导航的示例内容。</p></div>';return el;}
+function setup(n,{virtual=false,reverse=false,legacy=false}={}){
+  controller?.stop();if(virtualListener)scroll.removeEventListener('scroll',virtualListener);virtualListener=null;
+  content.replaceChildren();content.dataset.audit='';scroll.style.display=reverse?'flex':'block';scroll.style.flexDirection=reverse?'column-reverse':'';
+  content.style.flexShrink=reverse?'0':'';content.style.height='';scroll.scrollTop=0;
+  if(virtual){content.style.height=(n*220)+'px';let first=-1;
+    virtualListener=()=>{const max=scroll.scrollHeight-scroll.clientHeight;const pos=reverse?max+scroll.scrollTop:scroll.scrollTop;
+      const start=Math.max(0,Math.min(n-1,Math.floor(pos/220)-1));if(start===first)return;first=start;content.dataset.audit+=start+',';
+      const box=document.createElement('div');box.style.paddingTop=(start*220)+'px';
+      for(let i=start;i<Math.min(n,start+7);i++){const el=turn(i);el.style.height='220px';el.style.minHeight='220px';box.append(el);}content.replaceChildren(box);};
+    scroll.addEventListener('scroll',virtualListener);virtualListener();
+  }else{for(let i=0;i<n;i++)content.append(turn(i,legacy));}
+  controller=api.start(document);return controller;
+}
+function log(message){results.textContent+=message+'\n';}
+function check(condition,message){if(!condition)throw Error(message);log('PASS '+message);}
+function shadow(){return document.querySelector('#duro-conversation-rail').shadowRoot;}
+async function run(virtualOnly=false){results.textContent='';document.querySelector('#run').disabled=true;
+  try{
+    let c;
+    if(!virtualOnly){
+    c=setup(1000);await sleep(400);
+    check(c.snapshot().count===1000,'1,000 轮索引');check(c.snapshot().mountedMarks<=52,'横线 DOM 有界（≤52）');
+    const before={...c.stats}, start=performance.now();
+    for(let i=0;i<100;i++){scroll.scrollTop=i*300;await new Promise(requestAnimationFrame);}
+    await sleep(250);const after={...c.stats};
+    check(after.geometryReads===before.geometryReads,'连续滚动没有全量几何重测');
+    check(after.refreshes===before.refreshes,'连续滚动没有重建索引');
+    log('scroll wall time '+Math.round(performance.now()-start)+'ms; frames '+(after.scrollFrames-before.scrollFrames));
+    const p=content.querySelector('.markdown p').firstChild;const streamBefore=c.stats.refreshes;
+    for(let i=0;i<1000;i++)p.data='流式输出 '+i;
+    await sleep(400);check(c.stats.refreshes-streamBefore<=2,'1,000 次文本更新不反复扫描');
+    const count=c.snapshot().count;content.append(turn(1000));await sleep(400);
+    check(c.snapshot().count===count+1,'新提问增量加入');
+    shadow().querySelector('.mark[data-key]').focus();await sleep(30);check(!shadow().querySelector('.preview').hidden,'键盘预览');
+    shadow().querySelector('.mark[data-key]').dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true}));
+    check(shadow().activeElement.dataset.key==='turn:message-1000','虚拟导航键盘 End');
+    shadow().activeElement.click();await sleep(800);
+    check(Math.abs(scroll.scrollTop-(scroll.scrollHeight-scroll.clientHeight))<4&&content.lastElementChild.getBoundingClientRect().top<scroll.getBoundingClientRect().bottom,'末尾节点可见（尊重滚动边界）');
+    check(document.querySelector('textarea').value.includes('测试草稿'),'草稿保留');
+    history.pushState({},'',location.pathname+'?route-test'); // same pathname should preserve index
+    await sleep(250);check(c.snapshot().count===1001,'查询参数不清空会话');
+    history.pushState({},'', '/tests/another-conversation');content.replaceChildren(turn(5000),turn(5001));await sleep(500);
+    check(c.snapshot().count===2,'切换会话清理旧索引');
+    history.replaceState({},'', '/tests/conversation-rail.browser.html');
+    }
+    c=setup(80,{virtual:true,reverse:true});await sleep(400);
+    const initialCount=c.snapshot().count;check(initialCount<80,'新版虚拟列表只挂载附近消息');
+    const saved=scroll.scrollTop;shadow().querySelector('.index').click();
+    for(let i=0;i<220&&c.snapshot().indexing;i++)await sleep(120);
+    await sleep(800);
+    if(c.snapshot().count!==80){log('Missing: '+Array.from({length:80},(_,i)=>'turn:message-'+i).filter(key=>!c.snapshot().entries.some(item=>item.key===key)).join(','));log('Mount ranges: '+content.dataset.audit);}
+    check(c.snapshot().count===80,'负 scrollTop 虚拟列表全量索引');
+    check(Math.abs(scroll.scrollTop-saved)<5,'索引完成恢复原位置');
+    const reads=c.stats.refreshes;await sleep(500);check(c.stats.refreshes===reads,'空闲时没有轮询扫描');
+    const mark=shadow().querySelector('.mark[data-key]');mark.focus();mark.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));
+    shadow().activeElement.click();await sleep(2000);
+    const first=content.querySelector('[data-turn-key="message-0"]');
+    check(first&&Math.abs(first.getBoundingClientRect().top-scroll.getBoundingClientRect().top)<4,'跳转已卸载节点并校准');
+    shadow().querySelector('.index').click();await sleep(600);document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await sleep(500);
+    check(!c.snapshot().indexing,'索引可取消');
+    c=setup(3,{legacy:true});await sleep(400);check(c.snapshot().count===3,'旧版 conversation-turn 兼容');
+    const response=content.querySelector('.markdown');response.className='';response.setAttribute('data-chatgpt-search-unit-key','fallback-turn-0:2:assistant');response.textContent='新版回答摘要验证';
+    shadow().querySelector('.mark[data-key]').focus();check(shadow().querySelector('.answer').textContent==='新版回答摘要验证','新版回答摘要标记兼容');
+    c=setup(8);const loader=document.createElement('div');loader.innerHTML='<div role="status">正在加载更早的消息…</div>';content.prepend(loader);
+    setTimeout(()=>{for(let i=7;i>=0;i--)content.insertBefore(turn(200+i),loader.nextSibling);loader.remove();},900);
+    shadow().querySelector('.index').click();for(let i=0;i<300&&c.snapshot().indexing;i++)await sleep(120);await sleep(500);
+    check(c.snapshot().count===16,'索引等待服务器分页完成');
+    c.stop();scroll.after(content);scroll.style.display='none';content.replaceChildren();for(let i=0;i<20;i++)content.append(turn(i));
+    c=api.start(document);await sleep(400);
+    const navRect=shadow().querySelector('nav').getBoundingClientRect();check(navRect.top>=0&&navRect.bottom<innerHeight,'页面根滚动容器布局');
+    shadow().querySelector('.mark[data-key="turn:message-10"]').click();await sleep(800);
+    check(Math.abs(content.querySelector('[data-turn-key="message-10"]').getBoundingClientRect().top-24)<4,'页面根滚动容器跳转');
+    c.stop();content.append(turn(99));await sleep(300);check(!document.getElementById('duro-conversation-rail'),'卸载后释放观察器和 UI');
+    log('ALL TESTS PASSED');
+  }catch(e){log('FAIL '+e.stack);}finally{document.querySelector('#run').disabled=false;}
+}
+async function hydrationRegression(){
+  results.textContent='';
+  const savedPath=location.pathname;
+  try {
+    history.replaceState({},'', '/c/hydration-thread');
+    let c=setup(5);await sleep(400);
+    check(c.snapshot().count===5&&!shadow().querySelector('nav').hidden,'初始节点显示');
+    check(shadow().querySelector('.index').hidden,'短对话全部已加载时不显示红线');
+    history.replaceState({},'', '/g/project/c/hydration-thread');
+    content.dataset.audit='hydrated';content.append(document.createElement('span'));
+    await sleep(500);
+    check(c.snapshot().count===5&&!shadow().querySelector('nav').hidden,'项目地址规范化后保留全部节点');
+    c.stop();content.removeAttribute('data-thread-find-target');c=api.start(document);await sleep(400);
+    const preferred=document.createElement('section');preferred.dataset.threadFindTarget='conversation';
+    preferred.append(...content.children);content.append(preferred);await sleep(500);
+    preferred.append(turn(5));await sleep(400);
+    check(c.snapshot().count===6,'加载后切换首选内容容器并监听新节点');
+    history.replaceState({},'', '/c/another-thread');preferred.replaceChildren(...Array.from({length:5},(_,i)=>turn(i)));
+    await sleep(600);
+    check(c.snapshot().count===5,'切换会话时接受重新挂载的相同消息 ID');
+    history.replaceState({},'', '/c/reused-elements');preferred.append(document.createElement('span'));await sleep(1400);
+    check(c.snapshot().count===5,'会话切换后的相同 DOM 不会永久阻塞索引');
+    c.stop();content.replaceChildren();content.dataset.threadFindTarget='conversation';
+    c=setup(5);
+    const loader=document.createElement('div');loader.innerHTML='<div role="status">正在加载更早的消息…</div>';content.prepend(loader);await sleep(400);
+    const index=shadow().querySelector('.index');
+    check(!index.hidden&&index.parentElement===shadow().querySelector('.marks')&&index.style.top==='0px','历史入口为列表第一条横线');
+    index.focus();check(shadow().querySelector('.prompt').textContent==='点击加载过去的对话','历史红线使用同一预览提示');
+    check(getComputedStyle(index,'::before').backgroundColor==='rgb(207, 116, 107)'&&!index.textContent,'历史入口为红线且没有符号按钮');
+    setTimeout(()=>{content.insertBefore(turn(20),loader.nextSibling);loader.remove();},900);
+    index.click();
+    for(let i=0;i<150&&c.snapshot().indexing;i++)await sleep(120);
+    await sleep(700);
+    check(c.snapshot().count===6&&c.snapshot().historyComplete&&index.hidden,'更早历史加载完整后红线消失');
+    c=setup(80,{virtual:true});await sleep(400);
+    check(!shadow().querySelector('.index').hidden,'存在未发现的虚拟节点时显示红线');
+    const before={...c.stats};await sleep(500);
+    check(c.stats.refreshes===before.refreshes,'历史完整性检测没有空闲轮询');
+    log('ALL HYDRATION TESTS PASSED');
+  }catch(e){log('FAIL '+e.stack);}finally{history.replaceState({},'',savedPath);}
+}
+document.querySelector('#hydration').onclick=hydrationRegression;
+document.querySelector('#run').onclick=()=>run();
+document.querySelector('#virtual').onclick=()=>run(true);
+document.querySelector('#preview').onclick=async()=>{results.textContent='';setup(3);await sleep(400);const response=content.querySelector('.markdown');response.className='';response.setAttribute('data-chatgpt-search-unit-key','fallback-turn-0:2:assistant');response.textContent='新版回答摘要验证';shadow().querySelector('.mark[data-key]').focus();check(shadow().querySelector('.answer').textContent==='新版回答摘要验证','新版回答摘要标记兼容');log('ALL TESTS PASSED');};
+document.querySelector('#demo').onclick=()=>{results.textContent='';if(content.parentElement!==scroll){scroll.append(content);scroll.style.display='block';window.scrollTo(0,0);}setup(120);scroll.scrollTop=600;};
+document.querySelector('#light').onclick=()=>{document.documentElement.classList.toggle('dark');const dark=document.documentElement.classList.contains('dark');
+  document.documentElement.style.colorScheme=dark?'dark':'light';document.documentElement.style.setProperty('--text-primary',dark?'#eeeae2':'#292722');
+  document.documentElement.style.setProperty('--bg-elevated-primary',dark?'#302f2c':'#f3f0e9');document.body.style.background=dark?'#20201e':'#f7f5ef';document.body.style.color=dark?'#eeeae2':'#292722';};
+setup(120);
+</script></html>
