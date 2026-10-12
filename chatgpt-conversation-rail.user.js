@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.1.5
-// @description  Lightweight conversation navigation with short horizontal marks, previews and an optional history index.
+// @version      0.2.0
+// @description  Persistent conversation navigation with short marks, previews and on-demand history loading.
 // @author       duro
 // @license      MIT
 // @match        https://chatgpt.com/*
@@ -131,7 +131,134 @@
     return path.match(/(?:^|\/)c\/([^/]+)/)?.[1] || path;
   }
 
-  function start(doc) {
+  const CACHE_PREFIX = 'duro-conversation-rail:v1:';
+  const CACHE_SIZE = 1000000;
+  const CACHE_TOTAL = 2000000;
+  const CACHE_THREADS = 32;
+  const CACHE_ITEMS = 10000;
+  const cacheKey = thread => `${CACHE_PREFIX}thread:${thread}`;
+  const conversationId = path => path.match(/(?:^|\/)c\/([^/]+)/)?.[1] || null;
+
+  function decodeSaved(raw, thread, now = Date.now()) {
+    if (!raw || raw.length > CACHE_SIZE) return null;
+    try {
+      const data = JSON.parse(raw);
+      if (data.v !== 1 || data.thread !== thread || !Number.isFinite(data.updated) ||
+          data.updated > now + 86400000 ||
+          !Array.isArray(data.entries) || data.entries.length > CACHE_ITEMS) return null;
+      const keys = new Set(), entries = [];
+      for (const row of data.entries) {
+        if (!Array.isArray(row) || typeof row[0] !== 'string' || row[0].length > 200 ||
+            !/^(turn|message):/.test(row[0]) || keys.has(row[0]) ||
+            !Number.isFinite(row[1]) || !Number.isFinite(row[2]) || row[2] < row[1] ||
+            Math.abs(row[1]) > 1e9 || Math.abs(row[2]) > 1e9) return null;
+        keys.add(row[0]);
+        entries.push({ key: row[0], top: row[1], bottom: row[2],
+          prompt: typeof row[3] === 'string' ? row[3].slice(0, 180) : '',
+          answer: typeof row[4] === 'string' ? row[4].slice(0, 140) : '', element: null });
+      }
+      return { entries, complete: data.complete === true,
+        end: Number.isFinite(data.end) && Math.abs(data.end) <= 1e9 ? data.end : null, tail: data.tail === true };
+    } catch { return null; }
+  }
+
+  function encodeSaved(thread, items, complete, end, tail, now = Date.now()) {
+    const stable = items.filter(item => !/^turn:conversation-turn-/.test(item.key));
+    if (!stable.length || stable.length > CACHE_ITEMS) return null;
+    const data = { v: 1, thread, updated: now, complete: complete && stable.length === items.length, end, tail,
+      entries: stable.map(item => [item.key, Math.round(item.top * 10) / 10,
+        Math.round(item.bottom * 10) / 10, (item.prompt || '').slice(0, 180), (item.answer || '').slice(0, 140)]) };
+    let raw = JSON.stringify(data);
+    if (raw.length > CACHE_SIZE) {
+      for (const row of data.entries) { row[4] = ''; row[3] = row[3].slice(0, 60); }
+      raw = JSON.stringify(data);
+    }
+    if (raw.length > CACHE_SIZE) {
+      for (const row of data.entries) row[3] = '';
+      raw = JSON.stringify(data);
+    }
+    return raw.length <= CACHE_SIZE ? raw : null;
+  }
+
+  function mergeSaved(saved, items, complete, end, tail) {
+    if (!saved?.entries.length) return { entries: items, complete, end, tail };
+    const previous = new Map(saved.entries.map(item => [item.key, item]));
+    const anchor = items.find(item => previous.has(item.key));
+    const shift = anchor ? anchor.top - previous.get(anchor.key).top :
+      Number.isFinite(end) && saved.end !== null && saved.tail ? end - saved.end : 0;
+    const records = new Map(saved.entries.map(item => [item.key,
+      { ...item, top: item.top + shift, bottom: item.bottom + shift }]));
+    for (const item of items) records.set(item.key, item);
+    const order = mergeTimeline(saved.entries.map(item => item.key), items, records);
+    const covered = items.filter(item => previous.has(item.key)).length;
+    return { entries: order.map(key => records.get(key)),
+      complete: complete && order.length === items.length || Boolean(anchor) && saved.complete && covered < saved.entries.length && order[0] === saved.entries[0].key,
+      end: end ?? saved.end, tail: tail || saved.tail };
+  }
+
+  function createIndexStore(storage, stats) {
+    let enabled = Boolean(storage);
+    const catalogKey = `${CACHE_PREFIX}catalog`;
+    return {
+      read(thread, touch = true) {
+        if (!enabled || !thread) return null;
+        try {
+          stats.storageReads++;
+          const saved = decodeSaved(storage.getItem(cacheKey(thread)), thread);
+          if (saved && touch) {
+            // Touch only a small catalog at startup; unchanged conversations do
+            // not need a full snapshot rewrite to stay recently used.
+            try {
+              stats.storageReads++;
+              const raw = storage.getItem(catalogKey);
+              const rows = raw && raw.length < 20000 ? JSON.parse(raw) : [];
+              const row = Array.isArray(rows) && rows.find(item => item?.id === thread);
+              if (row) { row.updated = Date.now(); storage.setItem(catalogKey, JSON.stringify([...rows.filter(item => item !== row), row])); stats.storageWrites++; }
+            } catch { /* Cache reads remain useful even if catalog writes are unavailable. */ }
+          }
+          return saved;
+        }
+        catch { enabled = false; return null; }
+      },
+      write(thread, raw) {
+        if (!enabled || !thread || !raw) return false;
+        try {
+          let rows;
+          try { stats.storageReads++; const value = storage.getItem(catalogKey); rows = value && value.length < 20000 ? JSON.parse(value) : []; }
+          catch { rows = []; }
+          if (!Array.isArray(rows)) rows = [];
+          rows = rows.slice(0, CACHE_THREADS + 1).filter(row => row && typeof row.id === 'string' &&
+            row.id.length <= 200 && Number.isFinite(row.size) && row.size >= 0 && Number.isFinite(row.updated));
+          const keep = [];
+          for (const row of rows) {
+            if (row.id === thread) continue;
+            keep.push(row);
+          }
+          keep.sort((a, b) => a.updated - b.updated);
+          let size = raw.length + keep.reduce((sum, row) => sum + row.size, 0);
+          while (keep.length >= CACHE_THREADS || size > CACHE_TOTAL) {
+            const removed = keep.shift();
+            if (!removed) break;
+            storage.removeItem(cacheKey(removed.id)); size -= removed.size;
+          }
+          for (;;) {
+            try {
+              storage.setItem(cacheKey(thread), raw);
+              storage.setItem(catalogKey, JSON.stringify([...keep, { id: thread, size: raw.length, updated: Date.now() }]));
+              stats.storageWrites++;
+              return true;
+            } catch (error) {
+              const removed = keep.shift();
+              if (!removed) throw error;
+              storage.removeItem(cacheKey(removed.id));
+            }
+          }
+        } catch { enabled = false; return false; }
+      },
+    };
+  }
+
+  function start(doc, options = {}) {
     if (!doc?.body || doc.getElementById('duro-conversation-rail')) return null;
     const win = doc.defaultView;
     const host = doc.createElement('div');
@@ -158,16 +285,63 @@
     let selectedKey = null, positioned = [], focusY = null, railMotion = null;
     let chronology = [], transcriptEnd = null, tailKnown = false;
     let staleElements = null, staleUntil = 0, historyComplete = false, activeKey = null, hovered = false, stopped = false;
+    let saveTimer = 0, saveIdle = 0, dirty = false, waitingKey = null;
+    let savedThread = conversationId(win.location.pathname);
     let timer = 0, frame = 0, scan = null, jump = null, restoreJob = null, statusTimer = 0;
     let geometry = { origin: 0, height: 0, max: 0, reverse: false };
     let railHeight = 320;
-    const stats = { refreshes: 0, geometryReads: 0, scrollFrames: 0, renders: 0, railAnimationFrames: 0 };
+    const stats = { refreshes: 0, geometryReads: 0, scrollFrames: 0, renders: 0, railAnimationFrames: 0, storageReads: 0, storageWrites: 0 };
+    let persistenceAvailable = true;
+    let storage = options.storage;
+    if (storage === undefined) { try { storage = win.localStorage; } catch { storage = null; } }
+    const store = createIndexStore(storage, stats);
 
     function toast(text, sticky = false) {
       win.clearTimeout(statusTimer);
       status.textContent = text;
       status.hidden = !text;
       if (!sticky && text) statusTimer = win.setTimeout(() => { status.hidden = true; }, 3500);
+    }
+
+    function rebuildIndexes() {
+      indexes.clear();
+      items.forEach((item, index) => indexes.set(item.key, index));
+    }
+    function hydrate() {
+      const saved = store.read(savedThread);
+      if (!saved) return;
+      for (const item of saved.entries) cache.set(item.key, item);
+      chronology = saved.entries.map(item => item.key);
+      items = saved.entries;
+      historyComplete = saved.complete;
+      transcriptEnd = saved.end;
+      tailKnown = saved.tail;
+      rebuildIndexes();
+    }
+    function flushSaved() {
+      win.clearTimeout(saveTimer); saveTimer = 0;
+      if (saveIdle) { win.cancelIdleCallback?.(saveIdle); saveIdle = 0; }
+      if (!dirty || !savedThread || !items.length) return;
+      dirty = false;
+      // Merge a newer snapshot from another tab so a partial page cannot erase
+      // IDs already discovered in a complete index of this same conversation.
+      const merged = mergeSaved(store.read(savedThread, false), items, historyComplete, transcriptEnd, tailKnown);
+      const raw = encodeSaved(savedThread, merged.entries, merged.complete, merged.end, merged.tail);
+      if (raw && storage && !store.write(savedThread, raw)) {
+        persistenceAvailable = false;
+        toast('本地索引未能保存，本页导航仍可使用。');
+      }
+    }
+    function markDirty() {
+      if (!storage || !persistenceAvailable || !savedThread || stopped) return;
+      dirty = true;
+      win.clearTimeout(saveTimer);
+      if (saveIdle) { win.cancelIdleCallback?.(saveIdle); saveIdle = 0; }
+      saveTimer = win.setTimeout(() => {
+        saveTimer = 0;
+        if (win.requestIdleCallback) saveIdle = win.requestIdleCallback(() => { saveIdle = 0; flushSaved(); }, { timeout: 2000 });
+        else flushSaved();
+      }, 1500);
     }
 
     function position() { return geometry.origin + (scroller?.scrollTop || 0); }
@@ -212,7 +386,7 @@
 
     function render(extraIndex) {
       stats.renders += 1;
-      nav.hidden = !items.length || !content?.isConnected;
+      nav.hidden = !items.length;
       indexButton.hidden = historyComplete && !scan;
       const offset = indexButton.hidden ? 0 : 1;
       marks.style.height = `${(items.length + offset) * PITCH}px`;
@@ -368,9 +542,11 @@
         if (item.element?.isConnected) {
           // Refresh only the hovered entry, so editing and streamed responses stay current.
           const user = item.element.querySelector(USER);
+          const oldPrompt = item.prompt, oldAnswer = item.answer;
           item.prompt = prefix(user, 180) || item.prompt;
           const response = item.element.querySelector(RESPONSE);
           item.answer = prefix(response, 260) || item.answer;
+          if (item.prompt !== oldPrompt || (item.answer || '').slice(0, 140) !== (oldAnswer || '').slice(0, 140)) markDirty();
         }
         prompt.textContent = item.prompt || '尚未加载的提问';
         answer.textContent = item.answer || '点击定位这一轮。';
@@ -469,6 +645,9 @@
       }
       if (found.length) staleElements = null;
       stats.refreshes += 1;
+      const previousComplete = historyComplete;
+      const previousHead = chronology[0];
+      let changed = false;
       measure();
       const scrollRect = viewport();
       // Read geometry together, before rendering or updating any navigation DOM.
@@ -500,11 +679,13 @@
           item.prompt = prefix(item.user || item.element, 180);
           item.answer = prefix(item.element.querySelector(RESPONSE), 260);
         }
+        if (!previous || item.prompt !== undefined && (item.prompt !== previous.prompt || (item.answer || '').slice(0, 140) !== (previous.answer || '').slice(0, 140))) changed = true;
         const { user, ...record } = item;
         cache.set(item.key, { ...previous, ...record });
       }
       chronology = mergeTimeline(chronology, measured, cache, scan?.anchor, scan?.atStart);
       items = chronology.map(key => cache.get(key));
+      if (previousHead && chronology[0] !== previousHead) historyComplete = false;
       if (scan) {
         if (measured.length) scan.anchor = measured.at(-1).key;
         for (const element of pending) {
@@ -513,8 +694,8 @@
         }
       }
       updateHistoryState();
-      indexes.clear();
-      items.forEach((item, index) => indexes.set(item.key, index));
+      rebuildIndexes();
+      if (changed || historyComplete !== previousComplete) markDirty();
       watch();
       correctJump();
       if (!scan) syncActive();
@@ -529,19 +710,24 @@
     function checkRoute() {
       const next = threadIdentity(win.location.pathname);
       if (next === route) return false;
+      flushSaved();
       route = next;
+      savedThread = conversationId(win.location.pathname);
+      waitingKey = null;
+      stopRailMotion();
       staleElements = new Set(loaded);
       staleUntil = Date.now() + 1000;
       historyComplete = false;
       chronology = []; transcriptEnd = null; tailKnown = false;
       cancelScan(false);
-      jump = null;
+      cancelJump(false);
       cache.clear();
       indexes.clear();
       items = [];
       activeKey = selectedKey = null; positioned = [];
       hidePreview();
       toast('');
+      hydrate();
       render();
       schedule();
       return true;
@@ -562,7 +748,9 @@
       }
       boot.disconnect();
       if (next === content && content.isConnected) return;
+      const resumeKey = jump?.key || waitingKey;
       detach();
+      waitingKey = resumeKey;
       content = next;
       scroller = findScroller(content);
       scroller.addEventListener('scroll', onScroll, { passive: true });
@@ -570,38 +758,59 @@
       resize.observe(scroller);
       watch();
       refresh();
+      if (waitingKey) { const key = waitingKey; waitingKey = null; navigate(key); }
     }
 
     function detach() {
       stopRailMotion();
       cancelScan(false);
-      jump = null;
+      cancelJump(false);
       structure.disconnect();
       lifecycle.disconnect();
       resize.disconnect();
       scroller?.removeEventListener('scroll', onScroll);
       loaded = pending = mounted = positioned = [];
       content = scroller = null;
-      nav.hidden = true;
+      render();
     }
 
     function navigate(key) {
       cancelScan(false);
+      cancelJump(false);
       hidePreview();
       const item = cache.get(key);
-      if (!item || !scroller) return;
+      if (!item) return;
       restoreJob = null;
+      const originalSelection = selectedKey;
       selectedKey = key;
       setActive(key);
+      if (!scroller) { waitingKey = key; toast('正在等待对话页面加载…', true); return; }
       measure();
-      jump = { key, attempts: 0, timer: 0, route };
-      move(item.top - 24);
-      correctJump();
+      const first = loaded.find(element => element.getBoundingClientRect().bottom > viewport().top);
+      const anchorKey = items.find(record => record.element === first)?.key;
+      const job = { key, attempts: 0, timer: 0, route, container: scroller,
+        stage: item.element?.isConnected ? 'calibrate' : 'load', saved: position(), anchorKey, originalSelection,
+        offset: first ? first.getBoundingClientRect().top - viewport().top : 0 };
+      jump = job;
+      if (job.stage === 'load') loadTarget(job);
+      else { move(item.top - 24); correctJump(); }
+    }
+
+    function cancelJump(restorePosition) {
+      const job = jump;
+      waitingKey = null;
+      if (!job) return;
+      win.clearTimeout(job.timer);
+      jump = null;
+      if (job.stage === 'load') {
+        if (restorePosition) { selectedKey = null; restore(job); }
+        toast('已停止加载目标节点。');
+      } else toast('');
     }
 
     function correctJump() {
       const job = jump;
-      if (!job || job.route !== route) return;
+      if (!job || job.stage !== 'calibrate' || job.route !== route) return;
       win.clearTimeout(job.timer);
       const item = cache.get(job.key);
       if (!item) { jump = null; return; }
@@ -609,18 +818,72 @@
         const delta = item.element.getBoundingClientRect().top - viewport().top - 24;
         const destination = Math.max(0, Math.min(geometry.max, position() + delta));
         if (Math.abs(destination - position()) > 3) move(destination);
-        else { jump = null; return; }
-      } else {
-        move(item.top - 24);
-      }
+        else { jump = null; toast(''); return; }
+      } else move(item.top - 24);
       if (++job.attempts >= 12) {
         jump = null;
-        toast('该节点尚未挂载，位置为近似值；可补全索引后重试。');
+        toast('目标位置仍在调整，可稍后重试。');
       } else job.timer = win.setTimeout(() => {
         if (jump !== job) return;
-        measure();
-        refresh();
+        measure(); refresh();
       }, 180);
+    }
+
+    async function loadTarget(job) {
+      const started = Date.now();
+      let steps = 0, covered = 0, topStable = 0, previousEnd = null, estimated = false;
+      toast('正在加载目标节点… · Esc 或再次点击可取消', true);
+      try {
+        while (jump === job && job.route === route && job.container === scroller &&
+               scroller?.isConnected && !doc.hidden && steps++ < 600 && Date.now() - started < (options.loadTimeout || 120000)) {
+          measure(); refresh();
+          const item = cache.get(job.key);
+          if (item?.element?.isConnected) {
+            job.stage = 'calibrate'; correctJump(); return;
+          }
+          const targetIndex = indexes.get(job.key);
+          if (targetIndex === undefined) break;
+          const first = positioned[0], last = positioned.at(-1);
+          const firstIndex = indexes.get(first?.key), lastIndex = indexes.get(last?.key);
+          const pendingTarget = mounted.some(element => `turn:${element.getAttribute('data-turn-key') || element.getAttribute('data-testid')}` === job.key);
+          const older = item.top < 0 || firstIndex !== undefined && targetIndex < firstIndex && position() <= 2;
+          if (older && !pendingTarget) {
+            toast(`正在加载更早的历史以定位第 ${targetIndex + 1} 轮… · Esc 可取消`, true);
+            move(0);
+            await pause(300);
+            if (jump !== job) return;
+            refresh();
+            const end = transcriptEnd;
+            topStable = !earlierLoading() && end === previousEnd ? topStable + 1 : 0;
+            previousEnd = end;
+            if (topStable >= 8) break;
+            estimated = false;
+            continue;
+          }
+          topStable = 0;
+          if (pendingTarget) { covered = 0; await pause(180); continue; }
+          const step = Math.max(120, geometry.height * .65);
+          let destination;
+          if (!estimated) { destination = Math.max(0, item.top - 24); estimated = true; }
+          else if (firstIndex !== undefined && targetIndex < firstIndex) destination = Math.max(0, position() - step);
+          else if (lastIndex !== undefined && targetIndex > lastIndex) destination = Math.min(geometry.max, position() + step);
+          else {
+            // Neighbouring mounted IDs bracket the target: allow hydration to settle,
+            // then report a missing/changed branch instead of loading the entire transcript.
+            if (++covered >= 12) break;
+            destination = Math.max(0, item.top - 24);
+          }
+          move(destination);
+          await pause(240);
+        }
+        if (jump === job) {
+          jump = null; selectedKey = null;
+          restore(job);
+          toast('暂未找到该节点，可能仍在加载或当前分支已变化；缓存节点已保留，可重试。');
+        }
+      } catch {
+        if (jump === job) { jump = null; selectedKey = null; restore(job); toast('目标加载中断，可稍后重试。'); }
+      }
     }
 
     const pause = ms => new Promise(resolve => win.setTimeout(resolve, ms));
@@ -630,7 +893,12 @@
       return /loading\s+(earlier|older|previous)|加载.*(更早|历史|之前)|(更早|历史|之前).*加载/i.test(leading.textContent.slice(0, 180));
     }
     function updateHistoryState() {
-      if (earlierLoading()) { historyComplete = false; return; }
+      // Loading already cached pages does not mean the index is incomplete.
+      // A sentinel above the oldest known mounted ID does signal unknown history.
+      if (earlierLoading()) {
+        if (positioned.some(item => item.key === chronology[0])) historyComplete = false;
+        return;
+      }
       if (!items.length || historyComplete) return;
       // Cached intervals survive virtual unmounts. An uninterrupted range from
       // transcript start to end means there are no undiscovered history nodes.
@@ -727,6 +995,7 @@
           scan = null;
           if (bottomPasses >= 2) {
             historyComplete = !earlierLoading() && !job.pendingKeys.size;
+            markDirty();
             // Unmounting and delayed hydration are not proof that a turn was deleted.
             // Retain discovered entries; a real conversation switch clears the cache.
             refresh();
@@ -776,21 +1045,22 @@
     function interrupt(event) {
       if (event.composedPath().includes(host) && event.key !== "Escape") return;
       if (event.type === 'keydown' && !['Escape', 'PageUp', 'PageDown', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
-      releaseSelection();
-      cancelScan(event.type === 'keydown' && event.key === 'Escape');
+      const restorePosition = event.type === 'keydown' && event.key === 'Escape';
+      cancelJump(restorePosition);
+      if (!restorePosition) releaseSelection();
+      cancelScan(restorePosition);
     }
     function releaseSelection() {
       stopRailMotion();
       restoreJob = null;
       selectedKey = null;
-      if (jump) win.clearTimeout(jump.timer);
-      jump = null;
+      cancelJump(false);
     }
     function pointerIntent(event) {
       if (!event.composedPath().includes(host)) releaseSelection();
     }
     function visible() {
-      if (doc.hidden) { stopRailMotion(); cancelScan(false); return; }
+      if (doc.hidden) { flushSaved(); releaseSelection(); cancelScan(false); return; }
       bind();
       schedule();
     }
@@ -806,6 +1076,7 @@
     marks.addEventListener('click', event => {
       const button = event.target.closest('button');
       if (button === indexButton) buildIndex();
+      else if (jump?.stage === 'load' && jump.key === button?.dataset.key) cancelJump(true);
       else navigate(button?.dataset.key);
     });
     marks.addEventListener('keydown', event => {
@@ -832,18 +1103,23 @@
     doc.addEventListener('visibilitychange', visible);
     win.addEventListener('resize', schedule, { passive: true });
     win.addEventListener('popstate', bind);
+    win.addEventListener('pagehide', flushSaved);
     const routeSignal = () => win.setTimeout(() => { if (checkRoute()) bind(); }, 0);
     win.navigation?.addEventListener('navigatesuccess', routeSignal);
     theme.observe(doc.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme', 'data-color-scheme'] });
     syncTheme();
+    hydrate();
+    render();
     bind();
 
     // Returned controller is used by the local browser fixture; no page globals or diagnostics loop.
     return {
       stats,
-      snapshot: () => ({ count: items.length, activeKey, selectedKey, mountedMarks: buttons.size, indexing: Boolean(scan), animating: Boolean(railMotion), historyComplete,
+      flush: flushSaved,
+      snapshot: () => ({ count: items.length, activeKey, selectedKey, mountedMarks: buttons.size, indexing: Boolean(scan), loadingTarget: jump?.stage === "load", animating: Boolean(railMotion), historyComplete,
         entries: items.map(({ key, top, prompt }) => ({ key, top, prompt })) }),
       stop() {
+        flushSaved();
         stopped = true;
         detach();
         boot.disconnect();
@@ -859,10 +1135,11 @@
         doc.removeEventListener('visibilitychange', visible);
         win.removeEventListener('resize', schedule);
         win.removeEventListener('popstate', bind);
+        win.removeEventListener('pagehide', flushSaved);
         win.navigation?.removeEventListener('navigatesuccess', routeSignal);
         host.remove();
       },
     };
   }
-  return { activeAt, railRange, prefix, threadIdentity, mergeTimeline, start };
+  return { activeAt, railRange, prefix, threadIdentity, mergeTimeline, decodeSaved, encodeSaved, createIndexStore, cacheKey, mergeSaved, start };
 });

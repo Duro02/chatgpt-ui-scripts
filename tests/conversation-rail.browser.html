@@ -16,7 +16,7 @@
   #results{position:fixed;left:16px;top:80px;width:240px;background:#171715e8;padding:12px;font:12px/1.5 monospace;max-height:70vh;overflow:auto;z-index:60}
   #results:empty{display:none}.sr-only{display:none}
 </style>
-<header><h1>ChatGPT 横线导航 · 测试页面</h1><button id="all">运行全部回归</button><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="railscroll">验证长列表滚动</button><button id="animation">验证焦点动画</button><button id="selection">验证跳转高亮</button><button id="latest">验证最新节点保留</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button><button id="demo">展示长对话</button><button id="light">切换明暗</button></header>
+<header><h1>ChatGPT 横线导航 · 测试页面</h1><button id="persist">验证缓存与按需加载</button><button id="all">运行全部回归</button><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="railscroll">验证长列表滚动</button><button id="animation">验证焦点动画</button><button id="selection">验证跳转高亮</button><button id="latest">验证最新节点保留</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button><button id="demo">展示长对话</button><button id="light">切换明暗</button></header>
 <div id="scroll"><main id="content" data-thread-find-target="conversation"></main></div>
 <footer><textarea aria-label="草稿">测试草稿：索引和跳转应保留这段输入</textarea></footer><pre id="results"></pre>
 <script>window.module={exports:{}};</script><script src="../chatgpt-conversation-rail.user.js"></script>
@@ -41,7 +41,7 @@ function setup(n,{virtual=false,reverse=false,legacy=false,omitTailWhileIndexing
       for(let i=start;i<Math.min(n,start+7);i++){const el=turn(i);el.style.height='220px';el.style.minHeight='220px';if(omitTailWhileIndexing&&controller?.snapshot().indexing&&i>=n-3)el.replaceChildren();box.append(el);}content.replaceChildren(box);};
     scroll.addEventListener('scroll',virtualListener);virtualListener();
   }else{for(let i=0;i<n;i++)content.append(turn(i,legacy));}
-  controller=api.start(document);return controller;
+  controller=api.start(document,{storage:null});return controller;
 }
 function log(message){results.textContent+=message+'\n';}
 function check(condition,message){if(!condition)throw Error(message);log('PASS '+message);}
@@ -99,7 +99,7 @@ async function run(virtualOnly=false){results.textContent='';document.querySelec
     shadow().querySelector('.index').click();await waitUntil(()=>!c.snapshot().indexing,125000);await sleep(500);
     check(c.snapshot().count===16,'索引等待服务器分页完成');
     c.stop();scroll.after(content);scroll.style.display='none';content.replaceChildren();for(let i=0;i<20;i++)content.append(turn(i));
-    c=api.start(document);await sleep(400);
+    c=api.start(document,{storage:null});await sleep(400);
     const navRect=shadow().querySelector('nav').getBoundingClientRect();check(navRect.top>=0&&navRect.bottom<innerHeight,'页面根滚动容器布局');
     shadow().querySelector('.mark[data-key="turn:message-10"]').click();await sleep(800);
     check(Math.abs(content.querySelector('[data-turn-key="message-10"]').getBoundingClientRect().top-24)<4,'页面根滚动容器跳转');
@@ -107,6 +107,53 @@ async function run(virtualOnly=false){results.textContent='';document.querySelec
     log('ALL TESTS PASSED');
   }catch(e){log('FAIL '+e.stack);}finally{document.querySelector('#run').disabled=false;}
 }
+async function persistenceRegression(){
+  results.textContent='';
+  const savedPath=location.pathname, thread='persistence-'+Date.now();
+  const pendingTimers=new Set();let pagingListener=null;
+  const later=(fn,ms)=>{const timer=setTimeout(()=>{pendingTimers.delete(timer);fn();},ms);pendingTimers.add(timer);};
+  const cleanTimers=()=>{for(const timer of pendingTimers)clearTimeout(timer);pendingTimers.clear();};
+  try {
+    controller?.stop();history.replaceState({},'', '/c/'+thread);
+    setup(40);controller.stop();let c=controller=api.start(document);
+    await waitUntil(()=>c.stats.refreshes>=2);c.flush();
+    check(JSON.parse(localStorage.getItem(api.cacheKey(thread))).entries.length===40,'保存全部节点 ID、顺序和短摘要');
+    c.stop();let begin=30,requests=0,busy=false;
+    function renderPage(){content.replaceChildren();if(begin>0){const loader=document.createElement('div');loader.innerHTML='<div role="status">正在加载更早的消息…</div>';content.append(loader);}for(let i=begin;i<40;i++)content.append(turn(i));}
+    function page(){if(scroll.scrollTop>2||begin<=0||busy)return;busy=true;requests++;later(()=>{begin=Math.max(0,begin-5);busy=false;renderPage();scroll.scrollTop=0;later(page,400);},650);}
+    renderPage();scroll.scrollTop=scroll.scrollHeight;c=controller=api.start(document);
+    pagingListener=page;scroll.addEventListener('scroll',pagingListener);
+    check(c.snapshot().count===40,'初始化立即恢复全部已缓存节点');
+    check(shadow().querySelector('.index').hidden,'已完整缓存的索引不会因正文分页出现红线');
+    check(shadow().querySelector('[data-unloaded]'),'尚未挂载的缓存节点显示较暗横线');
+    const first=shadow().querySelector('.mark[data-key]');first.focus();first.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));
+    for(let i=0;i<18;i++)shadow().activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
+    shadow().activeElement.click();check(c.snapshot().loadingTarget,'点击缓存节点进入按需加载而非全量扫描');
+    await waitUntil(()=>!c.snapshot().loadingTarget&&content.querySelector('[data-turn-key="message-18"]')&&Math.abs(content.querySelector('[data-turn-key="message-18"]').getBoundingClientRect().top-scroll.getBoundingClientRect().top-24)<4,15000);
+    check(c.snapshot().activeKey==='turn:message-18'&&Math.abs(content.querySelector('[data-turn-key="message-18"]').getBoundingClientRect().top-scroll.getBoundingClientRect().top-24)<4,'逐批加载后精确定位并高亮目标');
+    await sleep(900);check(requests===3&&begin===15,'找到目标即停止，不继续加载全部更早历史');
+    check(c.snapshot().count===40,'按需加载保留最新缓存节点和总数');
+    const saved=scroll.scrollTop;shadow().querySelector('.mark[data-key]').focus();shadow().activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));shadow().activeElement.click();await sleep(60);
+    document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await sleep(500);
+    check(!c.snapshot().loadingTarget&&Math.abs(scroll.scrollTop-saved)<4,'Esc 取消按需加载并恢复阅读位置');
+    cleanTimers();scroll.removeEventListener('scroll',pagingListener);pagingListener=null;c.stop();
+    c=controller=api.start(document,{loadTimeout:1200});
+    shadow().querySelector('.mark[data-key]').focus();shadow().activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));shadow().activeElement.click();
+    await waitUntil(()=>!c.snapshot().loadingTarget,5000);
+    check(!c.snapshot().loadingTarget&&c.snapshot().count===40,'历史请求停滞时有限退出并保留缓存');
+    c.stop();history.replaceState({},'', '/c/'+thread+'-other');content.replaceChildren(turn(500));
+    c=controller=api.start(document);check(c.snapshot().count===1,'其他会话不会读入本会话缓存');c.stop();
+    history.replaceState({},'', '/c/'+thread+'-blocked');
+    c=controller=api.start(document,{storage:{getItem(){throw Error('storage denied');},setItem(){throw Error('quota');}}});c.flush();
+    check(c.snapshot().count===1,'存储不可用时仍可使用本页导航');c.stop();
+    log('ALL PERSISTENCE TESTS PASSED');
+  }catch(e){log('FAIL '+e.stack);}finally{
+    cleanTimers();if(pagingListener)scroll.removeEventListener('scroll',pagingListener);
+    controller?.stop();history.replaceState({},'',savedPath);
+    for(const id of [thread,thread+'-other',thread+'-blocked'])localStorage.removeItem(api.cacheKey(id));
+  }
+}
+document.querySelector('#persist').onclick=persistenceRegression;
 async function railScrollRegression(){
   results.textContent='';
   try {
@@ -231,7 +278,7 @@ async function hydrationRegression(){
     content.dataset.audit='hydrated';content.append(document.createElement('span'));
     await sleep(500);
     check(c.snapshot().count===5&&!shadow().querySelector('nav').hidden,'项目地址规范化后保留全部节点');
-    c.stop();content.removeAttribute('data-thread-find-target');c=api.start(document);await sleep(400);
+    c.stop();content.removeAttribute('data-thread-find-target');c=api.start(document,{storage:null});await sleep(400);
     const preferred=document.createElement('section');preferred.dataset.threadFindTarget='conversation';
     preferred.append(...content.children);content.append(preferred);await sleep(500);
     preferred.append(turn(5));await sleep(400);
@@ -265,7 +312,7 @@ document.querySelector('#hydration').onclick=hydrationRegression;
 document.querySelector('#all').onclick=async()=>{
   const button=document.querySelector('#all');button.disabled=true;const combined=[];
   try {
-    for(const [name,test] of [['latest',latestRegression],['selection',selectionRegression],['animation',animationRegression],['rail scroll',railScrollRegression],['hydration',hydrationRegression],['full performance and virtual history',()=>run()]]){
+    for(const [name,test] of [['persistence',persistenceRegression],['latest',latestRegression],['selection',selectionRegression],['animation',animationRegression],['rail scroll',railScrollRegression],['hydration',hydrationRegression],['full performance and virtual history',()=>run()]]){
       await test();combined.push(name+'\n'+results.textContent);
       results.textContent=combined.join('\n\n');
       if(combined.at(-1).includes('FAIL '))return;
@@ -280,5 +327,5 @@ document.querySelector('#demo').onclick=()=>{results.textContent='';if(content.p
 document.querySelector('#light').onclick=()=>{document.documentElement.classList.toggle('dark');const dark=document.documentElement.classList.contains('dark');
   document.documentElement.style.colorScheme=dark?'dark':'light';document.documentElement.style.setProperty('--text-primary',dark?'#eeeae2':'#292722');
   document.documentElement.style.setProperty('--bg-elevated-primary',dark?'#302f2c':'#f3f0e9');document.body.style.background=dark?'#20201e':'#f7f5ef';document.body.style.color=dark?'#eeeae2':'#292722';};
-setup(120);
+setup(12);
 </script></html>

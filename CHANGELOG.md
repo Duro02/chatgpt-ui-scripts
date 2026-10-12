@@ -1,5 +1,13 @@
 # 更新记录
 
+## Conversation Rail 0.2.0 — 2026-10-12
+
+- Persist per-conversation IDs, order, short previews and approximate coordinates in bounded localStorage snapshots, restoring the rail before older transcript content mounts.
+- Load cached targets on demand through page scrolling and older-history pagination, stop at the requested ID, then calibrate its position. Support cancellation and bounded failure handling without a full history scan.
+- Keep complete saved indexes separate from the page's current history-loading sentinel. Dim unloaded entries; reserve the red mark for unknown history.
+- Debounce snapshot writes to idle time, flush on page exit, isolate conversations and retain at most 32 recent indexes within a size budget. Storage errors preserve the in-memory rail.
+- Add schema/eviction tests, paging/cancellation regressions and a real document reload fixture.
+
 ## Conversation Rail 0.1.5 — 2026-10-12
 
 - Scroll overflowing rails with wheel/touch and keyboard arrows, PageUp/PageDown, Home/End; fade clipped edges as an overflow cue.

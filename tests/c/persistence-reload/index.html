@@ -1,0 +1,16 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>持久化导航 · 刷新验证</title>
+<style>body{margin:0;background:#20201e;color:#eeeae2;font:15px/1.6 system-ui;--text-primary:#eeeae2;--text-tertiary:#969187;--bg-elevated-primary:#302f2c}header{height:64px;padding:12px 24px;box-sizing:border-box}button{font:inherit;cursor:pointer}#scroll{height:calc(100vh - 130px);overflow:auto;overflow-anchor:none}main{max-width:650px;margin:auto}.turn{height:220px;padding:20px;box-sizing:border-box;border-bottom:1px solid #ffffff18}[data-user-message-bubble]{background:#35332e;padding:12px;border-radius:16px}.markdown{padding:12px;max-height:90px;overflow:hidden}#result{position:fixed;top:65px;left:15px;background:#171715e8;padding:10px;max-width:340px;z-index:80;white-space:pre-wrap;font:12px/1.6 monospace}</style>
+<header><button id="seed">保存索引，准备刷新</button> <button id="idle">检查空闲性能</button> <button id="cleanup">清理测试缓存</button></header><div id="scroll"><main data-thread-find-target="conversation"></main></div><pre id="result"></pre>
+<script>window.module={exports:{}};</script><script src="../../../chatgpt-conversation-rail.user.js"></script><script>
+const api=module.exports;delete window.module;
+const thread='persistence-reload',ready='duro-fixture-reload-ready';let c;
+const main=document.querySelector('main'),scroll=document.querySelector('#scroll'),result=document.querySelector('#result');
+function fill(first){main.replaceChildren();if(first){const loader=document.createElement('div');loader.innerHTML='<div role="status">正在加载更早的消息…</div>';main.append(loader);}for(let i=first;i<30;i++){const e=document.createElement('div');e.className='turn';e.dataset.turnKey='reload-'+i;e.innerHTML='<div data-user-message-bubble>第 '+(i+1)+' 轮：缓存恢复测试</div><div class="markdown">'+'这是一段用于刷新验证的短摘要。'.repeat(20)+'</div>';main.append(e);}scroll.scrollTop=scroll.scrollHeight;}
+function check(ok,text){result.textContent+=(ok?'PASS ':'FAIL ')+text+'\n';}
+if(sessionStorage.getItem(ready)){
+ fill(25);c=api.start(document);check(c.snapshot().count===30,'真实刷新后恢复 30 个节点');check(main.querySelectorAll('[data-turn-key]').length===5,'正文只挂载最近 5 轮');check(document.getElementById('duro-conversation-rail').shadowRoot.querySelector('.index').hidden,'正文分页不改变完整索引状态');
+}else{fill(0);result.textContent='点击保存索引，再刷新此页。';}
+document.querySelector('#seed').onclick=()=>{c?.stop();result.textContent='';fill(0);c=api.start(document);c.flush();c.stop();sessionStorage.setItem(ready,'1');result.textContent='READY：已保存 30 个节点，可以刷新。';};
+document.querySelector('#idle').onclick=async()=>{await new Promise(r=>setTimeout(r,700));const before={...c.stats};await new Promise(r=>setTimeout(r,1700));check(c.stats.storageWrites===before.storageWrites&&c.stats.storageReads===before.storageReads,'空闲时没有持续存储读写');check(c.snapshot().count===30,'缓存节点保持完整');};
+document.querySelector('#cleanup').onclick=()=>{c?.stop();sessionStorage.removeItem(ready);localStorage.removeItem(api.cacheKey(thread));result.textContent='CLEANUP PASSED';};
+</script></html>
