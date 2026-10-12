@@ -4,6 +4,7 @@
   :root{--text-primary:#eeeae2;--text-tertiary:#969187;--bg-elevated-primary:#302f2c;--border-light:#ffffff22;color-scheme:dark}
   *{box-sizing:border-box}body{margin:0;background:#20201e;color:#eeeae2;font:15px/1.7 system-ui}
   header{height:64px;display:flex;align-items:center;gap:18px;padding:10px 28px;background:#181817}
+  header{overflow-x:auto;white-space:nowrap}header>*{flex-shrink:0}
   button{cursor:pointer;font:inherit;padding:5px 12px}h1{font-size:16px;margin:0}
   #scroll{height:calc(100vh - 160px);overflow-y:auto;position:relative;overflow-anchor:none}
   #content{width:min(760px,calc(100% - 120px));margin:0 auto}
@@ -15,7 +16,7 @@
   #results{position:fixed;left:16px;top:80px;width:240px;background:#171715e8;padding:12px;font:12px/1.5 monospace;max-height:70vh;overflow:auto;z-index:60}
   #results:empty{display:none}.sr-only{display:none}
 </style>
-<header><h1>ChatGPT 横线导航 · 测试页面</h1><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="animation">验证焦点动画</button><button id="selection">验证跳转高亮</button><button id="latest">验证最新节点保留</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button><button id="demo">展示长对话</button><button id="light">切换明暗</button></header>
+<header><h1>ChatGPT 横线导航 · 测试页面</h1><button id="all">运行全部回归</button><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="railscroll">验证长列表滚动</button><button id="animation">验证焦点动画</button><button id="selection">验证跳转高亮</button><button id="latest">验证最新节点保留</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button><button id="demo">展示长对话</button><button id="light">切换明暗</button></header>
 <div id="scroll"><main id="content" data-thread-find-target="conversation"></main></div>
 <footer><textarea aria-label="草稿">测试草稿：索引和跳转应保留这段输入</textarea></footer><pre id="results"></pre>
 <script>window.module={exports:{}};</script><script src="../chatgpt-conversation-rail.user.js"></script>
@@ -24,12 +25,13 @@ const api=window.module.exports;delete window.module;
 let controller, virtualListener;
 const scroll=document.querySelector('#scroll'), content=document.querySelector('#content'), results=document.querySelector('#results');
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function waitUntil(predicate,timeout=5000){const deadline=performance.now()+timeout;while(!predicate()&&performance.now()<deadline)await sleep(50);}
 function turn(i,legacy=false){const el=document.createElement('div');el.className='turn';
   if(legacy){el.dataset.testid='conversation-turn-'+(i*2);el.dataset.turn='user';}
   else el.dataset.turnKey='message-'+i;
   el.innerHTML='<h4 class="sr-only">你说：</h4><div data-user-message-bubble="true">第 '+(i+1)+' 轮：长期执行中，哪些变化需要重新理解任务？</div><div class="markdown"><p>常规步骤由固定规则执行。新的目标或授权超出原规则时，再重新确定方案。这是用于验证导航的示例内容。</p></div>';return el;}
 function setup(n,{virtual=false,reverse=false,legacy=false,omitTailWhileIndexing=false}={}){
-  controller?.stop();if(virtualListener)scroll.removeEventListener('scroll',virtualListener);virtualListener=null;
+  controller?.stop();if(content.parentElement!==scroll){scroll.append(content);window.scrollTo(0,0);}if(virtualListener)scroll.removeEventListener('scroll',virtualListener);virtualListener=null;
   content.replaceChildren();content.dataset.audit='';scroll.style.display=reverse?'flex':'block';scroll.style.flexDirection=reverse?'column-reverse':'';
   content.style.flexShrink=reverse?'0':'';content.style.height='';scroll.scrollTop=0;
   if(virtual){content.style.height=(n*220)+'px';let first=-1;
@@ -50,6 +52,7 @@ async function run(virtualOnly=false){results.textContent='';document.querySelec
     if(!virtualOnly){
     c=setup(1000);await sleep(400);
     check(c.snapshot().count===1000,'1,000 轮索引');check(c.snapshot().mountedMarks<=52,'横线 DOM 有界（≤52）');
+    await waitUntil(()=>c.stats.refreshes>=2);
     const before={...c.stats}, start=performance.now();
     for(let i=0;i<100;i++){scroll.scrollTop=i*300;await new Promise(requestAnimationFrame);}
     await sleep(250);const after={...c.stats};
@@ -76,7 +79,7 @@ async function run(virtualOnly=false){results.textContent='';document.querySelec
     c=setup(80,{virtual:true,reverse:true});await sleep(400);
     const initialCount=c.snapshot().count;check(initialCount<80,'新版虚拟列表只挂载附近消息');
     const saved=scroll.scrollTop;shadow().querySelector('.index').click();
-    for(let i=0;i<220&&c.snapshot().indexing;i++)await sleep(120);
+    await waitUntil(()=>!c.snapshot().indexing,125000);
     await sleep(800);
     if(c.snapshot().count!==80){log('Missing: '+Array.from({length:80},(_,i)=>'turn:message-'+i).filter(key=>!c.snapshot().entries.some(item=>item.key===key)).join(','));log('Mount ranges: '+content.dataset.audit);}
     check(c.snapshot().count===80,'负 scrollTop 虚拟列表全量索引');
@@ -93,7 +96,7 @@ async function run(virtualOnly=false){results.textContent='';document.querySelec
     shadow().querySelector('.mark[data-key]').focus();check(shadow().querySelector('.answer').textContent==='新版回答摘要验证','新版回答摘要标记兼容');
     c=setup(8);const loader=document.createElement('div');loader.innerHTML='<div role="status">正在加载更早的消息…</div>';content.prepend(loader);
     setTimeout(()=>{for(let i=7;i>=0;i--)content.insertBefore(turn(200+i),loader.nextSibling);loader.remove();},900);
-    shadow().querySelector('.index').click();for(let i=0;i<300&&c.snapshot().indexing;i++)await sleep(120);await sleep(500);
+    shadow().querySelector('.index').click();await waitUntil(()=>!c.snapshot().indexing,125000);await sleep(500);
     check(c.snapshot().count===16,'索引等待服务器分页完成');
     c.stop();scroll.after(content);scroll.style.display='none';content.replaceChildren();for(let i=0;i<20;i++)content.append(turn(i));
     c=api.start(document);await sleep(400);
@@ -104,6 +107,40 @@ async function run(virtualOnly=false){results.textContent='';document.querySelec
     log('ALL TESTS PASSED');
   }catch(e){log('FAIL '+e.stack);}finally{document.querySelector('#run').disabled=false;}
 }
+async function railScrollRegression(){
+  results.textContent='';
+  try {
+    const c=setup(1000);await sleep(400);
+    const rail=shadow().querySelector('.scroller');const bodyStart=scroll.scrollTop;
+    check(rail.scrollHeight>rail.clientHeight,'千轮节点列表有独立上下滚动范围');
+    const first=shadow().querySelector('.mark[data-key]');first.focus();
+    const start=rail.scrollTop,samples=[];
+    first.dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true}));
+    for(let i=0;i<10;i++){await new Promise(requestAnimationFrame);samples.push(rail.scrollTop);}
+    await waitUntil(()=>!c.snapshot().animating);
+    const end=rail.scrollTop;
+    check(matchMedia('(prefers-reduced-motion:reduce)').matches||samples.some(top=>top>start+1&&top<end-1),'跨越可见区域时列表平滑滚动');
+    check(shadow().activeElement.dataset.key==='turn:message-999','键盘 End 可访问尚未渲染的最后节点');
+    check(scroll.scrollTop===bodyStart,'浏览节点列表不会滚动正文');
+    shadow().activeElement.click();
+    await waitUntil(()=>!c.snapshot().animating);
+    check(c.snapshot().activeKey==='turn:message-999'&&Math.abs(new DOMMatrixReadOnly(getComputedStyle(shadow().querySelector('.focus-line')).transform).m42-9990)<1,'列表末尾焦点与最后节点一致');
+    check(c.snapshot().mountedMarks<=52,'动画和长列表依然限制横线 DOM 数量');
+    shadow().activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'PageUp',bubbles:true}));
+    await waitUntil(()=>!c.snapshot().animating);
+    check(shadow().activeElement.dataset.key!=='turn:message-999'&&rail.scrollTop<end,'PageUp 向上浏览节点');
+    shadow().activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));await sleep(60);
+    rail.dispatchEvent(new WheelEvent('wheel',{bubbles:true,composed:true}));await sleep(400);
+    check(!c.snapshot().animating,'手动滚动可以打断自动列表动画');
+    const stoppedFrames=c.stats.railAnimationFrames;await sleep(400);
+    check(c.stats.railAnimationFrames===stoppedFrames,'动画取消后停止请求新帧');
+    shadow().activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));
+    await waitUntil(()=>!c.snapshot().animating);
+    check(rail.scrollTop<2,'Home 回到列表顶部');
+    log('ALL RAIL SCROLL TESTS PASSED');
+  }catch(e){log('FAIL '+e.stack);}
+}
+document.querySelector('#railscroll').onclick=railScrollRegression;
 async function animationRegression(){
   results.textContent='';
   try {
@@ -112,7 +149,7 @@ async function animationRegression(){
     const y=()=>new DOMMatrixReadOnly(getComputedStyle(line).transform).m42;
     const before=y(), samples=[];
     shadow().querySelector('.mark[data-key="turn:message-7"]').click();
-    for(let i=0;i<10;i++){await new Promise(requestAnimationFrame);samples.push(y());}
+    for(let i=0;i<12;i++){await new Promise(requestAnimationFrame);samples.push(y());}
     await sleep(350);
     const reduced=matchMedia('(prefers-reduced-motion:reduce)').matches;
     check(reduced||samples.some(value=>value>before+1&&value<69),'白色焦点连续经过中间位置');
@@ -120,7 +157,7 @@ async function animationRegression(){
     check(shadow().querySelectorAll('.focus-line').length===1,'单一白色焦点，不生成多个闪烁高亮');
     shadow().querySelector('.mark[data-key="turn:message-0"]').click();await sleep(80);
     shadow().querySelector('.mark[data-key="turn:message-5"]').click();
-    for(let i=0;i<40&&Math.abs(y()-50)>1;i++)await sleep(50);
+    await waitUntil(()=>Math.abs(y()-50)<1);
     check(Math.abs(y()-50)<1&&c.snapshot().activeKey==='turn:message-5','快速连续点击平滑转向最终目标');
     const beforeStats={...c.stats};await sleep(500);
     check(c.stats.refreshes===beforeStats.refreshes&&c.stats.geometryReads===beforeStats.geometryReads,'动画结束后无持续扫描或几何测量');
@@ -141,10 +178,10 @@ async function selectionRegression(){
     shadow().querySelector('.mark[data-key="turn:message-0"]').click();await sleep(600);clearInterval(capture);
     check(active.every(key=>key==='turn:message-0'),'跳转校准过程中不高亮经过的其他节点');
     document.dispatchEvent(new WheelEvent('wheel',{bubbles:true}));scroll.scrollTop=scroll.scrollHeight;
-    for(let i=0;i<40&&c.snapshot().activeKey==='turn:message-0';i++)await sleep(50);
+    await waitUntil(()=>c.snapshot().activeKey!=='turn:message-0');
     check(c.snapshot().selectedKey===null&&c.snapshot().activeKey!=='turn:message-0','用户手动滚动后恢复位置判断');
     c=setup(20,{virtual:true,reverse:true});await sleep(400);shadow().querySelector('.index').click();
-    for(let i=0;i<160&&c.snapshot().indexing;i++)await sleep(120);await sleep(400);
+    await waitUntil(()=>!c.snapshot().indexing,125000);await sleep(400);
     shadow().querySelector('.mark[data-key]').focus();shadow().activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));
     shadow().activeElement.click();await sleep(1500);
     check(c.snapshot().activeKey==='turn:message-0','虚拟未挂载节点校准后保持目标高亮');
@@ -159,11 +196,19 @@ async function latestRegression(){
   try {
     let c=setup(40,{virtual:true,reverse:true,omitTailWhileIndexing:true});await sleep(400);
     check(c.snapshot().entries.some(item=>item.key==='turn:message-39'),'扫描前已发现最新节点');
+    shadow().querySelector('nav').dispatchEvent(new PointerEvent('pointerenter'));
     shadow().querySelector('.index').click();
-    for(let i=0;i<220&&c.snapshot().indexing;i++)await sleep(120);
+    await waitUntil(()=>!c.snapshot().indexing,125000);
     await sleep(600);
     check(c.snapshot().count===40,'完整扫描不误删底部延迟挂载的最新三轮');
     check(c.snapshot().entries.at(-1).key==='turn:message-39','最新节点仍在时间线末端');
+    await waitUntil(()=>!c.snapshot().animating);
+    await waitUntil(()=>{
+      const mark=shadow().querySelector('.mark[data-key="turn:message-39"]');const rect=shadow().querySelector('.scroller').getBoundingClientRect();
+      return !c.snapshot().animating&&mark&&mark.getBoundingClientRect().top>=rect.top-2&&mark.getBoundingClientRect().bottom<=rect.bottom+2;
+    });
+    const lastMark=shadow().querySelector('.mark[data-key="turn:message-39"]');const railRect=shadow().querySelector('.scroller').getBoundingClientRect();
+    check(lastMark&&lastMark.getBoundingClientRect().top>=railRect.top-2&&lastMark.getBoundingClientRect().bottom<=railRect.bottom+2,'扫描恢复阅读位置后自动展示末端节点，鼠标停留在导航也不阻止');
     c=setup(5);await sleep(300);
     content.style.height='6600px';const box=document.createElement('div');
     for(let i=100;i<105;i++){const e=turn(i);e.style.height='220px';box.append(e);}content.replaceChildren(box);
@@ -205,17 +250,29 @@ async function hydrationRegression(){
     check(getComputedStyle(index,'::before').backgroundColor==='rgb(207, 116, 107)'&&!index.textContent,'历史入口为红线且没有符号按钮');
     setTimeout(()=>{content.insertBefore(turn(20),loader.nextSibling);loader.remove();},900);
     index.click();
-    for(let i=0;i<150&&c.snapshot().indexing;i++)await sleep(120);
+    await waitUntil(()=>!c.snapshot().indexing,125000);
     await sleep(700);
     check(c.snapshot().count===6&&c.snapshot().historyComplete&&index.hidden,'更早历史加载完整后红线消失');
     c=setup(80,{virtual:true});await sleep(400);
     check(!shadow().querySelector('.index').hidden,'存在未发现的虚拟节点时显示红线');
+    await waitUntil(()=>c.stats.refreshes>=2);
     const before={...c.stats};await sleep(500);
     check(c.stats.refreshes===before.refreshes,'历史完整性检测没有空闲轮询');
     log('ALL HYDRATION TESTS PASSED');
   }catch(e){log('FAIL '+e.stack);}finally{history.replaceState({},'',savedPath);}
 }
 document.querySelector('#hydration').onclick=hydrationRegression;
+document.querySelector('#all').onclick=async()=>{
+  const button=document.querySelector('#all');button.disabled=true;const combined=[];
+  try {
+    for(const [name,test] of [['latest',latestRegression],['selection',selectionRegression],['animation',animationRegression],['rail scroll',railScrollRegression],['hydration',hydrationRegression],['full performance and virtual history',()=>run()]]){
+      await test();combined.push(name+'\n'+results.textContent);
+      results.textContent=combined.join('\n\n');
+      if(combined.at(-1).includes('FAIL '))return;
+    }
+    log('ALL REGRESSIONS PASSED');
+  }finally{button.disabled=false;}
+};
 document.querySelector('#run').onclick=()=>run();
 document.querySelector('#virtual').onclick=()=>run(true);
 document.querySelector('#preview').onclick=async()=>{results.textContent='';setup(3);await sleep(400);const response=content.querySelector('.markdown');response.className='';response.setAttribute('data-chatgpt-search-unit-key','fallback-turn-0:2:assistant');response.textContent='新版回答摘要验证';shadow().querySelector('.mark[data-key]').focus();check(shadow().querySelector('.answer').textContent==='新版回答摘要验证','新版回答摘要标记兼容');log('ALL TESTS PASSED');};

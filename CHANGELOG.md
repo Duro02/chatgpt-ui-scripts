@@ -1,5 +1,12 @@
 # 更新记录
 
+## Conversation Rail 0.1.5 — 2026-10-12
+
+- Scroll overflowing rails with wheel/touch and keyboard arrows, PageUp/PageDown, Home/End; fade clipped edges as an overflow cue.
+- Move the white focus and rail viewport together over 260 ms when a target crosses the visible range. Interrupt or retarget ongoing transitions without snapping through unrelated active nodes.
+- Reveal the restored reading focus after history indexing even while the pointer remains over the rail; preserve explicit selections across indexing.
+- Keep rail buttons bounded and perform animation frames only during transitions, without per-frame transcript scans or geometry reads.
+
 ## Conversation Rail 0.1.4 — 2026-10-12
 
 - Animate one white focus line between turns instead of toggling independent white marks.

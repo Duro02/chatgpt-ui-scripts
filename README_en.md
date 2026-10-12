@@ -75,6 +75,7 @@ A standalone rail visually inspired by DSH's TurnNavigator: fixed-pitch horizont
 
 - Click a mark to jump. Arrow keys, Home and End select marks; Enter activates them.
 - When history is incomplete, the first mark is red. Hover to see “Click to load earlier conversation” (Chinese UI text); click to load and index history. The red mark disappears once all history is indexed. This temporarily scrolls the transcript and restores the reading position afterward. Click again or press Esc to cancel; wheel/touch input interrupts scanning. Keep the tab visible while indexing.
+- A clicked turn stays active until manual transcript interaction. One white focus moves smoothly between turns; overflowing rails support wheel/touch and arrows, PageUp/PageDown, Home/End, with synchronized focus and viewport transitions.
 - The index uses the conversation ID, retaining discovered turns across project-prefix changes and transcript container remounts.
 - Default discovery covers mounted or previously visited turns. The index stays in page memory only; reloading starts fresh. Previously discovered entries survive virtual unmounts and delayed hydration; switching conversations clears the cache.
 - Supports current `data-turn-key` and legacy `conversation-turn-*` wrappers, including negative `scrollTop` in a reversed scrollport.
