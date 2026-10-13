@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.2.0
+// @version      0.2.1
 // @description  Persistent conversation navigation with short marks, previews and on-demand history loading.
 // @author       duro
 // @license      MIT
@@ -290,6 +290,7 @@
     let timer = 0, frame = 0, scan = null, jump = null, restoreJob = null, statusTimer = 0;
     let geometry = { origin: 0, height: 0, max: 0, reverse: false };
     let railHeight = 320;
+    let observedStructure = new Map(), observedParents = [];
     const stats = { refreshes: 0, geometryReads: 0, scrollFrames: 0, renders: 0, railAnimationFrames: 0, storageReads: 0, storageWrites: 0 };
     let persistenceAvailable = true;
     let storage = options.storage;
@@ -577,24 +578,28 @@
     }
 
     function watch() {
-      structure.disconnect();
-      const targets = new Set([content]);
+      const targets = new Map([[content, !loaded.length]]);
       for (const element of [...loaded, ...pending]) {
         let parent = element;
         while (parent && parent !== content) {
-          targets.add(parent);
+          if (!targets.has(parent)) targets.set(parent, false);
           parent = parent.parentElement;
         }
       }
-      // Empty/virtualized lists can have structural containers but no loaded user messages yet.
-      for (const target of targets) structure.observe(target, { childList: true });
-      if (!loaded.length) structure.observe(content, { childList: true, subtree: true });
-      for (const target of pending) structure.observe(target, { childList: true, subtree: true });
-      lifecycle.disconnect();
-      let parent = content.parentElement;
-      while (parent) {
-        lifecycle.observe(parent, { childList: true });
-        parent = parent.parentElement;
+      // Resize/stream updates usually keep the same observer topology.
+      // Reconnect only when mounted wrappers, ancestors or subtree modes change.
+      for (const target of pending) targets.set(target, true);
+      if (targets.size !== observedStructure.size || [...targets].some(([target, subtree]) => observedStructure.get(target) !== subtree)) {
+        structure.disconnect();
+        for (const [target, subtree] of targets) structure.observe(target, { childList: true, subtree });
+        observedStructure = targets;
+      }
+      const parents = [];
+      for (let parent = content.parentElement; parent; parent = parent.parentElement) parents.push(parent);
+      if (parents.length !== observedParents.length || parents.some((parent, i) => parent !== observedParents[i])) {
+        lifecycle.disconnect();
+        for (const parent of parents) lifecycle.observe(parent, { childList: true });
+        observedParents = parents;
       }
     }
 
@@ -632,6 +637,8 @@
     }
 
     function refresh() {
+      // Explicit loads/calibration may refresh before an observer's timer fires.
+      win.clearTimeout(timer);
       timer = 0;
       if (stopped || doc.hidden || !content?.isConnected) return;
       if (checkRoute()) return;
@@ -647,7 +654,7 @@
       stats.refreshes += 1;
       const previousComplete = historyComplete;
       const previousHead = chronology[0];
-      let changed = false;
+      let changed = false, added = false;
       measure();
       const scrollRect = viewport();
       // Read geometry together, before rendering or updating any navigation DOM.
@@ -662,6 +669,7 @@
       // An overlapping anchor gives a better translation once it mounts again.
       const shift = overlapping ? overlapping.top - cache.get(overlapping.key).top
         : tailKnown && transcriptEnd !== null ? end - transcriptEnd : 0;
+      const previousPositioned = positioned;
       positioned = measured;
       const live = new Set(measured.map(item => item.key));
       if (Math.abs(shift) > 2) for (const item of cache.values()) {
@@ -669,7 +677,11 @@
       }
       transcriptEnd = end;
       if (measured.some(item => item.bottom >= end - 96)) tailKnown = true;
-      for (const item of cache.values()) if (!live.has(item.key)) item.element = null;
+      // Only the preceding mounted window can have newly unmounted elements.
+      for (const item of previousPositioned) if (!live.has(item.key)) {
+        const record = cache.get(item.key);
+        if (record) record.element = null;
+      }
       loaded = measured.map(item => item.element);
       for (const item of measured) {
         scan?.pendingKeys.delete(item.key);
@@ -681,10 +693,16 @@
         }
         if (!previous || item.prompt !== undefined && (item.prompt !== previous.prompt || (item.answer || '').slice(0, 140) !== (previous.answer || '').slice(0, 140))) changed = true;
         const { user, ...record } = item;
-        cache.set(item.key, { ...previous, ...record });
+        if (previous) Object.assign(previous, record);
+        else { cache.set(item.key, record); added = true; }
       }
-      chronology = mergeTimeline(chronology, measured, cache, scan?.anchor, scan?.atStart);
-      items = chronology.map(key => cache.get(key));
+      // Existing records retain their identity, so layout changes do not need
+      // an O(total cached turns) order copy, array rebuild or key-index rebuild.
+      if (added) {
+        chronology = mergeTimeline(chronology, measured, cache, scan?.anchor, scan?.atStart);
+        items = chronology.map(key => cache.get(key));
+        rebuildIndexes();
+      }
       if (previousHead && chronology[0] !== previousHead) historyComplete = false;
       if (scan) {
         if (measured.length) scan.anchor = measured.at(-1).key;
@@ -694,7 +712,6 @@
         }
       }
       updateHistoryState();
-      rebuildIndexes();
       if (changed || historyComplete !== previousComplete) markDirty();
       watch();
       correctJump();
@@ -734,7 +751,11 @@
     }
 
     function preferredRoot() {
-      return ROOTS.map(selector => doc.querySelector(selector)).find(node => node && !node.closest('[hidden], [aria-hidden="true"]'));
+      for (const selector of ROOTS) {
+        const node = doc.querySelector(selector);
+        if (node && !node.closest('[hidden], [aria-hidden="true"]')) return node;
+      }
+      return null;
     }
 
     function bind() {
@@ -767,8 +788,13 @@
       cancelJump(false);
       structure.disconnect();
       lifecycle.disconnect();
+      observedStructure.clear(); observedParents = [];
       resize.disconnect();
       scroller?.removeEventListener('scroll', onScroll);
+      for (const item of positioned) {
+        const record = cache.get(item.key);
+        if (record) record.element = null;
+      }
       loaded = pending = mounted = positioned = [];
       content = scroller = null;
       render();
@@ -825,7 +851,7 @@
         toast('目标位置仍在调整，可稍后重试。');
       } else job.timer = win.setTimeout(() => {
         if (jump !== job) return;
-        measure(); refresh();
+        refresh();
       }, 180);
     }
 
@@ -836,7 +862,7 @@
       try {
         while (jump === job && job.route === route && job.container === scroller &&
                scroller?.isConnected && !doc.hidden && steps++ < 600 && Date.now() - started < (options.loadTimeout || 120000)) {
-          measure(); refresh();
+          refresh();
           const item = cache.get(job.key);
           if (item?.element?.isConnected) {
             job.stage = 'calibrate'; correctJump(); return;

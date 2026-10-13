@@ -1,5 +1,12 @@
 # 更新记录
 
+## Conversation Rail 0.2.1 — 2026-10-13
+
+- Refresh existing mounted records in place; rebuild chronological arrays and key indexes only when new IDs appear.
+- Clear only the preceding mounted window on unmount, and reconnect observers only when their targets or subtree modes change.
+- Consume queued observer refreshes during explicit refreshes and remove duplicate geometry measurements during target loading/calibration.
+- Add a reproducible jsdom performance/regression harness; measurements cover script/DOM work, excluding browser layout, paint and GPU costs.
+
 ## Conversation Rail 0.2.0 — 2026-10-12
 
 - Persist per-conversation IDs, order, short previews and approximate coordinates in bounded localStorage snapshots, restoring the rail before older transcript content mounts.

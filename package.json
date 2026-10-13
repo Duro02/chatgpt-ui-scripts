@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "scripts": {
+    "test": "node tests/chatgpt-conversation-rail.test.js && node tests/chatgpt-claude-like-separator.test.js && node tests/chatgpt-project-source-preview.test.js && node tests/conversation-rail.performance.test.js"
+  },
+  "devDependencies": { "jsdom": "26.1.0" }
+}

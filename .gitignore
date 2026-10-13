@@ -1,3 +1,4 @@
 *.bak
 CLAUDE.md
 claude-*.user.js
+node_modules/
