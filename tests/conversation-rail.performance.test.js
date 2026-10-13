@@ -132,6 +132,22 @@ function previewRegression(){
   assert.ok(panel.hidden&&root.querySelector('.search-dock').hidden,'pointer exit closes both panels even with a focused result');
   f.close();
 }
+function routeRegression(){
+  const f=fixture(current,100),root=f.d.querySelector('#duro-conversation-rail').shadowRoot;
+  const mark=root.querySelector('.mark[data-key]');
+  assert.equal(f.c.snapshot().count,100);
+  f.w.history.pushState({},'', '/dots/home');
+  assert.equal(f.c.snapshot().count,0,'pushState clears old conversation without DOM mutations');
+  assert.ok(root.querySelector('nav').hidden,'unsupported page does not retain old marks');
+  const before=f.scroll.scrollTop;mark.click();
+  assert.equal(f.scroll.scrollTop,before,'a stale mark cannot scroll the previous conversation');
+  f.w.history.replaceState({},'', '/c/performance');
+  assert.equal(f.c.snapshot().count,100,'returning restores the correct conversation cache');
+  const historyHook=f.w.history.pushState;f.c.stop();
+  assert.notEqual(f.w.history.pushState,historyHook,'history hooks are restored on teardown');
+  f.close();
+}
+routeRegression();
 previewRegression();
 for(const count of [100,1000,10000]){if(baseline)run(baseline,'0.2.0',count,false);run(current,'current',count,!process.env.RAIL_BASELINE_ONLY);}
 console.log(JSON.stringify({method:'Node + jsdom, 7 mounted turns, 20 warmups, 100 synchronous height/text refreshes; no browser layout/paint/GPU measurement',results},null,2));

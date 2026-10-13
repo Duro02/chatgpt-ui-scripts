@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.4.1
+// @version      0.4.2
 // @description  Persistent conversation navigation with short marks, previews and on-demand history loading.
 // @author       duro
 // @license      MIT
@@ -1099,6 +1099,8 @@
     }
 
     function navigate(key, keepPreview = false) {
+      // Never scroll a previous conversation after a client-side route change.
+      if (checkRoute()) { bind(); return; }
       cancelScan(false);
       cancelJump(false);
       if (!keepPreview) hidePreview();
@@ -1494,7 +1496,19 @@
     win.addEventListener('resize', schedule, { passive: true });
     win.addEventListener('popstate', bind);
     win.addEventListener('pagehide', flushSaved);
-    const routeSignal = () => win.setTimeout(() => { if (checkRoute()) bind(); }, 0);
+    const routeSignal = () => { if (!stopped && checkRoute()) bind(); };
+    // SPA history changes need not emit popstate or mutate the watched transcript.
+    // Preserve existing wrappers and restore only our own hooks on teardown.
+    const historyHooks = ['pushState', 'replaceState'].map(name => {
+      const original = win.history[name];
+      const wrapper = function (...args) {
+        const result = original.apply(this, args);
+        routeSignal();
+        return result;
+      };
+      win.history[name] = wrapper;
+      return { name, original, wrapper };
+    });
     win.navigation?.addEventListener('navigatesuccess', routeSignal);
     theme.observe(doc.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme', 'data-color-scheme'] });
     syncTheme();
@@ -1528,6 +1542,7 @@
         win.removeEventListener('popstate', bind);
         win.removeEventListener('pagehide', flushSaved);
         win.navigation?.removeEventListener('navigatesuccess', routeSignal);
+        for (const { name, original, wrapper } of historyHooks) if (win.history[name] === wrapper) win.history[name] = original;
         host.remove();
       },
     };

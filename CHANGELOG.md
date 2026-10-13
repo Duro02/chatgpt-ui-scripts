@@ -1,5 +1,10 @@
 # 更新记录
 
+## Conversation Rail 0.4.2 — 2026-10-13
+
+- Clear stale navigation immediately on SPA pushState/replaceState changes, even without transcript mutations or popstate. Guard clicks against stale routes and restore history wrappers on teardown.
+- Verify route isolation and restoring the original conversation cache.
+
 ## Conversation Rail 0.4.1 — 2026-10-13
 
 - Reuse the preview's geometry, card renderer and keyed CSS transitions for search results: one central question/answer with up to three smaller user prompts above and below.
