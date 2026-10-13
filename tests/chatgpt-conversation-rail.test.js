@@ -69,3 +69,16 @@ store.write('thread-35',encodeSaved('thread-35',records,true,200,true));
 assert.ok(memory.has(cacheKey('thread-3')));
 assert.ok(!memory.has(cacheKey('thread-4')));
 console.log('Persistence: partial snapshots preserve other-tab discoveries and reads refresh retention');
+
+const {searchNodes}=require('../chatgpt-conversation-rail.user.js');
+const searchItems=[{key:'a',prompt:'恢复方案 ABC',answer:'检查失败样本'},{key:'b',prompt:'普通提问',answer:'恢复阶段 abc'},{key:'c',prompt:'<script> literal [x]',answer:'No match'}];
+assert.deepEqual(searchNodes(searchItems,'恢复').map(i=>i.key),['a','b']);
+assert.deepEqual(searchNodes(searchItems,'恢复 ＡＢＣ').map(i=>i.key),['a','b']);
+assert.deepEqual(searchNodes(searchItems,'恢复 样本').map(i=>i.key),['a']);
+assert.deepEqual(searchNodes(searchItems,'[x]').map(i=>i.key),['c']);
+assert.deepEqual(searchNodes(searchItems,'<script>').map(i=>i.key),['c']);
+assert.deepEqual(searchNodes(searchItems,'   '),[]);
+assert.deepEqual(searchNodes(searchItems,'missing'),[]);
+const manySearch=Array.from({length:10000},(_,i)=>({key:'node-'+i,prompt:'缓存问题 '+i,answer:i%2?'恢复阶段':'检查结果'}));
+assert.equal(searchNodes(manySearch,'恢复').length,5000);
+console.log('Search: cached question/answer matching, Unicode/case, multiple keywords, literal syntax and 10,000-node search passed');

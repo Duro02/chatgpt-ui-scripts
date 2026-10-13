@@ -16,7 +16,7 @@
   #results{position:fixed;left:16px;top:80px;width:240px;background:#171715e8;padding:12px;font:12px/1.5 monospace;max-height:70vh;overflow:auto;z-index:60}
   #results:empty{display:none}.sr-only{display:none}
 </style>
-<header><h1>ChatGPT 横线导航 · 测试页面</h1><button id="persist">验证缓存与按需加载</button><button id="panel">验证七节点预览</button><button id="all">运行全部回归</button><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="railscroll">验证长列表滚动</button><button id="animation">验证焦点动画</button><button id="selection">验证跳转高亮</button><button id="latest">验证最新节点保留</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button><button id="demo">展示长对话</button><button id="light">切换明暗</button></header>
+<header><h1>ChatGPT 横线导航 · 测试页面</h1><button id="persist">验证缓存与按需加载</button><button id="panel">验证七节点预览</button><button id="search">验证左侧搜索</button><button id="all">运行全部回归</button><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="railscroll">验证长列表滚动</button><button id="animation">验证焦点动画</button><button id="selection">验证跳转高亮</button><button id="latest">验证最新节点保留</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button><button id="demo">展示长对话</button><button id="light">切换明暗</button></header>
 <div id="scroll"><main id="content" data-thread-find-target="conversation"></main></div>
 <footer><textarea aria-label="草稿">测试草稿：索引和跳转应保留这段输入</textarea></footer><pre id="results"></pre>
 <script>window.module={exports:{}};</script><script src="../chatgpt-conversation-rail.user.js"></script>
@@ -131,9 +131,11 @@ async function persistenceRegression(){
     shadow().activeElement.dispatchEvent(new PointerEvent('pointerover',{bubbles:true}));
     const cachedPanel=shadow().querySelector('.preview');cachedPanel.dispatchEvent(new PointerEvent('pointerenter'));
     check(cachedPanel.querySelector('[data-center]').dataset.key==='turn:message-18','未挂载缓存节点也可展开邻居预览');
-    cachedPanel.querySelector('[data-center]').click();check(c.snapshot().loadingTarget,'通过预览点击缓存节点进入按需加载而非全量扫描');
+    shadow().querySelector('.search-toggle').click();shadow().querySelector('.search-input').value='第 19 轮';shadow().querySelector('.search-form').requestSubmit();
+    shadow().querySelector('.search-result[data-key="turn:message-18"]').click();check(c.snapshot().loadingTarget,'通过搜索结果点击缓存节点进入按需加载而非全量扫描');
     await waitUntil(()=>!c.snapshot().loadingTarget&&content.querySelector('[data-turn-key="message-18"]')&&Math.abs(content.querySelector('[data-turn-key="message-18"]').getBoundingClientRect().top-scroll.getBoundingClientRect().top-24)<4,15000);
     check(c.snapshot().activeKey==='turn:message-18'&&Math.abs(content.querySelector('[data-turn-key="message-18"]').getBoundingClientRect().top-scroll.getBoundingClientRect().top-24)<4,'逐批加载后精确定位并高亮目标');
+    check(!cachedPanel.hidden&&shadow().querySelector('.search-dock').hasAttribute('data-results'),'按需加载目标过程中保留搜索结果');
     await sleep(900);check(requests===3&&begin===15,'找到目标即停止，不继续加载全部更早历史');
     check(c.snapshot().count===40,'按需加载保留最新缓存节点和总数');
     const saved=scroll.scrollTop;shadow().querySelector('.mark[data-key]').focus();shadow().activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));shadow().activeElement.click();await sleep(60);
@@ -362,10 +364,51 @@ async function previewPanelRegression(){
   }catch(e){log('FAIL '+e.stack);}
 }
 document.querySelector('#panel').onclick=previewPanelRegression;
+async function searchRegression(){
+  results.textContent='';
+  try{
+    setup(60);controller.stop();
+    [...content.children].forEach((el,i)=>{el.querySelector('[data-user-message-bubble]').textContent=(i%2?'普通讨论 ':'恢复步骤 ')+i;el.querySelector('.markdown').textContent=(i%3?'检查流程 ':'恢复回答 ')+i;});
+    const c=controller=api.start(document,{storage:null});await sleep(400);
+    const root=shadow(),nav=root.querySelector('nav'),panel=root.querySelector('.preview'),dock=root.querySelector('.search-dock'),input=root.querySelector('.search-input'),form=root.querySelector('.search-form'),list=root.querySelector('.search-list');
+    const mark=root.querySelector('.mark[data-key="turn:message-15"]');nav.dispatchEvent(new PointerEvent('pointerenter'));mark.dispatchEvent(new PointerEvent('pointerover',{bubbles:true}));
+    check(getComputedStyle(panel.querySelector('[data-center]')).backgroundColor==='rgba(0, 0, 0, 0)'&&dock.hidden,'单气泡没有内层高亮或搜索按钮');
+    nav.dispatchEvent(new PointerEvent('pointerleave',{relatedTarget:panel}));panel.dispatchEvent(new PointerEvent('pointerenter'));await sleep(350);
+    await waitUntil(()=>{const p=panel.getBoundingClientRect(),d=dock.getBoundingClientRect();return !dock.hidden&&d.right<=p.left&&Math.abs(d.top+d.height/2-p.top-p.height/2)<2;});
+    const pbox=panel.getBoundingClientRect(),dbox=dock.getBoundingClientRect();
+    check(!dock.hidden&&dbox.right<=pbox.left&&Math.abs(dbox.top+dbox.height/2-pbox.top-pbox.height/2)<2,'圆形搜索按钮位于面板左侧中央');
+    root.querySelector('.search-toggle').click();await sleep(350);
+    check(dock.hasAttribute('data-open')&&!form.hidden&&input===root.activeElement,'点击圆形按钮向左展开胶囊输入框并聚焦');
+    const beforeSearch=c.stats.searches;input.value='恢复';input.dispatchEvent(new Event('input',{bubbles:true,composed:true}));await sleep(100);
+    check(c.stats.searches===beforeSearch&&list.hidden,'输入期间不执行搜索或扫描');
+    const centerBefore=panel.querySelector('[data-center]').dataset.key;input.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,composed:true,cancelable:true}));
+    check(panel.querySelector('[data-center]').dataset.key===centerBefore,'搜索输入框上下键不切换右侧预览');
+    form.requestSubmit();await sleep(350);
+    check(dock.hasAttribute('data-results')&&root.querySelector('.search-count').textContent==='40 个匹配节点','提交后胶囊展开匹配提问和回答摘要的列表');
+    check(root.querySelectorAll('.search-result').length<=16,'搜索结果只渲染可见窗口');
+    const searchBox=dock.getBoundingClientRect();check(searchBox.left>=10&&searchBox.top>=63&&searchBox.bottom<=innerHeight-15,'左侧搜索结果保持在窗口边界内');
+    const bodyBefore=scroll.scrollTop;list.scrollTop=900;await sleep(100);
+    check(scroll.scrollTop===bodyBefore&&root.querySelectorAll('.search-result').length<=16,'结果列表独立滚动且渲染有界');
+    const queryCount=c.stats.searches;panel.dispatchEvent(new WheelEvent('wheel',{deltaY:120,bubbles:true,composed:true,cancelable:true}));await sleep(300);
+    check(!panel.hidden&&dock.hasAttribute('data-results')&&input.value==='恢复'&&c.stats.searches===queryCount,'右侧预览滚轮切换时左侧结果保持且不重搜');
+    panel.dispatchEvent(new PointerEvent('pointerleave',{relatedTarget:nav}));nav.dispatchEvent(new PointerEvent('pointerenter'));root.querySelector('.scroller').scrollTop+=60;await sleep(300);
+    check(!panel.hidden&&dock.hasAttribute('data-results'),'回到横线列表滚动时搜索结果仍保留');
+    nav.dispatchEvent(new PointerEvent('pointerleave',{relatedTarget:panel}));panel.dispatchEvent(new PointerEvent('pointerenter'));
+    const result=root.querySelector('.search-result'),target=result.dataset.key,rightBefore=panel.querySelector('[data-center]').dataset.key;result.click();await sleep(500);
+    check(c.snapshot().selectedKey===target&&!panel.hidden&&dock.hasAttribute('data-results'),'点击搜索结果定位正文并保留结果面板');
+    check(panel.querySelector('[data-center]').dataset.key===rightBefore,'搜索结果点击不强制对应右侧预览进度');
+    input.value='不存在的关键词';form.requestSubmit();await sleep(300);
+    check(!root.querySelector('.search-empty').hidden&&root.querySelectorAll('.search-result').length===0,'没有匹配时显示空结果提示');
+    input.focus();panel.dispatchEvent(new PointerEvent('pointerleave'));nav.dispatchEvent(new PointerEvent('pointerleave'));await sleep(300);
+    check(panel.hidden&&dock.hidden&&input.value==='','输入框有焦点时移出整个区域也关闭并清空搜索');
+    log('ALL SEARCH TESTS PASSED');
+  }catch(e){log('FAIL '+e.stack);}
+}
+document.querySelector('#search').onclick=searchRegression;
 document.querySelector('#all').onclick=async()=>{
   const button=document.querySelector('#all');button.disabled=true;const combined=[];
   try {
-    for(const [name,test] of [['preview panel',previewPanelRegression],['persistence',persistenceRegression],['latest',latestRegression],['selection',selectionRegression],['animation',animationRegression],['rail scroll',railScrollRegression],['hydration',hydrationRegression],['full performance and virtual history',()=>run()]]){
+    for(const [name,test] of [['search',searchRegression],['preview panel',previewPanelRegression],['persistence',persistenceRegression],['latest',latestRegression],['selection',selectionRegression],['animation',animationRegression],['rail scroll',railScrollRegression],['hydration',hydrationRegression],['full performance and virtual history',()=>run()]]){
       await test();combined.push(name+'\n'+results.textContent);
       results.textContent=combined.join('\n\n');
       if(combined.at(-1).includes('FAIL '))return;

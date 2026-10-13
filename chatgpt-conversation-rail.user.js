@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.3.2
+// @version      0.4.0
 // @description  Persistent conversation navigation with short marks, previews and on-demand history loading.
 // @author       duro
 // @license      MIT
@@ -56,9 +56,9 @@
     .mark:focus-visible::before { transform:scaleX(1); opacity:1; }
     .index::before { background:#cf746b; opacity:.95; transform:scaleX(.75); }
     .index[aria-busy]::before { background:#e39a72; }
-    .preview { position:fixed; right:50px; top:var(--preview-top,40vh); width:min(300px,calc(100vw - 90px));
+    .preview { position:fixed; right:50px; top:var(--preview-top,40vh); width:var(--preview-width,min(300px,calc(100vw - 90px)));
       height:var(--preview-height,118px); z-index:51; color:inherit; pointer-events:auto;
-      transition:height 260ms cubic-bezier(.2,.85,.25,1),top 260ms cubic-bezier(.2,.85,.25,1); }
+      transition:height 260ms cubic-bezier(.2,.85,.25,1),top 260ms cubic-bezier(.2,.85,.25,1),width 260ms ease; }
     /* A small hit area bridges the gap from the rail into the bubble. */
     .preview::after { content:''; position:absolute; left:100%; width:14px; top:0; height:100%; }
     .preview-window { position:relative; height:100%; overflow:hidden; border-radius:14px;
@@ -80,11 +80,47 @@
     .preview-label { font-size:12px; line-height:1.35; -webkit-line-clamp:2; }
     .answer { margin-top:4px; color:var(--rail-muted); font-size:12px; -webkit-line-clamp:3; }
     .mark[data-preview]::before { transform:scaleX(.9); opacity:.9; }
+    .search-dock { position:absolute; right:calc(100% + 10px); top:var(--search-top,50%);
+      width:var(--search-width,36px); height:var(--search-height,36px); transform:translateY(-50%);
+      transition:width 240ms cubic-bezier(.2,.85,.25,1),height 260ms cubic-bezier(.2,.85,.25,1),top 260ms ease; }
+    .search-dock::after { content:''; position:absolute; left:100%; top:0; width:12px; height:100%; }
+    .search-surface { width:100%; height:100%; overflow:hidden; background:var(--rail-bg);
+      border:1px solid var(--rail-border); border-radius:18px; box-shadow:0 8px 24px #0003;
+      transition:border-radius 240ms ease; }
+    .search-dock[data-open] .search-surface { border-radius:22px; }
+    .search-dock[data-results] .search-surface { border-radius:16px; }
+    .search-toggle,.search-submit { display:grid; place-items:center; padding:0; width:34px; height:34px;
+      border:0; border-radius:50%; background:transparent; color:inherit; }
+    .search-toggle:hover,.search-submit:hover { background:color-mix(in srgb,currentColor 8%,var(--rail-bg)); }
+    .search-toggle svg,.search-submit svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.7; }
+    .search-form { height:44px; display:flex; align-items:center; padding:0 4px 0 13px; gap:4px; }
+    .search-input { min-width:0; width:100%; flex:1; border:0; outline:0; background:transparent;
+      color:inherit; font:13px/1.4 system-ui,sans-serif; }
+    .search-input::placeholder { color:var(--rail-muted); }
+    .search-input::-webkit-search-cancel-button { -webkit-appearance:none; width:12px; height:12px;
+      color:var(--rail-muted); opacity:.65; cursor:pointer;
+      background:linear-gradient(45deg,transparent 43%,currentColor 45%,currentColor 55%,transparent 57%),
+        linear-gradient(-45deg,transparent 43%,currentColor 45%,currentColor 55%,transparent 57%); }
+    .search-submit { flex-shrink:0; }
+    .search-surface:focus-within { border-color:color-mix(in srgb,currentColor 35%,var(--rail-border)); }
+    .search-count { height:28px; padding:3px 13px; color:var(--rail-muted); font-size:11px; }
+    .search-list { position:relative; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin;
+      scrollbar-color:var(--rail-border) transparent; }
+    .search-rows { position:relative; }
+    .search-result { position:absolute; left:6px; width:calc(100% - 12px); height:52px; padding:7px 8px 7px 30px;
+      border:0; border-radius:9px; text-align:left; color:inherit; background:transparent; }
+    .search-result:hover,.search-result:focus-visible { background:color-mix(in srgb,currentColor 7%,var(--rail-bg)); }
+    .search-result:focus-visible { outline:1px solid currentColor; outline-offset:-1px; }
+    .search-result-number { position:absolute; left:7px; top:9px; font-size:10px; color:var(--rail-muted); }
+    .search-result-label,.search-result-answer { display:-webkit-box; -webkit-box-orient:vertical;
+      -webkit-line-clamp:1; overflow:hidden; font-size:12px; line-height:18px; }
+    .search-result-answer { font-size:11px; color:var(--rail-muted); }
+    .search-empty { padding:14px 12px; color:var(--rail-muted); font-size:12px; }
     .status { position:fixed; right:50px; bottom:100px; max-width:300px; padding:8px 12px;
       border-radius:8px; background:var(--rail-bg); color:inherit; box-shadow:0 4px 18px #0002; }
     [hidden] { display:none !important; }
     @media(max-width:760px) { nav { right:5px; } .preview { right:39px; } }
-    @media(prefers-reduced-motion:reduce) { .mark::before,.focus-line,.preview,.preview-card { transition:none; } }
+    @media(prefers-reduced-motion:reduce) { .mark::before,.focus-line,.preview,.preview-card,.search-dock,.search-surface { transition:none; } }
   `;
 
   // Binary search over cached content coordinates; no DOM reads in this function.
@@ -103,6 +139,16 @@
       start: Math.max(0, Math.floor(scrollTop / PITCH) - OVERSCAN),
       end: Math.min(count, Math.ceil((scrollTop + height) / PITCH) + OVERSCAN),
     };
+  }
+
+  // Search bounded cached summaries only, explicitly on submission, never during typing.
+  function searchNodes(items, query) {
+    const words = String(query || '').slice(0, 160).normalize('NFKC').toLowerCase().trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return [];
+    return items.filter(item => {
+      const text = `${item.prompt || ''}\n${item.answer || ''}`.normalize('NFKC').toLowerCase();
+      return words.every(word => text.includes(word));
+    });
   }
 
   // Preserve chronology independently of coordinates that shift during history paging.
@@ -284,7 +330,11 @@
     const shadow = host.attachShadow({ mode: 'open' });
     shadow.innerHTML = `<style>${CSS}</style><nav aria-label="对话导航" hidden>
       <div class="scroller" tabindex="0" aria-label="对话节点列表，可上下滚动"><div class="marks"><div class="focus-line" aria-hidden="true" hidden></div><button class="mark index" type="button" style="top:0" aria-label="点击加载过去的对话" hidden></button></div></div></nav>
-      <div class="preview" role="region" aria-label="对话节点预览" id="rail-preview" hidden><div class="preview-window"></div></div>
+      <div class="preview" role="region" aria-label="对话节点预览" id="rail-preview" hidden><div class="preview-window"></div><div class="search-dock" hidden><div class="search-surface">
+        <button class="search-toggle" type="button" aria-label="搜索对话节点" title="搜索已索引的提问和回答摘要"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m15.5 15.5 5 5"></path></svg></button>
+        <form class="search-form" hidden><input class="search-input" type="search" maxlength="160" placeholder="搜索节点摘要" aria-label="搜索节点摘要" autocomplete="off"><button class="search-submit" type="submit" aria-label="执行搜索"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m15.5 15.5 5 5"></path></svg></button></form>
+        <div class="search-count" role="status" aria-live="polite" hidden></div><div class="search-list" aria-label="匹配的对话节点" hidden><div class="search-rows"></div><div class="search-empty" hidden>没有匹配的节点摘要</div></div>
+      </div></div></div>
       <div class="status" role="status" hidden></div>`;
     doc.body.appendChild(host);
     const nav = shadow.querySelector('nav');
@@ -293,6 +343,17 @@
     const preview = shadow.querySelector('.preview');
     const previewWindow = shadow.querySelector('.preview-window');
     const previewCards = new Map();
+    const searchDock = shadow.querySelector('.search-dock');
+    const searchToggle = shadow.querySelector('.search-toggle');
+    const searchForm = shadow.querySelector('.search-form');
+    const searchInput = shadow.querySelector('.search-input');
+    const searchCount = shadow.querySelector('.search-count');
+    const searchList = shadow.querySelector('.search-list');
+    const searchRows = shadow.querySelector('.search-rows');
+    const searchEmpty = shadow.querySelector('.search-empty');
+    const searchButtons = new Map();
+    let searchOpen = false, searchSubmitted = false, searchMatches = [], searchWords = [], searchFrame = 0, searchListHeight = 52;
+    let previewPointer = false, previewBoxTop = 100, previewBoxHeight = 118;
     let previewKey = null, previewExpanded = false, previewInside = false, navInside = false, previewKeyboard = false;
     let previewCloseTimer = 0, previewEntryFrame = 0, previewAnchor = 100, previewWheel = 0, previewWheelTime = 0;
     const status = shadow.querySelector('.status');
@@ -311,7 +372,7 @@
     let geometry = { origin: 0, height: 0, max: 0, reverse: false };
     let railHeight = 320;
     let observedStructure = new Map(), observedParents = [];
-    const stats = { refreshes: 0, geometryReads: 0, scrollFrames: 0, renders: 0, railAnimationFrames: 0, storageReads: 0, storageWrites: 0 };
+    const stats = { refreshes: 0, geometryReads: 0, scrollFrames: 0, renders: 0, railAnimationFrames: 0, storageReads: 0, storageWrites: 0, searches: 0 };
     let persistenceAvailable = true;
     let storage = options.storage;
     if (storage === undefined) { try { storage = win.localStorage; } catch { storage = null; } }
@@ -409,18 +470,21 @@
       if (preview.hidden && !previewCards.size) return;
       preview.hidden = true;
       setAttribute(preview, 'data-expanded', null);
-      previewExpanded = previewInside = previewKeyboard = false;
+      previewExpanded = previewInside = previewKeyboard = previewPointer = false;
       hovered = navInside;
       if (previewKey) setAttribute(buttons.get(previewKey) || preview, 'data-preview', null);
       previewKey = null; previewWheel = 0;
       previewCards.clear(); previewWindow.replaceChildren();
+      resetSearch();
     }
     function delayHidePreview() {
+      if (preview.hidden) return;
       win.clearTimeout(previewCloseTimer);
       previewCloseTimer = win.setTimeout(() => {
         previewCloseTimer = 0;
-        if (!previewInside && !navInside && !preview.contains(shadow.activeElement) &&
-            !(previewKeyboard && shadow.activeElement?.classList.contains('mark'))) hidePreview();
+        const focusInside = !previewPointer && (preview.contains(shadow.activeElement) ||
+          previewKeyboard && shadow.activeElement?.classList.contains('mark'));
+        if (!previewInside && !navInside && !focusInside) hidePreview();
       }, 220);
     }
 
@@ -606,6 +670,88 @@
       previewCards.set(key, card);
       return card;
     }
+    function resetSearch() {
+      win.cancelAnimationFrame(searchFrame); searchFrame = 0;
+      searchOpen = searchSubmitted = false; searchMatches = []; searchWords = [];
+      searchInput.value = ''; searchButtons.clear(); searchRows.replaceChildren(); searchList.scrollTop = 0;
+      setAttribute(searchDock, 'hidden', '');
+      setAttribute(searchDock, 'data-open', null); setAttribute(searchDock, 'data-results', null);
+      setAttribute(preview, 'data-search-open', null);
+    }
+    function layoutSearch() {
+      const right = win.innerWidth <= 760 ? 39 : 50;
+      const space = Math.max(260, win.innerWidth - right - 16);
+      const normalWidth = Math.min(300, Math.max(128, win.innerWidth - 90));
+      const mainWidth = searchOpen ? Math.min(normalWidth, Math.max(128, space - 230)) : normalWidth;
+      const width = searchOpen ? Math.min(300, Math.max(120, space - mainWidth - 10)) : 36;
+      const height = !searchOpen ? 36 : searchSubmitted
+        ? Math.min(Math.max(124, win.innerHeight - 80), 72 + Math.max(1, Math.min(8, searchMatches.length)) * 52) : 44;
+      const center = Math.max(64 + height / 2, Math.min(win.innerHeight - 16 - height / 2, previewBoxTop + previewBoxHeight / 2));
+      setStyle(preview, '--preview-width', `${mainWidth}px`);
+      setStyle(searchDock, '--search-width', `${width}px`);
+      setStyle(searchDock, '--search-height', `${height}px`);
+      setStyle(searchDock, '--search-top', searchOpen ? `${center - previewBoxTop}px` : '50%');
+      setAttribute(searchDock, 'hidden', previewExpanded || searchOpen ? null : '');
+      setAttribute(searchDock, 'data-open', searchOpen ? '' : null);
+      setAttribute(searchDock, 'data-results', searchSubmitted ? '' : null);
+      setAttribute(searchToggle, 'hidden', searchOpen ? '' : null);
+      setAttribute(searchForm, 'hidden', searchOpen ? null : '');
+      setAttribute(searchCount, 'hidden', searchSubmitted ? null : '');
+      setAttribute(searchList, 'hidden', searchSubmitted ? null : '');
+      searchListHeight = Math.max(52, height - 72);
+      setStyle(searchList, 'height', `${searchListHeight}px`);
+    }
+    function searchSnippet(text) {
+      const lower = text.toLowerCase();
+      const first = searchWords.map(word => lower.indexOf(word)).filter(index => index >= 0).sort((a, b) => a - b)[0] || 0;
+      const start = Math.max(0, first - 24);
+      return `${start ? '…' : ''}${text.slice(start, start + 110)}${start + 110 < text.length ? '…' : ''}`;
+    }
+    function renderSearch(extraIndex) {
+      if (!searchSubmitted) return;
+      setStyle(searchRows, 'height', `${searchMatches.length * 52}px`);
+      setAttribute(searchEmpty, 'hidden', searchMatches.length ? '' : null);
+      const start = Math.max(0, Math.floor(searchList.scrollTop / 52) - 2);
+      const end = Math.min(searchMatches.length, Math.ceil((searchList.scrollTop + searchListHeight) / 52) + 2);
+      const visible = Array.from({ length: Math.max(0, end - start) }, (_, i) => start + i);
+      if (Number.isInteger(extraIndex) && extraIndex >= 0 && extraIndex < searchMatches.length && !visible.includes(extraIndex)) visible.push(extraIndex);
+      const needed = new Set();
+      for (const i of visible) {
+        const item = searchMatches[i]; needed.add(item.key);
+        let row = searchButtons.get(item.key);
+        if (!row) {
+          const button = doc.createElement('button'); button.type = 'button'; button.className = 'search-result'; button.dataset.key = item.key;
+          const number = doc.createElement('span'); number.className = 'search-result-number';
+          const label = doc.createElement('span'); label.className = 'search-result-label';
+          const answer = doc.createElement('span'); answer.className = 'search-result-answer';
+          button.append(number, label, answer); searchRows.append(button);
+          row = { button, number, label, answer }; searchButtons.set(item.key, row);
+        }
+        setStyle(row.button, 'top', `${i * 52}px`);
+        setAttribute(row.button, 'data-search-index', String(i));
+        setAttribute(row.button, 'aria-label', `跳到第 ${(indexes.get(item.key) ?? i) + 1} 轮：${item.prompt || '尚未加载的提问'}`);
+        setText(row.number, String((indexes.get(item.key) ?? i) + 1));
+        setText(row.label, searchSnippet(item.prompt || '尚未加载的提问'));
+        const answerMatch = searchWords.some(word => (item.answer || '').normalize('NFKC').toLowerCase().includes(word));
+        setText(row.answer, answerMatch ? searchSnippet(item.answer || '') : '');
+      }
+      for (const [key, row] of searchButtons) if (!needed.has(key) && shadow.activeElement !== row.button) {
+        row.button.remove(); searchButtons.delete(key);
+      }
+    }
+    function submitSearch(event) {
+      event.preventDefault();
+      const query = searchInput.value.slice(0, 160).trim();
+      searchWords = query.normalize('NFKC').toLowerCase().split(/\s+/).filter(Boolean);
+      searchMatches = query ? searchNodes(items, query) : [];
+      searchSubmitted = Boolean(query);
+      if (query) stats.searches++;
+      searchList.scrollTop = 0;
+      searchButtons.clear(); searchRows.replaceChildren();
+      setText(searchCount, `${searchMatches.length} 个匹配节点`);
+      layoutSearch(); renderSearch();
+    }
+
     function renderPreview(direction = 0) {
       const index = indexes.get(previewKey);
       if (index === undefined || preview.hidden) return;
@@ -619,7 +765,10 @@
       setStyle(preview, '--preview-center-height', `${centerHeight}px`);
       setStyle(preview, '--preview-row-height', `${rowHeight}px`);
       setStyle(preview, '--preview-height', `${height}px`);
-      setStyle(host, '--preview-top', `${Math.max(64, Math.min(win.innerHeight - height - 16, previewAnchor - centerTop))}px`);
+      previewBoxHeight = height;
+      previewBoxTop = Math.max(64, Math.min(win.innerHeight - height - 16, previewAnchor - centerTop));
+      setStyle(host, '--preview-top', `${previewBoxTop}px`);
+      layoutSearch();
       const needed = new Set();
       for (let slot = -before; slot <= after; slot++) {
         const item = items[index + slot]; needed.add(item.key);
@@ -655,8 +804,9 @@
         });
       }
     }
-    function expandPreview() {
+    function expandPreview(event) {
       if (preview.hidden) return;
+      if (event?.type === 'pointerenter') previewPointer = true;
       win.clearTimeout(previewCloseTimer); previewCloseTimer = 0;
       previewInside = hovered = true;
       if (!previewKey || previewExpanded) return;
@@ -682,6 +832,7 @@
       if (!button) return;
       const item = cache.get(button.dataset.key);
       if (button !== indexButton && !item) return;
+      if (button === indexButton && searchOpen) return;
       win.clearTimeout(previewCloseTimer); previewCloseTimer = 0;
       previewKeyboard = keyboard;
       if (previewKey !== item?.key) {
@@ -689,8 +840,8 @@
         previewWheel = 0;
       }
       previewKey = item?.key || null;
-      previewExpanded = false;
-      setAttribute(preview, 'data-expanded', null);
+      previewExpanded = searchOpen;
+      setAttribute(preview, 'data-expanded', previewExpanded ? '' : null);
       const rect = button.getBoundingClientRect();
       previewAnchor = Math.max(64, Math.min(win.innerHeight - 134, rect.top - 35));
       preview.hidden = false;
@@ -702,6 +853,7 @@
         card.label.className = 'prompt'; card.response.className = 'answer';
         card.label.textContent = scan ? '正在加载过去的对话，点击取消' : '点击加载过去的对话';
         card.number.textContent = ''; card.response.textContent = ''; card.response.hidden = true;
+        setAttribute(searchDock, 'hidden', '');
         setStyle(preview, '--preview-height', '118px');
         setStyle(host, '--preview-top', `${previewAnchor}px`);
       } else {
@@ -923,6 +1075,7 @@
       boot.disconnect();
       if (next === content && content.isConnected) return;
       const resumeKey = jump?.key || waitingKey;
+      const resumePreview = Boolean(jump?.keepPreview || searchOpen && searchSubmitted);
       detach();
       waitingKey = resumeKey;
       content = next;
@@ -932,7 +1085,7 @@
       resize.observe(scroller);
       watch();
       refresh();
-      if (waitingKey) { const key = waitingKey; waitingKey = null; navigate(key); }
+      if (waitingKey) { const key = waitingKey; waitingKey = null; navigate(key, resumePreview); }
     }
 
     function detach() {
@@ -953,10 +1106,10 @@
       render();
     }
 
-    function navigate(key) {
+    function navigate(key, keepPreview = false) {
       cancelScan(false);
       cancelJump(false);
-      hidePreview();
+      if (!keepPreview) hidePreview();
       const item = cache.get(key);
       if (!item) return;
       restoreJob = null;
@@ -967,7 +1120,7 @@
       measure();
       const first = loaded.find(element => element.getBoundingClientRect().bottom > viewport().top);
       const anchorKey = items.find(record => record.element === first)?.key;
-      const job = { key, attempts: 0, timer: 0, route, container: scroller,
+      const job = { key, keepPreview, attempts: 0, timer: 0, route, container: scroller,
         stage: item.element?.isConnected ? 'calibrate' : 'load', saved: position(), anchorKey, originalSelection,
         offset: first ? first.getBoundingClientRect().top - viewport().top : 0 };
       jump = job;
@@ -1247,19 +1400,21 @@
 
     rail.addEventListener('wheel', stopRailMotion, { passive: true });
     rail.addEventListener('touchstart', stopRailMotion, { passive: true });
-    rail.addEventListener('scroll', () => { if (!railMotion) render(); if (!previewExpanded && !previewKeyboard) hidePreview(); }, { passive: true });
-    nav.addEventListener('pointerenter', () => { navInside = hovered = true; win.clearTimeout(previewCloseTimer); });
+    rail.addEventListener('scroll', () => { if (!railMotion) render(); if (!previewExpanded && !previewKeyboard && !searchOpen) hidePreview(); }, { passive: true });
+    nav.addEventListener('pointerenter', () => { previewPointer = true; navInside = hovered = true; win.clearTimeout(previewCloseTimer); });
     nav.addEventListener('pointerleave', () => { navInside = false; hovered = previewInside; delayHidePreview(); });
     preview.addEventListener('pointerenter', expandPreview);
     preview.addEventListener('pointerleave', () => { previewInside = false; hovered = navInside; delayHidePreview(); });
     preview.addEventListener('focusin', expandPreview);
     preview.addEventListener('focusout', delayHidePreview);
     preview.addEventListener('click', event => {
+      if (searchDock.contains(event.target)) return;
       const button = event.target.closest('button');
       if (button?.hasAttribute('data-history')) buildIndex();
       else if (button?.dataset.key) navigate(button.dataset.key);
     });
     preview.addEventListener('wheel', event => {
+      if (searchDock.contains(event.target)) return;
       event.preventDefault();
       if (!previewKey || !event.deltaY) return;
       expandPreview();
@@ -1271,10 +1426,44 @@
       shiftPreview(step);
     }, { passive: false });
     preview.addEventListener('keydown', event => {
+      if (searchDock.contains(event.target)) return;
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault(); expandPreview(); shiftPreview(event.key === 'ArrowDown' ? 1 : -1);
         previewCards.get(previewKey)?.button.focus({ preventScroll: true });
       }
+    });
+    searchToggle.addEventListener('click', () => {
+      expandPreview(); searchOpen = true;
+      setAttribute(preview, 'data-search-open', '');
+      layoutSearch(); searchInput.focus({ preventScroll: true });
+    });
+    searchForm.addEventListener('submit', submitSearch);
+    searchDock.addEventListener('wheel', event => {
+      event.stopPropagation();
+      if (!searchList.contains(event.target)) event.preventDefault();
+    }, { passive: false });
+    searchList.addEventListener('scroll', () => {
+      if (!searchFrame) searchFrame = win.requestAnimationFrame(() => { searchFrame = 0; renderSearch(); });
+    }, { passive: true });
+    searchRows.addEventListener('click', event => {
+      const button = event.target.closest('.search-result');
+      if (button?.dataset.key) navigate(button.dataset.key, true);
+    });
+    searchRows.addEventListener('keydown', event => {
+      const button = event.target.closest('.search-result');
+      if (!button) return;
+      const index = Number(button.dataset.searchIndex);
+      let next = index;
+      if (event.key === 'ArrowDown') next++;
+      else if (event.key === 'ArrowUp') next--;
+      else if (event.key === 'Home') next = 0;
+      else if (event.key === 'End') next = searchMatches.length - 1;
+      else return;
+      event.preventDefault();
+      next = Math.max(0, Math.min(searchMatches.length - 1, next));
+      searchList.scrollTop = Math.max(0, next * 52 - searchListHeight / 2);
+      renderSearch(next);
+      searchButtons.get(searchMatches[next]?.key)?.button.focus({ preventScroll: true });
     });
     marks.addEventListener('pointerover', event => showPreview(event.target.closest('button')));
     marks.addEventListener('focusin', event => showPreview(event.target.closest('button'), true));
@@ -1348,5 +1537,5 @@
       },
     };
   }
-  return { activeAt, railRange, prefix, threadIdentity, mergeTimeline, decodeSaved, encodeSaved, createIndexStore, cacheKey, mergeSaved, start };
+  return { activeAt, railRange, prefix, threadIdentity, mergeTimeline, decodeSaved, encodeSaved, createIndexStore, cacheKey, mergeSaved, searchNodes, start };
 });

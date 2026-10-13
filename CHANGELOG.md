@@ -1,5 +1,13 @@
 # 更新记录
 
+## Conversation Rail 0.4.0 — 2026-10-13
+
+- Add a circular search button at the preview panel’s left midpoint. Expand it leftward into a matching pill input, then into an independently scrolling result list on submission.
+- Search cached question/answer summaries on Enter, with case/Unicode normalization and space-separated keywords; do no searching while typing and no automatic history scan.
+- Keep results open while browsing the right preview or rail; result hover does not synchronize the right preview. Click results to navigate by ID, retaining search UI through target loading and content-root replacement.
+- Dismiss the entire group on pointer exit even when the input is focused; isolate input/list keyboard and wheel events from right-hand browsing.
+- Virtualize large result sets, bound query length, retain equal preview insets from 0.3.2, and validate keyboard access, cached targets, empty results, independent scrolling and modeled narrow-width layout.
+
 ## Conversation Rail 0.3.2 — 2026-10-13
 
 - Reserve equal inset space at the top and bottom of preview cards, including the first and last conversation nodes. Adjust the central highlight radius to fit the outer shell.

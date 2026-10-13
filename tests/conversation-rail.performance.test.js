@@ -105,6 +105,26 @@ function previewRegression(){
   assert.equal(f.c.stats.refreshes,refreshes,'preview wheel does not scan the transcript');
   assert.equal(f.layoutReads(),reads,'preview wheel does not measure transcript geometry');
   assert.equal(panel.querySelector('[data-center]').dataset.key,'turn:message-999');
+  root.querySelector('.search-toggle').click();
+  const input=root.querySelector('.search-input'),form=root.querySelector('.search-form');
+  input.value='Question';input.dispatchEvent(new f.w.Event('input',{bubbles:true}));
+  assert.equal(f.c.stats.searches,0,'typing does not search');
+  const searchReads=f.layoutReads(),searchRefreshes=f.c.stats.refreshes;
+  form.dispatchEvent(new f.w.Event('submit',{bubbles:true,cancelable:true}));
+  assert.equal(f.c.stats.searches,1);
+  assert.equal(root.querySelector('.search-count').textContent,'1000 个匹配节点');
+  assert.ok(root.querySelectorAll('.search-result').length<=16,'large search results are virtualized');
+  const list=root.querySelector('.search-list');list.scrollTop=50000;list.dispatchEvent(new f.w.Event('scroll'));f.frame();
+  assert.ok(root.querySelectorAll('.search-result').length<=16);
+  const result=root.querySelector('.search-result');result.focus();result.dispatchEvent(new f.w.KeyboardEvent('keydown',{key:'End',bubbles:true,cancelable:true}));
+  assert.equal(root.activeElement.dataset.key,'turn:message-999','keyboard End reaches the final virtual result');
+  assert.equal(f.c.stats.refreshes,searchRefreshes,'search and result browsing do not refresh transcript indexes');
+  assert.equal(f.layoutReads(),searchReads,'search and result browsing do not read transcript geometry');
+  f.w.innerWidth=390;f.c.audit.refresh();
+  const mainWidth=parseFloat(panel.style.getPropertyValue('--preview-width')),searchWidth=parseFloat(root.querySelector('.search-dock').style.getPropertyValue('--search-width'));
+  assert.ok(mainWidth+searchWidth+10+39+16<=390,'horizontal panels fit the modeled 390px width budget');
+  panel.dispatchEvent(new f.w.Event('pointerleave'));f.advance(220);
+  assert.ok(panel.hidden&&root.querySelector('.search-dock').hidden,'pointer exit closes both panels even with a focused result');
   f.close();
 }
 previewRegression();
