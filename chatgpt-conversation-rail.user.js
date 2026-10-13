@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.4.4
+// @version      0.4.5
 // @description  Persistent conversation navigation with short marks, previews and on-demand history loading.
 // @author       duro
 // @license      MIT
@@ -199,6 +199,7 @@
   const CACHE_THREADS = 32;
   const CACHE_ITEMS = 10000;
   const cacheKey = thread => `${CACHE_PREFIX}thread:${thread}`;
+  const provisionalDotsKey = key => /^message:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key);
   const conversationId = path => path.match(/(?:^|\/)c\/([^/]+)/)?.[1] || null;
 
   function decodeSaved(raw, thread, now = Date.now()) {
@@ -208,24 +209,27 @@
       if (data.v !== 1 || data.thread !== thread || !Number.isFinite(data.updated) ||
           data.updated > now + 86400000 ||
           !Array.isArray(data.entries) || data.entries.length > CACHE_ITEMS) return null;
-      const keys = new Set(), entries = [];
+      const keys = new Set(), entries = [], dots = typeof thread === 'string' && thread.startsWith('dots:');
+      let droppedProvisional = 0;
       for (const row of data.entries) {
         if (!Array.isArray(row) || typeof row[0] !== 'string' || row[0].length > 200 ||
             !/^(turn|message):/.test(row[0]) || keys.has(row[0]) ||
             !Number.isFinite(row[1]) || !Number.isFinite(row[2]) || row[2] < row[1] ||
             Math.abs(row[1]) > 1e9 || Math.abs(row[2]) > 1e9) return null;
         keys.add(row[0]);
+        if (dots && provisionalDotsKey(row[0])) { droppedProvisional++; continue; }
         entries.push({ key: row[0], top: row[1], bottom: row[2],
           prompt: typeof row[3] === 'string' ? row[3].slice(0, 180) : '',
           answer: typeof row[4] === 'string' ? row[4].slice(0, 140) : '', element: null });
       }
-      return { entries, complete: data.complete === true,
+      return { entries, droppedProvisional, complete: data.complete === true,
         end: Number.isFinite(data.end) && Math.abs(data.end) <= 1e9 ? data.end : null, tail: data.tail === true };
     } catch { return null; }
   }
 
   function encodeSaved(thread, items, complete, end, tail, now = Date.now()) {
-    const stable = items.filter(item => !/^turn:conversation-turn-/.test(item.key));
+    const dots = typeof thread === 'string' && thread.startsWith('dots:');
+    const stable = items.filter(item => !/^turn:conversation-turn-/.test(item.key) && !(dots && provisionalDotsKey(item.key)));
     if (!stable.length || stable.length > CACHE_ITEMS) return null;
     const data = { v: 1, thread, updated: now, complete: complete && stable.length === items.length, end, tail,
       entries: stable.map(item => [item.key, Math.round(item.top * 10) / 10,
@@ -352,7 +356,7 @@
     const searchRows = shadow.querySelector('.search-rows');
     const searchEmpty = shadow.querySelector('.search-empty');
     const searchButtons = new Map();
-    let searchOpen = false, searchSubmitted = false, searchMatches = [], searchIndex = 0, searchWheel = 0, searchWheelTime = 0;
+    let searchOpen = false, searchSubmitted = false, searchMatches = [], searchQuery = '', searchIndex = 0, searchWheel = 0, searchWheelTime = 0;
     let previewPointer = false, previewBoxTop = 100, previewBoxHeight = 118;
     let previewKey = null, previewExpanded = false, previewInside = false, navInside = false, previewKeyboard = false;
     let previewCloseTimer = 0, previewEntryFrame = 0, previewAnchor = 100, previewWheel = 0, previewWheelTime = 0;
@@ -360,6 +364,8 @@
     const indexButton = shadow.querySelector('.index');
     const focusLine = shadow.querySelector('.focus-line');
     const cache = new Map();
+    const provisionalKeys = new Set();
+    let dotsIdentityPath = null, dotsIdentityScope = null;
     const buttons = new Map();
     const indexes = new Map();
     let content = null, scroller = null, items = [], loaded = [], pending = [], mounted = [], route = pageIdentity().route;
@@ -387,12 +393,14 @@
     }
     function pageIdentity() {
       const path = win.location.pathname;
-      if (!isDots()) return { route: threadIdentity(path), thread: conversationId(path) };
-      const id = dotsRoot()?.querySelector('article.message-row[data-message-id]')?.getAttribute('data-message-id');
+      if (!isDots()) { dotsIdentityPath = dotsIdentityScope = null; return { route: threadIdentity(path), thread: conversationId(path) }; }
+      const id = dotsRoot()?.querySelector('article.message-row[data-message-id*="~"]')?.getAttribute('data-message-id');
       const parts = id?.split('~');
       const scope = parts?.length >= 3 && parts[0] && parts[1] ? parts.slice(0, 2).join('~') : null;
-      // The visible message namespace separates Dots accounts/threads sharing /dots/home.
-      return { route: `${path}#${scope || ''}`, thread: scope ? `dots:${path}:${scope}` : null };
+      if (dotsIdentityPath !== path) { dotsIdentityPath = path; dotsIdentityScope = null; }
+      if (scope) dotsIdentityScope = scope;
+      // Pending UUIDs and temporarily empty mounted windows are not a new thread.
+      return { route: `${path}#${dotsIdentityScope || ''}`, thread: dotsIdentityScope ? `dots:${path}:${dotsIdentityScope}` : null };
     }
     function nodeKey(element) {
       const turn = element.getAttribute('data-turn-key') || element.getAttribute('data-testid');
@@ -423,6 +431,7 @@
       transcriptEnd = saved.end;
       tailKnown = saved.tail;
       rebuildIndexes();
+      if (saved.droppedProvisional) markDirty();
     }
     function flushSaved() {
       win.clearTimeout(saveTimer); saveTimer = 0;
@@ -695,7 +704,7 @@
       return card;
     }
     function resetSearch() {
-      searchOpen = searchSubmitted = false; searchMatches = []; searchIndex = searchWheel = searchWheelTime = 0;
+      searchOpen = searchSubmitted = false; searchMatches = []; searchQuery = ''; searchIndex = searchWheel = searchWheelTime = 0;
       searchInput.value = ''; searchButtons.clear(); searchRows.replaceChildren(); searchList.scrollTop = 0;
       setAttribute(searchDock, 'hidden', '');
       setAttribute(searchDock, 'data-open', null); setAttribute(searchDock, 'data-results', null);
@@ -743,6 +752,7 @@
     function submitSearch(event) {
       event.preventDefault();
       const query = searchInput.value.slice(0, 160).trim();
+      searchQuery = query;
       searchMatches = query ? searchNodes(items, query) : [];
       searchSubmitted = Boolean(query);
       if (query) stats.searches++;
@@ -938,7 +948,9 @@
       for (const target of pending) targets.set(target, true);
       if (targets.size !== observedStructure.size || [...targets].some(([target, subtree]) => observedStructure.get(target) !== subtree)) {
         structure.disconnect();
-        for (const [target, subtree] of targets) structure.observe(target, { childList: true, subtree });
+        for (const [target, subtree] of targets) structure.observe(target, { childList: true, subtree,
+          ...(isDots() && target.matches('article.message-row[data-message-id]')
+            ? { attributes:true, attributeFilter:['data-message-id'] } : {}) });
         observedStructure = targets;
       }
       const parents = [];
@@ -1040,6 +1052,24 @@
       const previousPositioned = positioned;
       positioned = measured;
       const live = new Set(measured.map(item => item.key));
+      let retiredProvisional = false;
+      if (isDots() && measured.length && provisionalKeys.size) {
+        for (const key of provisionalKeys) if (!live.has(key)) {
+          const old = cache.get(key);
+          // A temporary client UUID is valid only while mounted. Confirmed IDs
+          // retain their chronology when virtualized; do not deduplicate message text.
+          const replacement = measured.find(item => item.element === old?.element && !provisionalDotsKey(item.key));
+          if (jump?.key === key) cancelJump(false);
+          if (selectedKey === key) selectedKey = replacement?.key || null;
+          if (activeKey === key) activeKey = replacement?.key || null;
+          if (previewKey === key) hidePreview();
+          scan?.pendingKeys.delete(key);
+          cache.delete(key); provisionalKeys.delete(key);
+          retiredProvisional = changed = true;
+        }
+        if (retiredProvisional) chronology = chronology.filter(key => cache.has(key));
+      }
+
       if (Math.abs(shift) > 2) for (const item of cache.values()) {
         if (!live.has(item.key)) { item.top += shift; item.bottom += shift; }
       }
@@ -1063,13 +1093,25 @@
         const { user, ...record } = item;
         if (previous) Object.assign(previous, record);
         else { cache.set(item.key, record); added = true; }
+        if (isDots() && provisionalDotsKey(item.key)) provisionalKeys.add(item.key);
       }
       // Existing records retain their identity, so layout changes do not need
       // an O(total cached turns) order copy, array rebuild or key-index rebuild.
-      if (added) {
+      if (added || retiredProvisional) {
         chronology = mergeTimeline(chronology, measured, cache, scan?.anchor, scan?.atStart);
         items = chronology.map(key => cache.get(key));
         rebuildIndexes();
+      }
+      if (retiredProvisional && searchSubmitted) {
+        const key = searchMatches[searchIndex]?.key, previousIndex = searchIndex;
+        const matches = new Map(searchMatches.filter(item => cache.has(item.key)).map(item => [item.key, item]));
+        // Only the mounted window is checked for newly confirmed matches.
+        // Preserve the submitted query even if the input now contains an unsubmitted edit.
+        for (const item of searchNodes(measured.map(item => cache.get(item.key)), searchQuery)) matches.set(item.key, item);
+        searchMatches = [...matches.values()].sort((a, b) => indexes.get(a.key) - indexes.get(b.key));
+        const retained = searchMatches.findIndex(item => item.key === key);
+        searchIndex = retained >= 0 ? retained : Math.max(0, Math.min(previousIndex, searchMatches.length - 1));
+        layoutSearch(); renderSearch();
       }
       if (previousHead && chronology[0] !== previousHead) historyComplete = false;
       if (scan) {
@@ -1107,7 +1149,7 @@
       chronology = []; transcriptEnd = null; tailKnown = false;
       cancelScan(false);
       cancelJump(false);
-      cache.clear();
+      cache.clear(); provisionalKeys.clear();
       indexes.clear();
       items = [];
       activeKey = selectedKey = null; positioned = [];

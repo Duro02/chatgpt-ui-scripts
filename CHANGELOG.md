@@ -1,5 +1,11 @@
 # 更新记录
 
+## Conversation Rail 0.4.5 — 2026-10-13
+
+- Treat bare Dots client UUIDs as provisional: show them while mounted, retire them after replacement/unmount, and persist only confirmed message identities. Automatically discard legacy provisional cache rows while preserving all confirmed IDs and actual repeated messages.
+- Observe message-ID attribute changes for in-place confirmation. Keep the Dots namespace stable through provisional/empty mounted windows; preserve confirmed nodes across virtual unmounts.
+- Replace provisional search matches with confirmed matches using the submitted query and mounted window only. Validate cache migration, confirmation by replacement/attribute changes, real repeated prompts, native UUID isolation and unchanged-refresh performance.
+
 ## Conversation Rail 0.4.4 — 2026-10-13
 
 - Hide the rail while the Dot profile panel is open; dismiss previews/search and restore the existing node list as soon as the panel closes or unmounts. Preserve indexed nodes and selection.

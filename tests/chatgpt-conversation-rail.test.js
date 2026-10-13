@@ -44,6 +44,20 @@ assert.equal(decodeSaved(JSON.stringify(corrupt),'thread-a',now),null);
 corrupt.entries.pop();corrupt.entries[0][1]='not a coordinate';
 assert.equal(decodeSaved(JSON.stringify(corrupt),'thread-a',now),null);
 assert.equal(encodeSaved('legacy',[{key:'turn:conversation-turn-0',top:0,bottom:100}],true,100,true),null);
+const pendingKey='message:11111111-2222-4333-8444-555555555555';
+const dotsThread='dots:/dots/home:scope~scope';
+const duplicateText=[{key:'message:scope~scope~CalpicoMessage~Sentinel_A',top:0,bottom:40,prompt:'same genuine message'},
+  {key:'message:scope~scope~CalpicoMessage~Sentinel_B',top:80,bottom:120,prompt:'same genuine message'},
+  {key:pendingKey,top:140,bottom:180,prompt:'same genuine message'}];
+const stableDots=encodeSaved(dotsThread,duplicateText,false,180,true,now);
+assert.equal(JSON.parse(stableDots).entries.length,2,'temporary Dots UUIDs are not persisted');
+const oldDots=JSON.stringify({v:1,thread:dotsThread,updated:now,complete:false,end:180,tail:true,entries:duplicateText.map(i=>[i.key,i.top,i.bottom,i.prompt,''])});
+const migratedDots=decodeSaved(oldDots,dotsThread,now);
+assert.equal(migratedDots.droppedProvisional,1,'old Dots caches migrate away temporary IDs');
+assert.equal(migratedDots.entries.length,2,'identical prompts with distinct confirmed IDs stay separate');
+const nativeUuid=encodeSaved('native-thread',[duplicateText[2]],false,180,true,now);
+assert.equal(decodeSaved(nativeUuid,'native-thread',now).entries.length,1,'ordinary conversation UUID messages are unaffected');
+console.log('Dots persistence: provisional UUID migration, stable duplicates and native UUID isolation passed');
 const memory=new Map();
 const storage={getItem:key=>memory.get(key)||null,setItem:(key,value)=>memory.set(key,value),removeItem:key=>memory.delete(key)};
 const stats={storageReads:0,storageWrites:0};const store=createIndexStore(storage,stats);
