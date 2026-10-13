@@ -15,7 +15,6 @@ ChatGPT 网页界面增强脚本与样式集合。
 | [`chatgpt-conversation-rail.user.js`](chatgpt-conversation-rail.user.js) | Tampermonkey userscript | ChatGPT 与 Dots 对话节点导航、节点持久化与节点搜索。 |
 | `GPT Claude-like Style.user.css` | Stylus/UserStyle | ChatGPT 深色界面样式，提供类似 Claude 的窄栏、暖灰阅读体验。 |
 | `chatgpt-claude-like-separator.user.js` | Tampermonkey userscript | 配合主题样式，使正文分隔线更自然。 |
-| `chatgpt-project-source-preview.user.js` | Tampermonkey userscript | 在 ChatGPT 项目源中直接预览 `.md` / `.txt` 文件，避免点击后直接下载。 |
 
 ## 安装
 
@@ -45,7 +44,6 @@ ChatGPT 网页界面增强脚本与样式集合。
 
 - 只想改外观：安装 `GPT Claude-like Style.user.css`。
 - 想让外观里的分隔线更自然：再安装 `chatgpt-claude-like-separator.user.js`。
-- 想预览项目源 Markdown/text 文件：安装 `chatgpt-project-source-preview.user.js`。
 - 需要右侧对话导航：安装 `chatgpt-conversation-rail.user.js`，可单独使用。
 
 ## 主要功能
