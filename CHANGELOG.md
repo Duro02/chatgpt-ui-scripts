@@ -1,5 +1,11 @@
 # 更新记录
 
+## Conversation Rail 0.4.6 — 2026-10-13
+
+- Keep an unloaded navigation target across consecutive server pages. Replace the 2.4-second height-only cutoff with message/geometry progress and a 15-second no-progress grace period; preserve cancellation and the 120-second overall limit.
+- Preserve the same jump job and its original anchor when paging replaces the message wrapper in the same scrollport. Keep the waiting target through a temporarily missing root, and calibrate a target arriving on the final wait before restoring the previous viewport.
+- Reproduce the old failure and verify a six-page Dots jump with no status sentinel, a slow page and scroll anchoring. Loading uses existing bounded scroll/wait work, with no simulated clicks or background polling.
+
 ## Conversation Rail 0.4.5 — 2026-10-13
 
 - Treat bare Dots client UUIDs as provisional: show them while mounted, retire them after replacement/unmount, and persist only confirmed message identities. Automatically discard legacy provisional cache rows while preserving all confirmed IDs and actual repeated messages.

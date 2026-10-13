@@ -162,6 +162,63 @@ async function persistenceRegression(){
   }
 }
 document.querySelector('#persist').onclick=persistenceRegression;
+async function historyJumpRegression(){
+  results.textContent='';
+  const savedPath=location.pathname, scope='paged-jump-'+Date.now(), thread=`dots:/dots/home:${scope}~${scope}`;
+  const timers=new Set();let listener=null, begin=30, requests=0, busy=false, c;
+  const later=(fn,ms)=>{const timer=setTimeout(()=>{timers.delete(timer);fn();},ms);timers.add(timer);};
+  const key=i=>`message:${scope}~${scope}~CalpicoMessage~msg-${i}`;
+  function renderPage(){
+    const list=document.createElement('div');list.className='message-list';
+    for(let i=begin;i<40;i++){
+      const row=document.createElement('article');row.className='message-row self turn';row.dataset.messageId=key(i).slice(8);
+      row.innerHTML=`<div class="message-text">第 ${i+1} 轮：多页历史跳转示例</div>`;list.append(row);
+    }
+    content.replaceChildren(list);
+  }
+  function page(){
+    if(scroll.scrollTop>2||begin<=0||busy||!c?.snapshot().loadingTarget)return;
+    busy=true;requests++;
+    // No status sentinel, and one server page exceeds the old 2.4 s cutoff.
+    later(()=>{const height=scroll.scrollHeight;begin=Math.max(0,begin-5);busy=false;
+      const commit=()=>{renderPage();scroll.scrollTop+=scroll.scrollHeight-height;};
+      if(requests===4){content.replaceChildren();later(commit,80);}else commit();
+    },requests===2?3200:550);
+  }
+  try{
+    setup(0);controller.stop();history.replaceState({},'', '/dots/home');scroll.dataset.role='messages-scroll';
+    const records=Array.from({length:40},(_,i)=>({key:key(i),top:i*180,bottom:(i+1)*180,prompt:`第 ${i+1} 轮：多页历史跳转示例`,answer:''}));
+    localStorage.setItem(api.cacheKey(thread),api.encodeSaved(thread,records,true,7200,true));
+    renderPage();scroll.scrollTop=scroll.scrollHeight;c=controller=api.start(document,{loadTimeout:20000});
+    listener=page;scroll.addEventListener('scroll',listener);
+    check(c.snapshot().count===40,'Dots 初始化恢复跨六页的缓存节点');
+    shadow().querySelector(`.mark[data-key="${key(3)}"]`).click();
+    await waitUntil(()=>!c.snapshot().loadingTarget&&content.querySelector(`[data-message-id="${key(3).slice(8)}"]`),19000);
+    const target=content.querySelector(`[data-message-id="${key(3).slice(8)}"]`);
+    check(requests===6&&begin===0,'一次点击连续加载六页，慢页没有被提前判定为结束');
+    check(target&&c.snapshot().selectedKey===key(3)&&c.snapshot().activeKey===key(3)&&Math.abs(target.getBoundingClientRect().top-scroll.getBoundingClientRect().top-24)<4,'加载后直接定位目标，不恢复旧节点或要求再点一次');
+    await sleep(900);check(requests===6&&c.snapshot().activeKey===key(3),'目标定位完成后停止加载，焦点保持稳定');
+    check(document.querySelector('textarea').value==='测试草稿：索引和跳转应保留这段输入','多页加载保留草稿');
+    c.stop();begin=30;requests=0;busy=false;renderPage();scroll.scrollTop=scroll.scrollHeight;
+    localStorage.setItem(api.cacheKey(thread),api.encodeSaved(thread,records,true,7200,true));
+    c=controller=api.start(document,{loadTimeout:1200});shadow().querySelector(`.mark[data-key="${key(3)}"]`).click();
+    await waitUntil(()=>!c.snapshot().loadingTarget,3000);
+    check(!c.snapshot().loadingTarget&&requests>=1&&requests<6&&begin>0,'消息容器重挂载不重置整次跳转超时，失败仍有限退出');
+    for(const timer of timers)clearTimeout(timer);timers.clear();scroll.removeEventListener('scroll',listener);listener=null;c.stop();
+    begin=30;renderPage();scroll.scrollTop=scroll.scrollHeight;
+    localStorage.setItem(api.cacheKey(thread),api.encodeSaved(thread,records,true,7200,true));
+    c=controller=api.start(document,{loadTimeout:200});
+    later(()=>{begin=0;renderPage();},150);shadow().querySelector(`.mark[data-key="${key(3)}"]`).click();
+    await waitUntil(()=>!c.snapshot().loadingTarget&&c.snapshot().activeKey===key(3),1500);
+    const finalTarget=content.querySelector(`[data-message-id="${key(3).slice(8)}"]`);
+    check(finalTarget&&c.snapshot().selectedKey===key(3)&&Math.abs(finalTarget.getBoundingClientRect().top-scroll.getBoundingClientRect().top-24)<4,'目标在最后一次等待中到达，优先定位而不是恢复旧位置');
+    log('ALL MULTIPAGE JUMP TESTS PASSED');
+  }catch(e){log('FAIL '+e.stack);}finally{
+    for(const timer of timers)clearTimeout(timer);if(listener)scroll.removeEventListener('scroll',listener);
+    controller?.stop();scroll.removeAttribute('data-role');history.replaceState({},'',savedPath);localStorage.removeItem(api.cacheKey(thread));
+  }
+}
+const historyJumpButton=document.createElement('button');historyJumpButton.id='historyjump';historyJumpButton.textContent='验证多页目标跳转';document.querySelector('#persist').after(historyJumpButton);historyJumpButton.onclick=historyJumpRegression;
 async function railScrollRegression(){
   results.textContent='';
   try {
@@ -505,7 +562,7 @@ document.querySelector('#dots').onclick=dotsRegression;
 document.querySelector('#all').onclick=async()=>{
   const button=document.querySelector('#all');button.disabled=true;const combined=[];
   try {
-    for(const [name,test] of [['Dots and route isolation',dotsRegression],['search',searchRegression],['preview panel',previewPanelRegression],['persistence',persistenceRegression],['latest',latestRegression],['selection',selectionRegression],['animation',animationRegression],['rail scroll',railScrollRegression],['hydration',hydrationRegression],['full performance and virtual history',()=>run()]]){
+    for(const [name,test] of [['Dots and route isolation',dotsRegression],['search',searchRegression],['preview panel',previewPanelRegression],['persistence',persistenceRegression],['multipage target jump',historyJumpRegression],['latest',latestRegression],['selection',selectionRegression],['animation',animationRegression],['rail scroll',railScrollRegression],['hydration',hydrationRegression],['full performance and virtual history',()=>run()]]){
       await test();combined.push(name+'\n'+results.textContent);
       results.textContent=combined.join('\n\n');
       if(combined.at(-1).includes('FAIL '))return;

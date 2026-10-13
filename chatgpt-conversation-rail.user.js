@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.4.5
+// @version      0.4.6
 // @description  Persistent conversation navigation with short marks, previews and on-demand history loading.
 // @author       duro
 // @license      MIT
@@ -1176,18 +1176,24 @@
       syncProfile();
       const next = preferredRoot();
       if (!next) {
+        const resumeKey = jump?.key || waitingKey;
         detach();
+        waitingKey = resumeKey;
         boot.observe(doc.body, { childList: true, subtree: true });
         return;
       }
       boot.disconnect();
       if (next === content && content.isConnected) return;
+      const nextScroller = findScroller(next);
+      const resumeJump = jump && jump.route === route && jump.container === nextScroller;
       const resumeKey = jump?.key || waitingKey;
       const resumePreview = Boolean(jump?.keepPreview || searchOpen && searchSubmitted);
-      detach();
-      waitingKey = resumeKey;
+      // Paging may replace the message wrapper inside the same scrollport.
+      // Keep one load job, its original anchor and its overall deadline.
+      detach(Boolean(resumeJump));
+      waitingKey = resumeJump ? null : resumeKey;
       content = next;
-      scroller = findScroller(content);
+      scroller = nextScroller;
       scroller.addEventListener('scroll', onScroll, { passive: true });
       resize.observe(content);
       resize.observe(scroller);
@@ -1196,10 +1202,10 @@
       if (waitingKey) { const key = waitingKey; waitingKey = null; navigate(key, resumePreview); }
     }
 
-    function detach() {
+    function detach(preserveJump = false) {
       stopRailMotion();
       cancelScan(false);
-      cancelJump(false);
+      if (!preserveJump) cancelJump(false);
       structure.disconnect();
       lifecycle.disconnect();
       observedStructure.clear(); observedParents = [];
@@ -1274,12 +1280,13 @@
 
     async function loadTarget(job) {
       const started = Date.now();
-      let steps = 0, covered = 0, topStable = 0, previousEnd = null, estimated = false;
+      let steps = 0, covered = 0, previousPage = null, lastProgress = started, estimated = false;
       toast('正在加载目标节点… · Esc 或再次点击可取消', true);
       try {
         while (jump === job && job.route === route && job.container === scroller &&
                scroller?.isConnected && !doc.hidden && steps++ < 600 && Date.now() - started < (options.loadTimeout || 120000)) {
           refresh();
+          if (jump !== job) return;
           const item = cache.get(job.key);
           if (item?.element?.isConnected) {
             job.stage = 'calibrate'; correctJump(); return;
@@ -1291,19 +1298,23 @@
           const pendingTarget = mounted.some(element => nodeKey(element) === job.key);
           const older = item.top < 0 || firstIndex !== undefined && targetIndex < firstIndex && position() <= 2;
           if (older && !pendingTarget) {
+            // Dots can page without a loading sentinel. Stable height for a few
+            // frames is not completion: keep this target until paging progresses
+            // or the bounded no-progress/global timeout expires.
+            const page = { first:first?.key, last:last?.key, count:mounted.length, end:transcriptEnd, max:geometry.max };
+            if (!previousPage || page.first !== previousPage.first || page.last !== previousPage.last ||
+                page.count !== previousPage.count || Math.abs(page.end - previousPage.end) > 2 ||
+                Math.abs(page.max - previousPage.max) > 2 || earlierLoading()) lastProgress = Date.now();
+            previousPage = page;
+            if (Date.now() - lastProgress >= 15000) break;
             toast(`正在加载更早的历史以定位第 ${targetIndex + 1} 轮… · Esc 可取消`, true);
             move(0);
             await pause(300);
             if (jump !== job) return;
-            refresh();
-            const end = transcriptEnd;
-            topStable = !earlierLoading() && end === previousEnd ? topStable + 1 : 0;
-            previousEnd = end;
-            if (topStable >= 8) break;
             estimated = false;
             continue;
           }
-          topStable = 0;
+          previousPage = null;
           if (pendingTarget) { covered = 0; await pause(180); continue; }
           const step = Math.max(120, geometry.height * .65);
           let destination;
@@ -1320,6 +1331,11 @@
           await pause(240);
         }
         if (jump === job) {
+          // A final page may commit during the last wait, just as a limit expires.
+          // Give its mounted target precedence over restoring the old viewport.
+          refresh();
+          if (jump !== job) return;
+          if (cache.get(job.key)?.element?.isConnected) { job.stage = 'calibrate'; correctJump(); return; }
           jump = null; selectedKey = null;
           restore(job);
           toast('暂未找到该节点，可能仍在加载或当前分支已变化；缓存节点已保留，可重试。');
