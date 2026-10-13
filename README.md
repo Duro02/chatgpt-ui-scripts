@@ -1,10 +1,8 @@
 # ChatGPT UI Scripts
 
-个人自用的 ChatGPT 网页增强脚本集合，作者：duro。
+ChatGPT 网页界面增强脚本与样式集合。
 
 中文 | [English](README_en.md)
-
-对话导航的正式版本是 [ChatGPT Conversation Rail](#chatgpt-conversation-rail)，支持 ChatGPT 和 Dots，可独立安装。
 
 ## 预览
 
@@ -14,20 +12,20 @@
 
 | 文件 | 类型 | 用途 |
 | --- | --- | --- |
-| [`chatgpt-conversation-rail.user.js`](chatgpt-conversation-rail.user.js) | Tampermonkey userscript | ChatGPT 与 Dots 的右侧对话导航，支持消息跳转、七节点预览、摘要搜索、本地索引缓存和按需加载历史。 |
-| `GPT Claude-like Style.user.css` | Stylus/UserStyle | ChatGPT 深色界面样式，让页面更接近 Claude 的窄版、暖灰、低干扰阅读体验。兼容 `html.dark`、`data-color-scheme`、`data-theme` 三套前端标记。 |
-| `chatgpt-claude-like-separator.user.js` | Tampermonkey userscript | 配合上面的样式使用，识别纯文本分隔符段落并添加 class，方便样式渲染为更自然的分割线。 |
-| `chatgpt-project-source-preview.user.js` | Tampermonkey userscript | 在 ChatGPT 项目源里预览 `.md` / `.txt` 文件，避免点击后直接下载。 |
+| [`chatgpt-conversation-rail.user.js`](chatgpt-conversation-rail.user.js) | Tampermonkey userscript | ChatGPT 与 Dots 对话节点导航、节点持久化与节点搜索。 |
+| `GPT Claude-like Style.user.css` | Stylus/UserStyle | ChatGPT 深色界面样式，提供类似 Claude 的窄栏、暖灰阅读体验。 |
+| `chatgpt-claude-like-separator.user.js` | Tampermonkey userscript | 配合主题样式，使正文分隔线更自然。 |
+| `chatgpt-project-source-preview.user.js` | Tampermonkey userscript | 在 ChatGPT 项目源中直接预览 `.md` / `.txt` 文件，避免点击后直接下载。 |
 
 ## 安装
 
 ### Stylus 样式
 
-推荐方式（可从 GitHub 自动更新）：
+推荐方式（可自动更新）：
 
 1. 安装浏览器扩展 Stylus。
 2. 打开原始文件地址：`https://raw.githubusercontent.com/Duro02/chatgpt-ui-scripts/main/GPT%20Claude-like%20Style.user.css`
-3. Stylus 会弹出安装页，点击安装即可；以后在管理页对该样式点“检查更新”即可同步最新版本。
+3. Stylus 会弹出安装页，点击安装即可；后续在管理面板检查更新即可同步最新样式。
 
 手动方式：
 
@@ -46,9 +44,9 @@
 建议组合：
 
 - 只想改外观：安装 `GPT Claude-like Style.user.css`。
-- 想让外观里的分隔线更稳定：再安装 `chatgpt-claude-like-separator.user.js`。
+- 想让外观里的分隔线更自然：再安装 `chatgpt-claude-like-separator.user.js`。
 - 想预览项目源 Markdown/text 文件：安装 `chatgpt-project-source-preview.user.js`。
-- 想恢复右侧对话导航：安装 `chatgpt-conversation-rail.user.js`，可以单独使用。
+- 需要右侧对话导航：安装 `chatgpt-conversation-rail.user.js`，可单独使用。
 
 ## 主要功能
 
@@ -57,47 +55,19 @@
 - 暖灰深色主题。
 - 更窄的正文阅读宽度。
 - 更接近 Claude 的文本、代码块、引用块和分隔线视觉。
-- 尽量不破坏 ChatGPT 原始布局节点，方便与其他脚本共存。
 
 ### ChatGPT Claude-like Separators
 
-- 扫描 ChatGPT 回答中的纯文本分隔符段落。
-- 给匹配段落添加 `claude-like-separator` class。
-- 由 Stylus 样式负责最终视觉渲染。
+配合主题样式，让回答中的分隔线更自然。
 
 ### ChatGPT Conversation Rail
 
-独立实现的对话导航脚本：右侧固定间距的短横线，当前轮变长、变亮，悬停或键盘聚焦显示提问与回答摘要。可单独安装，不依赖主题样式。
-
-- 点击横线跳到该轮；上下方向键、Home、End 选择节点，Enter 激活。
-- 悬停横线先显示单节点问答；向左移入气泡后平滑展开最多七个相邻节点，中央显示问答，通常上下各三个仅显示用户消息。滚轮或上下键浏览中央预览，不移动正文；点击任一卡片才跳转。移出后关闭，Esc 可立即关闭；首尾用另一侧的真实邻居补齐最多七张，滚动时面板高度和位置固定，避免缩放与空白。滚轮事件按帧合并，浏览期间卡片即时补位，不叠加位置、大小和透明度动画；展开动画继续保留。
-- 展开预览后，左侧中央出现圆形放大镜按钮。点击向左展开胶囊搜索框，输入关键词并按回车，胶囊展开为搜索结果列表。搜索已缓存的提问与回答摘要（空格分隔的关键词需全部匹配）；尚未发现的历史需先补全索引。结果复用七节点预览：中央显示提问与回答摘要（回答不必命中关键词），上下邻居仅显示提问；滚轮／上下键、Home/End 独立浏览匹配节点，点击定位；返回右侧预览或横线浏览时结果保留，移出整个区域后一起关闭。
-- 搜索与预览复用卡片布局、过渡动画、圆角、留白和悬停颜色，首尾高亮不会贴到外壳。搜索面板显示当前匹配序号和总数，与右侧浏览位置互相独立。
-- 尚有未发现的历史时，横线列表最顶端显示一条红线，悬停提示“点击加载过去的对话”。点击红线加载历史并补全索引；历史索引完整后自动隐藏红线。扫描会临时滚动，结束后恢复阅读位置；再次点击、Esc、鼠标滚轮或触摸可以中止。扫描期间请保持该标签页可见。
-- 点击节点后，高亮会保持在目标，正文手动滚动后恢复阅读位置判断。白色焦点平滑过渡；长列表可用滚轮、触摸、方向键、PageUp/PageDown、Home/End 浏览，跨可见范围时焦点与列表一起平滑移动。
-- 加载过程中按会话 ID 保留索引，项目地址前缀变化和内容容器重新挂载不会丢失已发现节点。
-- 自动保存已发现节点的 ID、顺序和短摘要。重新打开会话时先恢复导航；未挂载的节点显示较暗横线。点击后按需加载更早历史，找到目标即停止、定位并高亮。再次点击同一节点或 Esc 可取消；加载期间保持标签页可见。
-- 历史扫描保留已发现节点，虚拟卸载不等于删除。切换会话时保存当前索引并恢复对应会话的缓存；项目地址前缀不影响会话 ID。
-- 支持 Dots（`/dots/...`）当前消息列表：按用户 `.self` 消息卡片建立节点，关联其后首条文本回复；预览、搜索、跳转和缓存共用原组件。缓存按地址和可见消息 ID 的所属前缀隔离，同地址切换消息所属前缀也会清理旧节点。Dots 的分页完整性需通过主动历史扫描确认。
-- 点击未挂载的缓存节点，会保留目标并逐页加载；根据消息 ID、数量和几何变化判断分页进展，连续 15 秒无进展或整次跳转达 120 秒时有限退出。同一滚动区域的容器重挂载不重置任务，最后一页到达后直接定位，无需再点一次；不模拟点击，不新增后台轮询。
-- 虚拟卸载只保留 ID、位置与短摘要，同时释放用户和回答 DOM 引用；切换会话使用弱引用隔离旧节点。停止脚本会取消恢复任务、等待、观察器和监听器，并清空运行时索引。持久缓存最多 32 个会话，单会话最多 10,000 条；达到条数或字符预算时保留最新的可容纳节点，并标记历史不完整。这是磁盘缓存限制，当前会话元数据仍随发现的节点数增长。
-- Dots 发送中的客户端 UUID 属于临时节点，只在消息仍挂载时保留；正式消息接替后移除临时节点。持久缓存仅保存正式 ID，升级会自动清理旧缓存的临时条目，无需清空正式索引。同文但正式 ID 不同的提问仍分别保留。
-- Dot 个人资料面板展开时自动隐藏导航，关闭预览／搜索；面板关闭或卸载后恢复原节点，索引和缓存保留。只监听局部浮动面板，无持续轮询。
-- 客户端 `pushState`／`replaceState` 切页时即时清理旧导航；旧节点点击也会先校验当前会话。
-- 适配新版 `data-turn-key` 和旧版 `conversation-turn-*` 节点，支持 `column-reverse` 容器的负 `scrollTop`。
-
-性能设计：正常阅读和空闲时没有定时轮询或持续存储读写；滚动只读取滚动位置，用缓存坐标二分查询，并更新前后两个高亮。监听消息列表和祖先的直接结构变动，不持续监听回答内部文本；尺寸变化以 180ms 合并更新。摘要限制长度和遍历节点数；横线列表只渲染视口附近约 50 个按钮。缓存写入在变动停止 1.5 秒后合并到空闲时执行，离开页面时补存；保存时合并同一会话其他标签页已发现的节点，避免较少节点覆盖完整索引。完整历史扫描与点击后的按需加载、定位校准有次数和时间上限。0.2.2 中，已知节点的布局刷新只处理挂载窗口，新增 ID 时才重建顺序和索引；监听目标不变时不重连，未变化的横线属性不重复写入。审计方法、对照数据和限制见 [性能审计](CONVERSATION_RAIL_PERFORMANCE.md)。
-
-缓存保存在当前站点的浏览器 localStorage，只包含索引和截断摘要，不保存整段对话或 DOM，也不上传。最多保留 32 个最近访问的会话，总计约 200 万字符，单会话最多 1 万节点；容量不足时先缩短摘要或淘汰较旧的本脚本缓存。无固定过期时间；存储不可用时退回本页内存索引。旧版只有序号、没有稳定消息 ID 的节点不跨刷新复用。
-
-脚本不直接请求会话 API；按需加载通过页面滚动触发 ChatGPT 自身加载。缓存坐标只用于估计，最终按节点 ID 匹配并校准；节点在当前分支找不到时保留缓存并提示，可重试。顶部红线表示索引尚有未知历史，已缓存节点的正文加载独立处理。
-
-开发验证：运行 `node tests/chatgpt-conversation-rail.test.js`。在仓库根目录启动本机 HTTP 服务，打开 `tests/conversation-rail.browser.html`，点击“运行全部回归”。另外打开 `tests/c/persistence-reload/`，保存索引后实际刷新，验证正文只挂载 5 轮时仍恢复 30 个节点。本地 HTTP 服务还提供 `dots/home/` 结构演示页面，可用于录制 Dots 导航；该页面使用合成消息，不包含个人对话。页面覆盖千轮索引、滚动/流式更新开销、新旧结构、虚拟化历史、会话切换和释放资源。
+为 ChatGPT 和 Dots 添加右侧对话节点导航，点击节点即可跳转到对应提问。已发现的节点会保留，下次打开会话时仍可浏览，也可以按关键词搜索提问和回答摘要。
 
 ## 许可证
 
-当前仓库中的脚本和样式由 duro 编写，按 [MIT 许可证](LICENSE.md) 发布。
+[MIT](LICENSE.md)
 
 ## 注意
 
-ChatGPT 网页 DOM 变化很快，这些脚本都依赖当前网页结构。若某个功能突然失效，通常需要用浏览器开发者工具重新确认相关 DOM 或请求路径。
+ChatGPT 网页更新后，部分功能可能需要适配。如遇到问题，欢迎提交 Issue。
