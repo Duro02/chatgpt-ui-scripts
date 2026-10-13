@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.4.7
+// @version      0.4.8
 // @description  Persistent conversation navigation with short marks, previews and on-demand history loading.
 // @author       duro
 // @license      MIT
@@ -229,8 +229,9 @@
 
   function encodeSaved(thread, items, complete, end, tail, now = Date.now()) {
     const dots = typeof thread === 'string' && thread.startsWith('dots:');
-    const stable = items.filter(item => !/^turn:conversation-turn-/.test(item.key) && !(dots && provisionalDotsKey(item.key)));
-    if (!stable.length || stable.length > CACHE_ITEMS) return null;
+    const eligible = items.filter(item => !/^turn:conversation-turn-/.test(item.key) && !(dots && provisionalDotsKey(item.key)));
+    if (!eligible.length) return null;
+    const stable = eligible.length > CACHE_ITEMS ? eligible.slice(-CACHE_ITEMS) : eligible;
     const data = { v: 1, thread, updated: now, complete: complete && stable.length === items.length, end, tail,
       entries: stable.map(item => [item.key, Math.round(item.top * 10) / 10,
         Math.round(item.bottom * 10) / 10, (item.prompt || '').slice(0, 180), (item.answer || '').slice(0, 140)]) };
@@ -241,6 +242,20 @@
     }
     if (raw.length > CACHE_SIZE) {
       for (const row of data.entries) row[3] = '';
+      raw = JSON.stringify(data);
+    }
+    if (raw.length > CACHE_SIZE) {
+      // Long confirmed IDs alone can exceed the budget. Keep the newest suffix
+      // rather than dropping the entire save, and do not claim a complete index.
+      data.complete = false;
+      let size = JSON.stringify({ ...data, entries: [] }).length, start = data.entries.length;
+      while (start > 0) {
+        const rowSize = JSON.stringify(data.entries[start - 1]).length + (start < data.entries.length ? 1 : 0);
+        if (size + rowSize > CACHE_SIZE) break;
+        size += rowSize; start--;
+      }
+      data.entries = data.entries.slice(start);
+      if (!data.entries.length) return null;
       raw = JSON.stringify(data);
     }
     return raw.length <= CACHE_SIZE ? raw : null;

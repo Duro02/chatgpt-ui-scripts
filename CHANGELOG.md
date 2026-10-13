@@ -1,5 +1,10 @@
 # 更新记录
 
+## Conversation Rail 0.4.8 — 2026-10-13
+
+- Preserve the newest cached suffix when the 10,000-entry or serialized character limit is exceeded, rather than silently abandoning the entire save. Keep storage budgets unchanged and mark trimmed history incomplete.
+- Cover oversized entry counts, long confirmed IDs, newest-node retention, ordering and non-mutating serialization.
+
 ## Conversation Rail 0.4.7 — 2026-10-13
 
 - Release both user and answer DOM references when Dots messages unmount or their wrapper detaches. Use weak references for stale-route suppression, so old message trees are not retained while waiting for the next conversation.
