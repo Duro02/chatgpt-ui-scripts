@@ -90,5 +90,23 @@ function run(file,label,count,verify){
   }
   results.push({label,cached:count,mounted:7,startupMs:f.startupMs,refresh100:refresh,unchangedRender100:render,idleStable});f.close();
 }
+function previewRegression(){
+  const f=fixture(current,1000), root=f.d.querySelector('#duro-conversation-rail').shadowRoot;
+  const mark=root.querySelector('.mark[data-key="turn:message-993"]'), panel=root.querySelector('.preview');
+  mark.dispatchEvent(new f.w.Event('pointerover',{bubbles:true}));
+  panel.dispatchEvent(new f.w.Event('pointerenter'));
+  assert.equal(panel.querySelectorAll('.preview-card').length,7);
+  f.changes.takeRecords();
+  for(let i=0;i<100;i++)f.c.audit.refresh();
+  assert.equal(f.changes.takeRecords().length,0,'an unchanged expanded panel does not rewrite DOM during refresh');
+  const reads=f.layoutReads(), refreshes=f.c.stats.refreshes;
+  for(let i=0;i<100;i++)panel.dispatchEvent(new f.w.WheelEvent('wheel',{deltaY:120,bubbles:true,composed:true,cancelable:true}));
+  assert.ok(panel.querySelectorAll('.preview-card').length<=7,'rapid wheel browsing keeps preview DOM bounded');
+  assert.equal(f.c.stats.refreshes,refreshes,'preview wheel does not scan the transcript');
+  assert.equal(f.layoutReads(),reads,'preview wheel does not measure transcript geometry');
+  assert.equal(panel.querySelector('[data-center]').dataset.key,'turn:message-999');
+  f.close();
+}
+previewRegression();
 for(const count of [100,1000,10000]){if(baseline)run(baseline,'0.2.0',count,false);run(current,'current',count,!process.env.RAIL_BASELINE_ONLY);}
 console.log(JSON.stringify({method:'Node + jsdom, 7 mounted turns, 20 warmups, 100 synchronous height/text refreshes; no browser layout/paint/GPU measurement',results},null,2));

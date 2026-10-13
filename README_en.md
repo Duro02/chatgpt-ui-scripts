@@ -71,6 +71,8 @@ Suggested combinations:
 
 ### ChatGPT Conversation Rail
 
+Move left from a hovered rail mark into its bubble to expand up to seven neighboring turns. The center shows the question and answer; three smaller prompts appear on each side. Wheel or arrow keys browse previews without moving the transcript; click a card to navigate. Leaving dismisses the panel, and Esc closes it immediately.
+
 A standalone rail visually inspired by DSH's TurnNavigator: fixed-pitch horizontal marks, a longer/brighter active mark, and prompt/answer previews on hover or keyboard focus. It does not include the archived script's backup or Prompt manager.
 
 - Click a mark to jump. Arrow keys, Home and End select marks; Enter activates them.

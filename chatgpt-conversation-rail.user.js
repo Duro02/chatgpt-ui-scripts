@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.2.2
+// @version      0.3.0
 // @description  Persistent conversation navigation with short marks, previews and on-demand history loading.
 // @author       duro
 // @license      MIT
@@ -57,16 +57,33 @@
     .index::before { background:#cf746b; opacity:.95; transform:scaleX(.75); }
     .index[aria-busy]::before { background:#e39a72; }
     .preview { position:fixed; right:50px; top:var(--preview-top,40vh); width:min(300px,calc(100vw - 90px));
-      max-height:130px; padding:10px 12px; border-radius:10px; background:var(--rail-bg);
-      color:inherit; box-shadow:0 4px 18px #0002; pointer-events:none; overflow:hidden; }
-    .prompt,.answer { display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; white-space:pre-wrap; }
+      height:var(--preview-height,118px); z-index:51; color:inherit; pointer-events:auto;
+      transition:height 260ms cubic-bezier(.2,.85,.25,1),top 260ms cubic-bezier(.2,.85,.25,1); }
+    /* A small hit area bridges the gap from the rail into the bubble. */
+    .preview::after { content:''; position:absolute; left:100%; width:14px; top:0; height:100%; }
+    .preview-window { position:relative; height:100%; overflow:hidden; border-radius:14px;
+      background:var(--rail-bg); border:1px solid var(--rail-border); box-shadow:0 8px 24px #0003; }
+    .preview-card { position:absolute; left:50%; width:calc(100% - 32px); height:var(--preview-row-height,40px);
+      transform:translateX(-50%); padding:6px 8px 6px 28px; text-align:left; border:0; border-radius:9px;
+      background:transparent; color:var(--rail-muted); overflow:hidden;
+      transition:top 240ms cubic-bezier(.2,.85,.25,1),height 240ms cubic-bezier(.2,.85,.25,1),
+        width 240ms cubic-bezier(.2,.85,.25,1),opacity 180ms ease,background 140ms ease; }
+    .preview-card[data-center] { width:calc(100% - 12px); height:var(--preview-center-height,118px);
+      padding-top:10px; color:inherit; background:color-mix(in srgb,currentColor 5%,var(--rail-bg)); }
+    .preview-card:hover { background:color-mix(in srgb,currentColor 8%,var(--rail-bg)); }
+    .preview-card:focus-visible { outline:1px solid currentColor; outline-offset:-2px; }
+    .preview:not([data-expanded]) .preview-card:not([data-center]) { opacity:0; pointer-events:none; }
+    .preview-number { position:absolute; left:8px; top:9px; font-size:10px; opacity:.55; }
+    .prompt,.answer,.preview-label { display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; white-space:pre-wrap; }
     .prompt { font-weight:600; -webkit-line-clamp:2; }
+    .preview-label { font-size:12px; line-height:1.35; -webkit-line-clamp:2; }
     .answer { margin-top:4px; color:var(--rail-muted); font-size:12px; -webkit-line-clamp:3; }
+    .mark[data-preview]::before { transform:scaleX(.9); opacity:.9; }
     .status { position:fixed; right:50px; bottom:100px; max-width:300px; padding:8px 12px;
       border-radius:8px; background:var(--rail-bg); color:inherit; box-shadow:0 4px 18px #0002; }
     [hidden] { display:none !important; }
     @media(max-width:760px) { nav { right:5px; } .preview { right:39px; } }
-    @media(prefers-reduced-motion:reduce) { .mark::before,.focus-line { transition:none; } }
+    @media(prefers-reduced-motion:reduce) { .mark::before,.focus-line,.preview,.preview-card { transition:none; } }
   `;
 
   // Binary search over cached content coordinates; no DOM reads in this function.
@@ -266,15 +283,17 @@
     const shadow = host.attachShadow({ mode: 'open' });
     shadow.innerHTML = `<style>${CSS}</style><nav aria-label="对话导航" hidden>
       <div class="scroller" tabindex="0" aria-label="对话节点列表，可上下滚动"><div class="marks"><div class="focus-line" aria-hidden="true" hidden></div><button class="mark index" type="button" style="top:0" aria-label="点击加载过去的对话" hidden></button></div></div></nav>
-      <div class="preview" role="tooltip" id="rail-preview" hidden><div class="prompt"></div><div class="answer"></div></div>
+      <div class="preview" role="region" aria-label="对话节点预览" id="rail-preview" hidden><div class="preview-window"></div></div>
       <div class="status" role="status" hidden></div>`;
     doc.body.appendChild(host);
     const nav = shadow.querySelector('nav');
     const rail = shadow.querySelector('.scroller');
     const marks = shadow.querySelector('.marks');
     const preview = shadow.querySelector('.preview');
-    const prompt = shadow.querySelector('.prompt');
-    const answer = shadow.querySelector('.answer');
+    const previewWindow = shadow.querySelector('.preview-window');
+    const previewCards = new Map();
+    let previewKey = null, previewExpanded = false, previewInside = false, navInside = false, previewKeyboard = false;
+    let previewCloseTimer = 0, previewEntryFrame = 0, previewAnchor = 100, previewWheel = 0, previewWheelTime = 0;
     const status = shadow.querySelector('.status');
     const indexButton = shadow.querySelector('.index');
     const focusLine = shadow.querySelector('.focus-line');
@@ -383,7 +402,26 @@
       return doc.scrollingElement;
     }
 
-    function hidePreview() { preview.hidden = true; }
+    function hidePreview() {
+      win.clearTimeout(previewCloseTimer); previewCloseTimer = 0;
+      win.cancelAnimationFrame(previewEntryFrame); previewEntryFrame = 0;
+      if (preview.hidden && !previewCards.size) return;
+      preview.hidden = true;
+      setAttribute(preview, 'data-expanded', null);
+      previewExpanded = previewInside = previewKeyboard = false;
+      hovered = navInside;
+      if (previewKey) setAttribute(buttons.get(previewKey) || preview, 'data-preview', null);
+      previewKey = null; previewWheel = 0;
+      previewCards.clear(); previewWindow.replaceChildren();
+    }
+    function delayHidePreview() {
+      win.clearTimeout(previewCloseTimer);
+      previewCloseTimer = win.setTimeout(() => {
+        previewCloseTimer = 0;
+        if (!previewInside && !navInside && !preview.contains(shadow.activeElement) &&
+            !(previewKeyboard && shadow.activeElement?.classList.contains('mark'))) hidePreview();
+      }, 220);
+    }
 
     // Native attribute setters may invalidate styles even when the value matches.
     // Keep unchanged animation windows and resize refreshes free of DOM writes.
@@ -391,6 +429,9 @@
       if (element.getAttribute(name) === value) return;
       if (value === null) element.removeAttribute(name);
       else element.setAttribute(name, value);
+    }
+    function setText(element, text) {
+      if (element.textContent !== text) element.textContent = text;
     }
     function setStyle(element, name, value) {
       if (element.style.getPropertyValue(name) !== value) element.style.setProperty(name, value);
@@ -424,6 +465,7 @@
         setAttribute(button, 'aria-label', `跳到第 ${i + 1} 轮：${item.prompt || '尚未加载的提问'}`);
         setAttribute(button, 'data-unloaded', item.element?.isConnected ? null : '');
         setAttribute(button, 'aria-current', item.key === activeKey ? 'true' : null);
+        setAttribute(button, 'data-preview', item.key === previewKey ? '' : null);
       }
       updateIndicator();
       for (const [key, button] of buttons) {
@@ -542,29 +584,128 @@
       if (!frame && !doc.hidden) frame = win.requestAnimationFrame(syncActive);
     }
 
-    function showPreview(button) {
-      const item = cache.get(button?.dataset.key);
-      if (button === indexButton) {
-        prompt.textContent = scan ? '正在加载过去的对话，点击取消' : '点击加载过去的对话';
-        answer.textContent = '';
-      } else {
-        if (!item) return;
-        if (item.element?.isConnected) {
-          // Refresh only the hovered entry, so editing and streamed responses stay current.
-          const user = item.element.querySelector(USER);
-          const oldPrompt = item.prompt, oldAnswer = item.answer;
-          item.prompt = prefix(user, 180) || item.prompt;
-          const response = item.element.querySelector(RESPONSE);
-          item.answer = prefix(response, 260) || item.answer;
-          if (item.prompt !== oldPrompt || (item.answer || '').slice(0, 140) !== (oldAnswer || '').slice(0, 140)) markDirty();
-        }
-        prompt.textContent = item.prompt || '尚未加载的提问';
-        answer.textContent = item.answer || '点击定位这一轮。';
+    function readPreview(item) {
+      if (!item?.element?.isConnected) return;
+      // Only the central entry is reread; neighbors use bounded cached summaries.
+      const oldPrompt = item.prompt, oldAnswer = item.answer;
+      item.prompt = prefix(item.element.querySelector(USER), 180) || item.prompt;
+      item.answer = prefix(item.element.querySelector(RESPONSE), 260) || item.answer;
+      if (item.prompt !== oldPrompt || (item.answer || '').slice(0, 140) !== (oldAnswer || '').slice(0, 140)) markDirty();
+    }
+    function previewCard(key) {
+      let card = previewCards.get(key);
+      if (card) return card;
+      const button = doc.createElement('button');
+      button.type = 'button'; button.className = 'preview-card'; button.dataset.key = key;
+      const number = doc.createElement('span'); number.className = 'preview-number';
+      const label = doc.createElement('span');
+      const response = doc.createElement('span'); response.hidden = true;
+      button.append(number, label, response); previewWindow.appendChild(button);
+      card = { button, number, label, response, top: 0, entering: false };
+      previewCards.set(key, card);
+      return card;
+    }
+    function renderPreview(direction = 0) {
+      const index = indexes.get(previewKey);
+      if (index === undefined || preview.hidden) return;
+      const available = Math.max(140, win.innerHeight - 80);
+      const centerHeight = Math.round(Math.min(118, Math.max(74, available * .36)) * 100) / 100;
+      const rowHeight = Math.round(Math.min(40, Math.max(11, (available - centerHeight) / 6)) * 100) / 100;
+      const before = Math.min(3, index), after = Math.min(3, items.length - index - 1);
+      const centerTop = previewExpanded ? before * rowHeight : 0;
+      const height = centerHeight + (previewExpanded ? (before + after) * rowHeight : 0);
+      setStyle(preview, '--preview-center-height', `${centerHeight}px`);
+      setStyle(preview, '--preview-row-height', `${rowHeight}px`);
+      setStyle(preview, '--preview-height', `${height}px`);
+      setStyle(host, '--preview-top', `${Math.max(64, Math.min(win.innerHeight - height - 16, previewAnchor - centerTop))}px`);
+      const needed = new Set();
+      for (let slot = -before; slot <= after; slot++) {
+        const item = items[index + slot]; needed.add(item.key);
+        const isNew = !previewCards.has(item.key), card = previewCard(item.key), central = slot === 0;
+        setAttribute(card.button, 'data-center', central ? '' : null);
+        setAttribute(card.button, 'aria-label', `跳到第 ${index + slot + 1} 轮：${item.prompt || '尚未加载的提问'}`);
+        setAttribute(card.button, 'tabindex', central || previewExpanded ? '0' : '-1');
+        setAttribute(card.button, 'aria-hidden', central || previewExpanded ? null : 'true');
+        setText(card.number, String(index + slot + 1));
+        setAttribute(card.label, 'class', central ? 'prompt' : 'preview-label');
+        setText(card.label, item.prompt || '尚未加载的提问');
+        setAttribute(card.response, 'class', central ? 'answer' : 'preview-response');
+        setAttribute(card.response, 'hidden', central ? null : '');
+        if (central) {
+          setText(card.response, item.answer || '点击定位这一轮。');
+        } else setText(card.response, '');
+        card.top = Math.round((slot < 0 ? centerTop + slot * rowHeight : slot > 0 ? centerTop + centerHeight + (slot - 1) * rowHeight : centerTop) * 100) / 100;
+        if (isNew && previewExpanded && direction && !win.matchMedia('(prefers-reduced-motion:reduce)').matches) {
+          card.entering = true;
+          card.button.style.top = `${card.top + direction * rowHeight}px`;
+          card.button.style.opacity = '0';
+        } else if (!card.entering) setStyle(card.button, 'top', `${card.top}px`);
       }
-      answer.hidden = !answer.textContent;
-      preview.hidden = false;
+      for (const [key, card] of previewCards) if (!needed.has(key)) { card.button.remove(); previewCards.delete(key); }
+      // One bounded entry frame; card movement itself uses CSS transitions.
+      if (!previewEntryFrame && [...previewCards.values()].some(card => card.entering)) {
+        previewEntryFrame = win.requestAnimationFrame(() => {
+          previewEntryFrame = 0;
+          for (const card of previewCards.values()) if (card.entering) {
+            card.entering = false; card.button.style.opacity = '';
+            setStyle(card.button, 'top', `${card.top}px`);
+          }
+        });
+      }
+    }
+    function expandPreview() {
+      if (preview.hidden) return;
+      win.clearTimeout(previewCloseTimer); previewCloseTimer = 0;
+      previewInside = hovered = true;
+      if (!previewKey || previewExpanded) return;
+      previewExpanded = true;
+      setAttribute(preview, 'data-expanded', '');
+      renderPreview();
+    }
+    function shiftPreview(delta) {
+      const index = indexes.get(previewKey);
+      if (index === undefined) return;
+      const next = Math.max(0, Math.min(items.length - 1, index + delta));
+      if (next === index) return;
+      setAttribute(buttons.get(previewKey) || preview, 'data-preview', null);
+      previewKey = items[next].key;
+      readPreview(items[next]); renderPreview(Math.sign(delta));
+      stopRailMotion();
+      // Browse the rail along with the panel, without moving the transcript.
+      const top = (next + (indexButton.hidden ? 0 : 1)) * PITCH;
+      if (top < rail.scrollTop || top + PITCH > rail.scrollTop + railHeight) rail.scrollTop = Math.max(0, top - railHeight / 2);
+      render();
+    }
+    function showPreview(button, keyboard = false) {
+      if (!button) return;
+      const item = cache.get(button.dataset.key);
+      if (button !== indexButton && !item) return;
+      win.clearTimeout(previewCloseTimer); previewCloseTimer = 0;
+      previewKeyboard = keyboard;
+      if (previewKey !== item?.key) {
+        setAttribute(buttons.get(previewKey) || preview, 'data-preview', null);
+        previewWheel = 0;
+      }
+      previewKey = item?.key || null;
+      previewExpanded = false;
+      setAttribute(preview, 'data-expanded', null);
       const rect = button.getBoundingClientRect();
-      host.style.setProperty('--preview-top', `${Math.max(64, Math.min(win.innerHeight - 150, rect.top - 35))}px`);
+      previewAnchor = Math.max(64, Math.min(win.innerHeight - 134, rect.top - 35));
+      preview.hidden = false;
+      if (button === indexButton) {
+        previewCards.clear(); previewWindow.replaceChildren();
+        const card = previewCard('history');
+        card.button.removeAttribute('data-key'); card.button.dataset.history = '';
+        card.button.setAttribute('data-center', ''); card.button.style.top = '0px';
+        card.label.className = 'prompt'; card.response.className = 'answer';
+        card.label.textContent = scan ? '正在加载过去的对话，点击取消' : '点击加载过去的对话';
+        card.number.textContent = ''; card.response.textContent = ''; card.response.hidden = true;
+        setStyle(preview, '--preview-height', '118px');
+        setStyle(host, '--preview-top', `${previewAnchor}px`);
+      } else {
+        readPreview(item); renderPreview();
+        setAttribute(button, 'data-preview', '');
+      }
     }
 
     // Observe direct structural containers only. Token text and answer descendants are not watched.
@@ -727,6 +868,7 @@
       if (!scan) syncActive();
       render();
       follow();
+      if (previewExpanded) renderPreview();
     }
 
     function schedule() {
@@ -1081,6 +1223,7 @@
       if (event.composedPath().includes(host) && event.key !== "Escape") return;
       if (event.type === 'keydown' && !['Escape', 'PageUp', 'PageDown', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
       const restorePosition = event.type === 'keydown' && event.key === 'Escape';
+      hidePreview();
       cancelJump(restorePosition);
       if (!restorePosition) releaseSelection();
       cancelScan(restorePosition);
@@ -1092,22 +1235,48 @@
       cancelJump(false);
     }
     function pointerIntent(event) {
-      if (!event.composedPath().includes(host)) releaseSelection();
+      if (!event.composedPath().includes(host)) { hidePreview(); releaseSelection(); }
     }
     function visible() {
-      if (doc.hidden) { flushSaved(); releaseSelection(); cancelScan(false); return; }
+      if (doc.hidden) { hidePreview(); flushSaved(); releaseSelection(); cancelScan(false); return; }
       bind();
       schedule();
     }
 
     rail.addEventListener('wheel', stopRailMotion, { passive: true });
     rail.addEventListener('touchstart', stopRailMotion, { passive: true });
-    rail.addEventListener('scroll', () => { if (!railMotion) render(); hidePreview(); }, { passive: true });
-    nav.addEventListener('pointerenter', () => { hovered = true; });
-    nav.addEventListener('pointerleave', () => { hovered = false; hidePreview(); });
+    rail.addEventListener('scroll', () => { if (!railMotion) render(); if (!previewExpanded && !previewKeyboard) hidePreview(); }, { passive: true });
+    nav.addEventListener('pointerenter', () => { navInside = hovered = true; win.clearTimeout(previewCloseTimer); });
+    nav.addEventListener('pointerleave', () => { navInside = false; hovered = previewInside; delayHidePreview(); });
+    preview.addEventListener('pointerenter', expandPreview);
+    preview.addEventListener('pointerleave', () => { previewInside = false; hovered = navInside; delayHidePreview(); });
+    preview.addEventListener('focusin', expandPreview);
+    preview.addEventListener('focusout', delayHidePreview);
+    preview.addEventListener('click', event => {
+      const button = event.target.closest('button');
+      if (button?.hasAttribute('data-history')) buildIndex();
+      else if (button?.dataset.key) navigate(button.dataset.key);
+    });
+    preview.addEventListener('wheel', event => {
+      event.preventDefault();
+      if (!previewKey || !event.deltaY) return;
+      expandPreview();
+      if (event.timeStamp - previewWheelTime > 160) previewWheel = 0;
+      previewWheelTime = event.timeStamp;
+      previewWheel += event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 80 : 1);
+      if (Math.abs(previewWheel) < 36) return;
+      const step = Math.sign(previewWheel); previewWheel = 0;
+      shiftPreview(step);
+    }, { passive: false });
+    preview.addEventListener('keydown', event => {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault(); expandPreview(); shiftPreview(event.key === 'ArrowDown' ? 1 : -1);
+        previewCards.get(previewKey)?.button.focus({ preventScroll: true });
+      }
+    });
     marks.addEventListener('pointerover', event => showPreview(event.target.closest('button')));
-    marks.addEventListener('focusin', event => showPreview(event.target.closest('button')));
-    marks.addEventListener('focusout', hidePreview);
+    marks.addEventListener('focusin', event => showPreview(event.target.closest('button'), true));
+    marks.addEventListener('focusout', delayHidePreview);
     marks.addEventListener('click', event => {
       const button = event.target.closest('button');
       if (button === indexButton) buildIndex();
@@ -1156,6 +1325,7 @@
       stop() {
         flushSaved();
         stopped = true;
+        hidePreview();
         detach();
         boot.disconnect();
         theme.disconnect();

@@ -1,5 +1,13 @@
 # 更新记录
 
+## Conversation Rail 0.3.0 — 2026-10-13
+
+- Let the pointer cross from a rail mark into its bubble, then expand a seven-node preview panel with three neighboring user prompts above and below the central question/answer.
+- Browse the central preview with wheel or arrow keys without scrolling the transcript; click any card to navigate using the existing mounted/cached target logic.
+- Animate expansion and keyed card promotion, retain the central node on entry, clamp to viewport edges, and show only available neighbors at conversation boundaries.
+- Keep preview DOM bounded to seven cards, reread only the central bounded summary, avoid unchanged expanded-panel DOM writes, and stop entry frames/close timers on dismissal. Respect reduced motion and keep collapsed neighbors out of the accessibility tree.
+- Add browser interaction regressions, real mouse/wheel verification and jsdom checks for bounded rendering, zero transcript geometry reads during preview wheel browsing, and no DOM rewrites on unchanged refreshes.
+
 ## Conversation Rail 0.2.2 — 2026-10-13
 
 - Write rail labels, positions, visibility, unloaded/current states and overflow attributes only when values change. Unchanged renders no longer mutate the rail DOM.

@@ -16,7 +16,7 @@
   #results{position:fixed;left:16px;top:80px;width:240px;background:#171715e8;padding:12px;font:12px/1.5 monospace;max-height:70vh;overflow:auto;z-index:60}
   #results:empty{display:none}.sr-only{display:none}
 </style>
-<header><h1>ChatGPT 横线导航 · 测试页面</h1><button id="persist">验证缓存与按需加载</button><button id="all">运行全部回归</button><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="railscroll">验证长列表滚动</button><button id="animation">验证焦点动画</button><button id="selection">验证跳转高亮</button><button id="latest">验证最新节点保留</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button><button id="demo">展示长对话</button><button id="light">切换明暗</button></header>
+<header><h1>ChatGPT 横线导航 · 测试页面</h1><button id="persist">验证缓存与按需加载</button><button id="panel">验证七节点预览</button><button id="all">运行全部回归</button><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="railscroll">验证长列表滚动</button><button id="animation">验证焦点动画</button><button id="selection">验证跳转高亮</button><button id="latest">验证最新节点保留</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button><button id="demo">展示长对话</button><button id="light">切换明暗</button></header>
 <div id="scroll"><main id="content" data-thread-find-target="conversation"></main></div>
 <footer><textarea aria-label="草稿">测试草稿：索引和跳转应保留这段输入</textarea></footer><pre id="results"></pre>
 <script>window.module={exports:{}};</script><script src="../chatgpt-conversation-rail.user.js"></script>
@@ -128,7 +128,10 @@ async function persistenceRegression(){
     check(shadow().querySelector('[data-unloaded]'),'尚未挂载的缓存节点显示较暗横线');
     const first=shadow().querySelector('.mark[data-key]');first.focus();first.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));
     for(let i=0;i<18;i++)shadow().activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
-    shadow().activeElement.click();check(c.snapshot().loadingTarget,'点击缓存节点进入按需加载而非全量扫描');
+    shadow().activeElement.dispatchEvent(new PointerEvent('pointerover',{bubbles:true}));
+    const cachedPanel=shadow().querySelector('.preview');cachedPanel.dispatchEvent(new PointerEvent('pointerenter'));
+    check(cachedPanel.querySelector('[data-center]').dataset.key==='turn:message-18','未挂载缓存节点也可展开邻居预览');
+    cachedPanel.querySelector('[data-center]').click();check(c.snapshot().loadingTarget,'通过预览点击缓存节点进入按需加载而非全量扫描');
     await waitUntil(()=>!c.snapshot().loadingTarget&&content.querySelector('[data-turn-key="message-18"]')&&Math.abs(content.querySelector('[data-turn-key="message-18"]').getBoundingClientRect().top-scroll.getBoundingClientRect().top-24)<4,15000);
     check(c.snapshot().activeKey==='turn:message-18'&&Math.abs(content.querySelector('[data-turn-key="message-18"]').getBoundingClientRect().top-scroll.getBoundingClientRect().top-24)<4,'逐批加载后精确定位并高亮目标');
     await sleep(900);check(requests===3&&begin===15,'找到目标即停止，不继续加载全部更早历史');
@@ -309,10 +312,54 @@ async function hydrationRegression(){
   }catch(e){log('FAIL '+e.stack);}finally{history.replaceState({},'',savedPath);}
 }
 document.querySelector('#hydration').onclick=hydrationRegression;
+async function previewPanelRegression(){
+  results.textContent='';
+  try{
+    const c=setup(40);await sleep(400);
+    const root=shadow(), nav=root.querySelector('nav'), panel=root.querySelector('.preview');
+    const mark=root.querySelector('.mark[data-key="turn:message-15"]');
+    nav.dispatchEvent(new PointerEvent('pointerenter'));
+    mark.dispatchEvent(new PointerEvent('pointerover',{bubbles:true}));
+    check(!panel.hidden&&!panel.hasAttribute('data-expanded'),'横线悬停先显示单节点气泡');
+    check(panel.querySelector('.prompt').textContent.includes('第 16 轮'),'单节点气泡内容与横线一致');
+    nav.dispatchEvent(new PointerEvent('pointerleave',{relatedTarget:panel}));await sleep(120);
+    panel.dispatchEvent(new PointerEvent('pointerenter',{relatedTarget:nav}));await sleep(350);
+    check(!panel.hidden&&panel.hasAttribute('data-expanded'),'跨过横线与气泡间隙仍可进入并展开');
+    check(panel.querySelectorAll('.preview-card').length===7,'展开时有七个相邻节点');
+    check(panel.querySelector('[data-center]').dataset.key==='turn:message-15','原悬停节点保持在中间');
+    check([...panel.querySelectorAll('.preview-card:not([data-center])')].every(card=>!card.querySelector('.preview-response').textContent),'上下六个邻居仅显示用户消息');
+    const promoted=panel.querySelector('[data-key="turn:message-16"]'), before=scroll.scrollTop, readingKey=c.snapshot().activeKey;
+    const wheel=new WheelEvent('wheel',{deltaY:120,bubbles:true,composed:true,cancelable:true});panel.dispatchEvent(wheel);await sleep(350);
+    check(wheel.defaultPrevented&&panel.querySelector('[data-center]')===promoted,'滚轮复用相邻卡片并将其平滑提升到中央');
+    check(panel.querySelector('[data-center]').dataset.key==='turn:message-16','下滚一格预览下一轮');
+    check(scroll.scrollTop===before&&c.snapshot().activeKey===readingKey,'浏览预览不滚动正文或改变阅读高亮');
+    await waitUntil(()=>{const a=promoted.getBoundingClientRect(),b=panel.querySelector('.preview-card:not([data-center])')?.getBoundingClientRect();return b&&a.height>b.height&&a.width>b.width;});
+    const center=promoted.getBoundingClientRect(), side=panel.querySelector('.preview-card:not([data-center])').getBoundingClientRect();
+    check(center.height>side.height&&center.width>side.width,'中央问答预览更大，邻居更窄');
+    const box=panel.getBoundingClientRect();check(box.top>=63&&box.bottom<=innerHeight-15,'七节点面板保持在窗口范围内');
+    const idle={...c.stats};await sleep(400);check(c.stats.refreshes===idle.refreshes&&c.stats.railAnimationFrames===idle.railAnimationFrames,'展开后空闲没有持续扫描或动画帧');
+    for(let i=0;i<60;i++)panel.dispatchEvent(new WheelEvent('wheel',{deltaY:120,bubbles:true,composed:true,cancelable:true}));await sleep(300);
+    check(panel.querySelector('[data-center]').dataset.key==='turn:message-39'&&panel.querySelectorAll('.preview-card').length===4,'到末尾停止，显示实际存在的邻居');
+    for(let i=0;i<60;i++)panel.dispatchEvent(new WheelEvent('wheel',{deltaY:-120,bubbles:true,composed:true,cancelable:true}));await sleep(300);
+    check(panel.querySelector('[data-center]').dataset.key==='turn:message-0'&&panel.querySelectorAll('.preview-card').length===4,'到开头停止，不出现空白占位节点');
+    panel.querySelector('[data-center]').focus();
+    panel.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,composed:true,cancelable:true}));await sleep(300);
+    check(panel.querySelector('[data-center]').dataset.key==='turn:message-1','键盘上下键也可以浏览中央预览');
+    panel.querySelector('[data-key="turn:message-3"]').click();await sleep(350);
+    check(c.snapshot().selectedKey==='turn:message-3'&&panel.hidden,'点击邻居跳转对应正文并关闭面板');
+    const again=root.querySelector('.mark[data-key="turn:message-3"]');again.dispatchEvent(new PointerEvent('pointerover',{bubbles:true}));panel.dispatchEvent(new PointerEvent('pointerenter'));panel.dispatchEvent(new PointerEvent('pointerleave'));await sleep(300);
+    check(panel.hidden,'移出面板后自动关闭');
+    again.dispatchEvent(new PointerEvent('pointerover',{bubbles:true}));panel.dispatchEvent(new PointerEvent('pointerenter'));document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+    check(panel.hidden,'Esc 可以关闭预览');
+    check(c.snapshot().mountedMarks<=52,'新增预览不扩大横线渲染范围');
+    log('ALL PREVIEW PANEL TESTS PASSED');
+  }catch(e){log('FAIL '+e.stack);}
+}
+document.querySelector('#panel').onclick=previewPanelRegression;
 document.querySelector('#all').onclick=async()=>{
   const button=document.querySelector('#all');button.disabled=true;const combined=[];
   try {
-    for(const [name,test] of [['persistence',persistenceRegression],['latest',latestRegression],['selection',selectionRegression],['animation',animationRegression],['rail scroll',railScrollRegression],['hydration',hydrationRegression],['full performance and virtual history',()=>run()]]){
+    for(const [name,test] of [['preview panel',previewPanelRegression],['persistence',persistenceRegression],['latest',latestRegression],['selection',selectionRegression],['animation',animationRegression],['rail scroll',railScrollRegression],['hydration',hydrationRegression],['full performance and virtual history',()=>run()]]){
       await test();combined.push(name+'\n'+results.textContent);
       results.textContent=combined.join('\n\n');
       if(combined.at(-1).includes('FAIL '))return;
