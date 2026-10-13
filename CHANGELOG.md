@@ -1,5 +1,9 @@
 # 更新记录
 
+## Conversation Rail 0.3.1 — 2026-10-13
+
+- Keep the single hover bubble flat. Apply the inner central-card highlight and card hover backgrounds only after the pointer enters and expands the panel.
+
 ## Conversation Rail 0.3.0 — 2026-10-13
 
 - Let the pointer cross from a rail mark into its bubble, then expand a seven-node preview panel with three neighboring user prompts above and below the central question/answer.

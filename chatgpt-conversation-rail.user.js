@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.3.0
+// @version      0.3.1
 // @description  Persistent conversation navigation with short marks, previews and on-demand history loading.
 // @author       duro
 // @license      MIT
@@ -69,8 +69,9 @@
       transition:top 240ms cubic-bezier(.2,.85,.25,1),height 240ms cubic-bezier(.2,.85,.25,1),
         width 240ms cubic-bezier(.2,.85,.25,1),opacity 180ms ease,background 140ms ease; }
     .preview-card[data-center] { width:calc(100% - 12px); height:var(--preview-center-height,118px);
-      padding-top:10px; color:inherit; background:color-mix(in srgb,currentColor 5%,var(--rail-bg)); }
-    .preview-card:hover { background:color-mix(in srgb,currentColor 8%,var(--rail-bg)); }
+      padding-top:10px; color:inherit; }
+    .preview[data-expanded] .preview-card[data-center] { background:color-mix(in srgb,currentColor 5%,var(--rail-bg)); }
+    .preview[data-expanded] .preview-card:hover { background:color-mix(in srgb,currentColor 8%,var(--rail-bg)); }
     .preview-card:focus-visible { outline:1px solid currentColor; outline-offset:-2px; }
     .preview:not([data-expanded]) .preview-card:not([data-center]) { opacity:0; pointer-events:none; }
     .preview-number { position:absolute; left:8px; top:9px; font-size:10px; opacity:.55; }
