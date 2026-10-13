@@ -4,23 +4,20 @@ A personal collection of ChatGPT web enhancement scripts by duro.
 
 [中文](README.md) | English
 
+The maintained conversation navigator is [ChatGPT Conversation Rail](#chatgpt-conversation-rail). It supports ChatGPT and Dots and works independently of the theme.
+
 ## Preview
 
 ![ChatGPT Claude-like dark theme applied to a logged-in conversation](assets/chatgpt-claude-style-demo.png)
 
-This repository contains two main enhancements:
+This repository contains the following enhancements:
 
 | File | Type | Purpose |
 | --- | --- | --- |
+| [`chatgpt-conversation-rail.user.js`](chatgpt-conversation-rail.user.js) | Tampermonkey userscript | Conversation navigation for ChatGPT and Dots, with message jumps, seven-card previews, summary search, local index caching and on-demand history loading. |
 | `GPT Claude-like Style.user.css` | Stylus/UserStyle | Dark UI theme for ChatGPT that brings the page closer to Claude's narrow, warm-gray, low-distraction reading experience. |
 | `chatgpt-claude-like-separator.user.js` | Tampermonkey userscript | Companion to the style: detects plain-text separator paragraphs in replies and adds a class so the style can render them as natural dividers. |
-
-The repo also includes these extra scripts:
-
-| File | Type | Purpose |
-| --- | --- | --- |
 | `chatgpt-project-source-preview.user.js` | Tampermonkey userscript | Previews `.md` / `.txt` files inside ChatGPT project sources instead of downloading them on click. |
-| `chatgpt-conversation-rail.user.js` | Tampermonkey userscript | Short horizontal navigation marks with previews, active-turn highlighting, jumps, and optional history indexing. |
 
 ## Installation
 
@@ -77,7 +74,7 @@ After expansion, a circular search button appears at the panel’s left midpoint
 
 Search and preview reuse card geometry, shell/card radii, insets and hover colors. Edge windows fill with actual neighbors from the other side to retain up to seven cards, so browsing keeps a stable shell size and position. Wheel events coalesce once per frame; cards fill immediately without overlapping position/size/opacity tweens. Opening transitions remain. First/last highlights keep equal shell gutters. A match position indicator tracks the left panel independently of the right preview.
 
-A standalone rail visually inspired by DSH's TurnNavigator: fixed-pitch horizontal marks, a longer/brighter active mark, and prompt/answer previews on hover or keyboard focus. It does not include the archived script's backup or Prompt manager.
+An independently implemented conversation rail with fixed-pitch horizontal marks, a longer/brighter active mark, and prompt/answer previews on hover or keyboard focus. It works on its own without the theme.
 
 - Click a mark to jump. Arrow keys, Home and End select marks; Enter activates them.
 - When history is incomplete, the first mark is red. Hover to see “Click to load earlier conversation” (Chinese UI text); click to load and index history. The red mark disappears once all history is indexed. This temporarily scrolls the transcript and restores the reading position afterward. Click again or press Esc to cancel; wheel/touch input interrupts scanning. Keep the tab visible while indexing.
@@ -100,53 +97,9 @@ No direct conversation API calls are made: scrolling triggers the page's own his
 
 Validation: run `node tests/chatgpt-conversation-rail.test.js`. Serve the repository locally, open `tests/conversation-rail.browser.html`, and choose “运行全部回归” to exercise a thousand turns, streaming/scrolling costs, current/legacy DOM, virtual history, navigation and cleanup. For a real document reload test, open `tests/c/persistence-reload/`, save its index, then reload; only five turns mount while all thirty navigation entries restore.
 
-Visual reference: [DSH TurnNavigator](https://github.com/deepseek-ai/deepseek-harness/blob/main/packages/client/ui-chat/src/client/chat/TurnNavigator.tsx). The new script is independently implemented under this repository's MIT license.
+## License
 
-### ChatGPT Conversation Navigator (archived)
-
-File lives at `archived/chatgpt-conversation-navigator.user.js`. It is a modified version of YukonKong's `ChatGPT体验增强插件`, offering long-conversation timeline navigation, a prompt manager, conversation backup, and more.
-
-This version was archived when ChatGPT provided its own navigation. It remains **not guaranteed to work** and is kept for archival purposes. Use the new Conversation Rail for lightweight navigation.
-
-Changes in this modified version relative to the original:
-
-- Uses `conversation-turn-*` wrappers as timeline anchors for long conversations.
-- Adapts to ChatGPT's virtualized DOM to reduce jump misalignment in long conversations.
-- Adds a Prompt manager with naming, categories, save, and append-to-input.
-- Adds per-conversation backup and improved scrolling capture for long conversations.
-- Marks branch conversations in the chat list and right-side timeline, distinguishing "branches from edited user messages" and "branches from regenerated answers".
-- Supports clicking `Index Missing` to backfill preview text and branch markers for uncached nodes in long conversations.
-- Removes the original GreasyFork auto-update URL so the modified version is not overwritten by upstream updates.
-
-Usage:
-
-- The right-side dot timeline jumps to the corresponding user question.
-- Click the right-side list button to expand the conversation list; search and jump by index or text.
-- For long or old conversations, click `Index Missing` to have the script scroll-scan uncached nodes and backfill previews and branch status.
-- Long-press a timeline dot to manually flag it as important; long-press again to unflag.
-- The prompt-manager button at the bottom right saves common prompts by category and appends them to the input box.
-- The backup button exports the current conversation as Markdown; long conversations reuse existing backups and only scan the unbacked-up portion.
-
-Color legend:
-
-- Gray dot: normal conversation node.
-- Yellow dot: manually flagged node.
-- Blue dot / `2/2` blue label: the user question has branches created by edits and resends.
-- White dot / `A 2/2` white label: the GPT answer has branches created by regeneration.
-- Yellow + blue: manually flagged and has a user-question branch.
-- Yellow + white: manually flagged and has an answer branch.
-- Blue + white: the same turn has both a user-question branch and an answer branch.
-- Yellow + blue + white: the node has a manual flag, a user-question branch, and an answer branch.
-
-## License and attribution
-
-- `archived/chatgpt-conversation-navigator.user.js` (archived) is modified from YukonKong's original script, which is licensed under `CC-BY-NC-4.0`. This modified version keeps the original author's attribution and the same license restrictions — use and redistribution only within what the license permits, especially the non-commercial clause.
-- `GPT Claude-like Style.user.css`, `chatgpt-claude-like-separator.user.js`, and `chatgpt-project-source-preview.user.js` are written by duro. Unless a file states otherwise, they are released under the `MIT` license.
-
-Original script source:
-
-- `ChatGPT体验增强插件` by YukonKong
-- GreasyFork update URL: `https://update.greasyfork.org/scripts/570234/ChatGPT%E4%BD%93%E9%AA%8C%E5%A2%9E%E5%BC%BA%E6%8F%92%E4%BB%B6.user.js`
+The scripts and styles currently in this repository are written by duro and released under the [MIT License](LICENSE.md).
 
 ## Notes
 

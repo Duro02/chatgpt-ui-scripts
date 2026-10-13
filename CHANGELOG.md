@@ -1,5 +1,11 @@
 # 更新记录
 
+## 仓库发布整理 — 2026-10-13
+
+- 将 ChatGPT Conversation Rail 列为合集仓库的正式导航脚本，保留现有文件名和安装标识。
+- 移除过期的归档导航代码及其使用说明，更新中英文 README 和当前版本的 MIT 许可证说明；旧代码及原许可证仍可在 Git 历史中查阅。
+- 清理不再适用于当前导航脚本的参考说明；导航功能和版本号不变。
+
 ## Conversation Rail 0.4.9 — 2026-10-13
 
 - Stabilize both expanded preview and search windows during fast wheel browsing: fill edge windows with up to seven real neighbors and keep the preview shell position fixed. Preserve equal first/last insets and compact short lists.
@@ -133,11 +139,11 @@
 
 ## Conversation Rail 0.1.0 — 2026-10-12
 
-- 新增独立的短横线对话导航，视觉参考 DSH 的 TurnNavigator。
+- 新增独立实现的短横线对话导航。
 - 适配新版虚拟化消息节点及旧版消息 wrapper，处理反向容器的负滚动位置。
 - 缓存坐标、二分查询、直接结构观察和横线列表虚拟化，控制滚动及流式输出期间的持续开销。
 - 按需扫描历史，支持取消、阅读位置恢复和卸载节点跳转校准。
-- 添加 Node 算法检查和本机浏览器验证页面；旧版大型导航继续保留在 archived 中。
+- 添加 Node 算法检查和本机浏览器验证页面。
 
 ## 0.4.9 — 2026-10-10
 
