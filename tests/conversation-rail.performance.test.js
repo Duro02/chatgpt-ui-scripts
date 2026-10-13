@@ -43,6 +43,7 @@ function fixture(file, count) {
   const changes=new NativeObserver(()=>{});changes.observe(shadow,{attributes:true,subtree:true,childList:true});
   function advance(ms){time+=ms;for(const [key,t] of [...timers])if(t.at<=time){timers.delete(key);t.fn();}}
   return {dom,w,d,c,content,scroll,changes,startupMs,advance,
+    frame(){const queued=[...frames.values()];frames.clear();queued.forEach(fn=>fn(time));},
     mutate(){heightChange++;content.lastElementChild.querySelector('.markdown').textContent='Stream '+heightChange;},
     observeCalls:()=>observerCalls,layoutReads:()=>layoutReads,
     close(){c.stop();changes.disconnect();dom.window.close();}};
@@ -63,19 +64,29 @@ function run(file,label,count,verify){
     assert.equal(refresh.indexBuilds,0,'height/text changes do not rebuild the full index');
     assert.equal(refresh.cacheVisits,0,'stable virtual window does not walk all cached records');
     assert.equal(refresh.observerObserveCalls,0,'unchanged targets do not reconnect observers');
+    assert.equal(render.domMutations,0,'unchanged rail renders do not rewrite DOM');
     assert.ok(idleStable,'no periodic idle work');
     // A synchronous refresh consumes the already queued refresh, rather than orphaning it.
     c.audit.schedule();c.audit.refresh();const refreshed=c.stats.refreshes;f.advance(180);assert.equal(c.stats.refreshes,refreshed);
+    const geometryBefore=c.stats.geometryReads, framesBefore=c.stats.scrollFrames;
+    for(let i=0;i<100;i++)f.scroll.dispatchEvent(new f.w.Event('scroll'));f.frame();
+    assert.equal(c.stats.scrollFrames,framesBefore+1,'scroll events coalesce into one frame');
+    assert.equal(c.stats.geometryReads,geometryBefore,'scroll frame does not measure transcript geometry');
     const mounted=f.content.lastElementChild;mounted.remove();c.audit.refresh();
+    assert.ok(f.d.querySelector('#duro-conversation-rail').shadowRoot.querySelector('[data-key="turn:message-'+(count-1)+'"]').hasAttribute('data-unloaded'),'unmounted node is visibly marked');
     assert.equal(c.snapshot().count,count,'unmount retains cached latest nodes');
     f.content.append(mounted);c.audit.refresh();
     const el=f.d.createElement('div');el.dataset.turnKey='new-message';el.innerHTML='<div data-user-message-bubble>New question</div>';
     el.getBoundingClientRect=()=>({top:count*220,bottom:(count+1)*220,height:220});f.content.append(el);c.audit.refresh();
     assert.equal(c.snapshot().count,count+1,'new messages extend the index');
     assert.equal(c.snapshot().entries.at(-1).key,'turn:new-message');
+    assert.ok(c.snapshot().mountedMarks<=52,'rail buttons remain bounded');
     // Observer topology must update when a mounted wrapper is replaced.
     const observed=f.observeCalls();const clone=f.content.firstElementChild.cloneNode(true);clone.getBoundingClientRect=f.content.firstElementChild.getBoundingClientRect;
     f.content.firstElementChild.replaceWith(clone);c.audit.refresh();assert.ok(f.observeCalls()>observed);
+    clone.querySelector('[data-user-message-bubble]').textContent='Edited question';
+    const clone2=clone.cloneNode(true);clone2.getBoundingClientRect=clone.getBoundingClientRect;clone.replaceWith(clone2);c.audit.refresh();
+    assert.equal(c.snapshot().entries.find(r=>r.key==='turn:message-'+(count-7)).prompt,'Edited question','remount updates metadata without breaking cached order');
   }
   results.push({label,cached:count,mounted:7,startupMs:f.startupMs,refresh100:refresh,unchangedRender100:render,idleStable});f.close();
 }

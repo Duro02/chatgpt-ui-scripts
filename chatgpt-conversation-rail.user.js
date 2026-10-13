@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.2.1
+// @version      0.2.2
 // @description  Persistent conversation navigation with short marks, previews and on-demand history loading.
 // @author       duro
 // @license      MIT
@@ -369,8 +369,8 @@
       const top = Math.max(64, rect.top);
       const band = Math.max(100, bottom - top);
       railHeight = Math.max(60, Math.min(420, band - 64));
-      host.style.setProperty('--rail-center', `${top + band / 2}px`);
-      host.style.setProperty('--rail-height', `${railHeight}px`);
+      setStyle(host, '--rail-center', `${top + band / 2}px`);
+      setStyle(host, '--rail-height', `${railHeight}px`);
       stats.geometryReads += 1;
     }
 
@@ -385,16 +385,26 @@
 
     function hidePreview() { preview.hidden = true; }
 
+    // Native attribute setters may invalidate styles even when the value matches.
+    // Keep unchanged animation windows and resize refreshes free of DOM writes.
+    function setAttribute(element, name, value) {
+      if (element.getAttribute(name) === value) return;
+      if (value === null) element.removeAttribute(name);
+      else element.setAttribute(name, value);
+    }
+    function setStyle(element, name, value) {
+      if (element.style.getPropertyValue(name) !== value) element.style.setProperty(name, value);
+    }
     function render(extraIndex) {
       stats.renders += 1;
-      nav.hidden = !items.length;
-      indexButton.hidden = historyComplete && !scan;
+      setAttribute(nav, 'hidden', items.length ? null : '');
+      setAttribute(indexButton, 'hidden', historyComplete && !scan ? '' : null);
       const offset = indexButton.hidden ? 0 : 1;
-      marks.style.height = `${(items.length + offset) * PITCH}px`;
+      setStyle(marks, 'height', `${(items.length + offset) * PITCH}px`);
       const range = railRange(items.length, Math.max(0, rail.scrollTop - offset * PITCH), railHeight);
       const height = Math.min(railHeight, (items.length + offset) * PITCH);
-      nav.toggleAttribute('data-above', rail.scrollTop > 2);
-      nav.toggleAttribute('data-below', rail.scrollTop + height < (items.length + offset) * PITCH - 2);
+      setAttribute(nav, 'data-above', rail.scrollTop > 2 ? '' : null);
+      setAttribute(nav, 'data-below', rail.scrollTop + height < (items.length + offset) * PITCH - 2 ? '' : null);
       const needed = new Set();
       const visibleIndexes = Array.from({ length: Math.max(0, range.end - range.start) }, (_, i) => range.start + i);
       if (Number.isInteger(extraIndex) && extraIndex >= 0 && extraIndex < items.length && !visibleIndexes.includes(extraIndex)) visibleIndexes.push(extraIndex);
@@ -410,11 +420,10 @@
           buttons.set(item.key, button);
           marks.appendChild(button);
         }
-        button.style.top = `${(i + offset) * PITCH}px`;
-        button.setAttribute('aria-label', `跳到第 ${i + 1} 轮：${item.prompt || '尚未加载的提问'}`);
-        button.toggleAttribute('data-unloaded', !item.element?.isConnected);
-        if (item.key === activeKey) button.setAttribute('aria-current', 'true');
-        else button.removeAttribute('aria-current');
+        setStyle(button, 'top', `${(i + offset) * PITCH}px`);
+        setAttribute(button, 'aria-label', `跳到第 ${i + 1} 轮：${item.prompt || '尚未加载的提问'}`);
+        setAttribute(button, 'data-unloaded', item.element?.isConnected ? null : '');
+        setAttribute(button, 'aria-current', item.key === activeKey ? 'true' : null);
       }
       updateIndicator();
       for (const [key, button] of buttons) {
@@ -431,11 +440,11 @@
     }
     function paintFocus(y) {
       focusY = y;
-      focusLine.style.transform = `translateY(${y}px)`;
+      setStyle(focusLine, 'transform', `translateY(${y}px)`);
     }
     function updateIndicator() {
       const target = indicatorTarget();
-      focusLine.hidden = target === null || !items.length;
+      setAttribute(focusLine, 'hidden', target === null || !items.length ? '' : null);
       if (!focusLine.hidden && !railMotion) paintFocus(target);
     }
     function stopRailMotion() {
@@ -1107,7 +1116,7 @@
     });
     marks.addEventListener('keydown', event => {
       const button = event.target.closest('button');
-      const i = items.findIndex(item => item.key === button?.dataset.key);
+      const i = indexes.get(button?.dataset.key) ?? -1;
       let next = i;
       if (event.key === 'ArrowDown') next++;
       else if (event.key === 'ArrowUp') next--;

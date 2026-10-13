@@ -1,0 +1,22 @@
+<!doctype html><html lang="zh-CN" class="dark"><meta charset="utf-8"><title>对话导航性能对照</title>
+<style>:root{color-scheme:dark;--text-primary:#eeeae2}body{margin:20px;background:#20201e;color:#eeeae2;font:14px system-ui}button{padding:8px}#scroll{height:400px;overflow-y:auto;margin-top:20px}main{position:relative}.turn{position:absolute;width:500px;height:220px;box-sizing:border-box;padding:20px;background:#292925}#results{white-space:pre-wrap;font:13px/1.5 monospace}</style>
+<h2>对话导航性能对照 · Chrome</h2><p>7 条挂载消息，缓存 100 / 1,000 / 10,000 节点。100 次刷新。包含布局读取，排除绘制、GPU、ChatGPT 本身和网络。</p><button id="run">运行对照</button><pre id="results"></pre><div id="scroll"><main data-thread-find-target="conversation"></main></div>
+<script>
+const output=document.querySelector('#results'),scroll=document.querySelector('#scroll'),content=document.querySelector('main');let controller;
+function apiFrom(source){source=source.replace('      stats,\n      flush:', '      stats, audit: {refresh,render,watch,schedule},\n      flush:').replaceAll('cache.values()', '(stats.cacheWalks=(stats.cacheWalks||0)+cache.size,cache.values())').replace('function rebuildIndexes() {','function rebuildIndexes() { stats.indexBuilds=(stats.indexBuilds||0)+1;');const module={exports:{}};new Function('module',source)(module);return module.exports;}
+function runOne(api,label,count){controller?.stop();content.replaceChildren();scroll.scrollTop=0;content.style.height=count*220+'px';
+  const entries=Array.from({length:count},(_,i)=>({key:'turn:message-'+i,top:i*220,bottom:(i+1)*220,prompt:'Question '+i,answer:'Answer '+i}));
+  for(let i=count-7;i<count;i++){const el=document.createElement('div');el.className='turn';el.dataset.turnKey='message-'+i;el.style.top=i*220+'px';el.innerHTML='<div data-user-message-bubble>Question '+i+'</div><div class="markdown">Answer '+i+'</div>';content.append(el);}
+  const memory=new Map([[api.cacheKey('performance'),api.encodeSaved('performance',entries,true,count*220,true)]]);const storage={getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,v),removeItem:k=>memory.delete(k)};
+  const NativeObserver=window.MutationObserver;let observerCalls=0;window.MutationObserver=class extends NativeObserver{observe(...args){observerCalls++;return super.observe(...args);}};
+  const init=performance.now();controller=api.start(document,{storage});const startupMs=performance.now()-init;
+  const shadow=document.querySelector('#duro-conversation-rail').shadowRoot, changes=new NativeObserver(()=>{});changes.observe(shadow,{attributes:true,childList:true,subtree:true});
+  for(let i=0;i<20;i++)controller.audit.refresh();changes.takeRecords();const before={...controller.stats}, observed=observerCalls, samples=[];
+  for(let i=0;i<100;i++){content.style.height=count*220+i+'px';content.lastElementChild.style.height=220+i+'px';content.lastElementChild.querySelector('.markdown').textContent='Stream '+i;const t=performance.now();controller.audit.refresh();samples.push(performance.now()-t);}
+  changes.takeRecords();const t=performance.now();for(let i=0;i<100;i++)controller.audit.render();const renderMs=performance.now()-t,mutations=changes.takeRecords().length;
+  const sorted=samples.sort((a,b)=>a-b),result={label,cached:count,mounted:7,startupMs,medianMs:sorted[50],p95Ms:sorted[95],render100Ms:renderMs,unchangedDomMutations:mutations,cacheVisits:(controller.stats.cacheWalks||0)-(before.cacheWalks||0),indexBuilds:controller.stats.indexBuilds-before.indexBuilds,observerObserveCalls:observerCalls-observed};
+  changes.disconnect();window.MutationObserver=NativeObserver;controller.stop();controller=null;return result;}
+window.performanceResults=[];document.querySelector('#run').onclick=async()=>{output.textContent='运行中…';try{history.replaceState(null,'','/tests/c/performance');const current=apiFrom(await (await fetch('/chatgpt-conversation-rail.user.js')).text()),baseline=apiFrom(await(await fetch('/tests/.performance-baseline.js')).text());
+const results=[];for(const n of [100,1000,10000])for(const [label,api] of [['0.2.0',baseline],['0.2.2',current]]){results.push(runOne(api,label,n));}
+window.performanceResults=results;output.textContent=results.map(r=>r.label+' · '+r.cached+' 节点：刷新中位 '+r.medianMs.toFixed(2)+' ms，P95 '+r.p95Ms.toFixed(2)+' ms；100 次无变化渲染 '+r.render100Ms.toFixed(2)+' ms；DOM 写入 '+r.unchangedDomMutations+'；缓存遍历 '+r.cacheVisits).join('\n')+'\n完成（仅局部场景对照，不代表整页 CPU 占用比例）';}catch(e){output.textContent='FAIL '+e.stack;}};
+</script></html>

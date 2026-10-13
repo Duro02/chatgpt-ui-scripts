@@ -1,5 +1,11 @@
 # 更新记录
 
+## Conversation Rail 0.2.2 — 2026-10-13
+
+- Write rail labels, positions, visibility, unloaded/current states and overflow attributes only when values change. Unchanged renders no longer mutate the rail DOM.
+- Avoid repeated rail geometry style writes and identical focus transforms. Use the existing key index for keyboard navigation.
+- Verify unchanged-render mutation counts alongside index-refresh, observer-topology and timer regressions.
+
 ## Conversation Rail 0.2.1 — 2026-10-13
 
 - Refresh existing mounted records in place; rebuild chronological arrays and key indexes only when new IDs appear.

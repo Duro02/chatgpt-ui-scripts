@@ -139,3 +139,5 @@ Original script source:
 ## Notes
 
 ChatGPT's DOM changes quickly, and all these scripts depend on the current page structure. If a feature suddenly stops working, you usually need to re-check the relevant DOM nodes or request paths with the browser's developer tools.
+
+Conversation Rail performance: existing-turn layout refreshes process the mounted window without rebuilding the entire cached index. Observer connections and rail attributes update only when changed. See [the audit and reproduction steps](CONVERSATION_RAIL_PERFORMANCE.md).

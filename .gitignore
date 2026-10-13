@@ -2,3 +2,4 @@
 CLAUDE.md
 claude-*.user.js
 node_modules/
+tests/.performance-baseline.js
