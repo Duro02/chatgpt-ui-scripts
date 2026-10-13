@@ -42,7 +42,7 @@ function fixture(file, count) {
   const host=d.querySelector('#duro-conversation-rail'), shadow=host.shadowRoot;
   const changes=new NativeObserver(()=>{});changes.observe(shadow,{attributes:true,subtree:true,childList:true});
   function advance(ms){time+=ms;for(const [key,t] of [...timers])if(t.at<=time){timers.delete(key);t.fn();}}
-  return {dom,w,d,c,content,scroll,changes,startupMs,advance,
+  return {dom,w,d,c,api,storage,memory,content,scroll,changes,startupMs,advance,
     frame(){const queued=[...frames.values()];frames.clear();queued.forEach(fn=>fn(time));},
     mutate(){heightChange++;content.lastElementChild.querySelector('.markdown').textContent='Stream '+heightChange;},
     observeCalls:()=>observerCalls,layoutReads:()=>layoutReads,
@@ -147,7 +147,43 @@ function routeRegression(){
   assert.notEqual(f.w.history.pushState,historyHook,'history hooks are restored on teardown');
   f.close();
 }
+function dotsRegression(){
+  const f=fixture(current,100),pane=f.d.createElement('main');pane.className='thread-pane';
+  const scroller=f.d.createElement('div');scroller.dataset.role='messages-scroll';scroller.style.overflowY='auto';
+  const list=f.d.createElement('div');list.className='message-list';scroller.append(list);pane.append(scroller);f.d.body.append(pane);
+  Object.defineProperties(scroller,{clientHeight:{value:300},scrollHeight:{get:()=>list.children.length*120}});
+  scroller.getBoundingClientRect=()=>({top:64,bottom:364,height:300});
+  scroller.scrollTo=({top})=>{scroller.scrollTop=top;};
+  list.getBoundingClientRect=()=>({top:64-scroller.scrollTop,bottom:64-scroller.scrollTop+list.children.length*120,height:list.children.length*120});
+  const message=(scope,i,self,text)=>{
+    const el=f.d.createElement('article');el.className='message-row'+(self?' self':'');el.dataset.messageId=`${scope}~${scope}~CalpicoMessage~msg-${i}`;
+    el.innerHTML=`<div class="message-body" data-message-id="${el.dataset.messageId}"><div class="message-text">${text}</div><button>Ignore control</button></div><time>12:00</time>`;
+    el.getBoundingClientRect=()=>{const top=64+[...list.children].indexOf(el)*120-scroller.scrollTop;return {top,bottom:top+120,height:120};};return el;
+  };
+  for(let i=0;i<3;i++)list.append(message('scope-A',i*2,true,'Dots question '+i),message('scope-A',i*2+1,false,'Dots answer '+i));
+  f.w.history.pushState({},'', '/dots/home');
+  assert.equal(f.c.snapshot().count,3,'Dots selects its message list instead of the earlier ordinary main');
+  assert.ok(f.c.snapshot().entries.every(e=>e.key.startsWith('message:scope-A~')),'only user articles become stable nodes, not duplicate body IDs or assistant messages');
+  const root=f.d.querySelector('#duro-conversation-rail').shadowRoot,panel=root.querySelector('.preview');
+  const target=root.querySelector('.mark[data-key="message:scope-A~scope-A~CalpicoMessage~msg-4"]');
+  target.dispatchEvent(new f.w.Event('pointerover',{bubbles:true}));panel.dispatchEvent(new f.w.Event('pointerenter'));
+  assert.equal(panel.querySelector('.answer').textContent,'Dots answer 2','the user node previews its following separate assistant article');
+  target.click();assert.equal(f.c.snapshot().selectedKey,target.dataset.key);assert.ok(scroller.scrollTop>0,'Dots jump uses its actual message scroller');
+  target.dispatchEvent(new f.w.Event('pointerover',{bubbles:true}));panel.dispatchEvent(new f.w.Event('pointerenter'));
+  root.querySelector('.search-toggle').click();root.querySelector('.search-input').value='Dots answer 1';root.querySelector('.search-form').dispatchEvent(new f.w.Event('submit',{cancelable:true}));
+  assert.equal(root.querySelector('.search-total').textContent,'1 个匹配节点','Dots answers participate in the existing search');
+  f.c.flush();const key=f.api.cacheKey('dots:/dots/home:scope-A~scope-A');
+  assert.ok(f.memory.has(key),'Dots persists under an independent visible-message namespace');
+  const saved=f.api.decodeSaved(f.memory.get(key),'dots:/dots/home:scope-A~scope-A');assert.equal(saved.entries.length,3);
+  list.replaceChildren(message('scope-B',0,true,'Another Dots account'),message('scope-B',1,false,'Other reply'));
+  f.c.audit.refresh();f.advance(180);
+  assert.equal(f.c.snapshot().count,1,'changing the Dots message namespace on the same URL clears previous nodes');
+  assert.ok(f.c.snapshot().entries.every(e=>e.key.startsWith('message:scope-B~')));
+  f.w.history.pushState({},'', '/c/performance');assert.equal(f.c.snapshot().count,100,'leaving Dots restores ordinary conversation independently');
+  f.close();
+}
 routeRegression();
+dotsRegression();
 previewRegression();
 for(const count of [100,1000,10000]){if(baseline)run(baseline,'0.2.0',count,false);run(current,'current',count,!process.env.RAIL_BASELINE_ONLY);}
 console.log(JSON.stringify({method:'Node + jsdom, 7 mounted turns, 20 warmups, 100 synchronous height/text refreshes; no browser layout/paint/GPU measurement',results},null,2));

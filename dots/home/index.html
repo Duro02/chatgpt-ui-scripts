@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN" class="chatgpt-theme" data-theme="dark"><meta charset="utf-8"><title>Dots 对话导航 · 结构演示</title>
+<style>
+:root{--color-text-primary:#eeeae2;--color-text-tertiary:#969187;--color-surface-elevated-secondary:#302f2c;--color-border:#ffffff22;color-scheme:dark;--page:#20201e;--user:#343330}
+:root:not([data-theme="dark"]){--color-text-primary:#292722;--color-text-tertiary:#7f7a70;--color-surface-elevated-secondary:#f3f0e9;--color-border:#29272222;color-scheme:light;--page:#f7f5ef;--user:#e8e3d8}
+*{box-sizing:border-box}body{margin:0;background:var(--page);color:var(--color-text-primary);font:15px/1.7 system-ui}
+header{height:64px;display:flex;align-items:center;gap:16px;padding:12px 28px;overflow-x:auto;white-space:nowrap}h1{font-size:16px;margin:0}button{cursor:pointer;font:inherit;padding:5px 12px}a{color:inherit}
+.messages-scroll{height:calc(100vh - 160px);overflow-y:auto;overflow-anchor:none}.message-list{width:min(760px,calc(100% - 120px));margin:auto}.message-row{padding:18px 0;min-height:150px}.message-row.self{margin-left:80px}.self .message-text{padding:12px 18px;border-radius:18px;background:var(--user)}.message-row:not(.self) .message-text{color:var(--color-text-tertiary)}time{font-size:11px;opacity:.5}footer{height:96px;padding:15px max(60px,calc((100vw - 760px)/2))}textarea{width:100%;height:55px;border:0;border-radius:20px;padding:15px;font:inherit;color:inherit;background:var(--user)}
+</style>
+<header><h1>Dots 消息结构 · 导航演示</h1><button id="expand">展开预览与搜索</button><button id="reset">重置演示</button><button id="theme">切换明暗</button><a href="/tests/conversation-rail.browser.html">完整回归测试</a></header>
+<main class="thread-pane"><div class="messages-scroll" data-role="messages-scroll"><div class="message-list"></div></div></main>
+<footer><textarea aria-label="演示草稿">Dots 演示草稿：预览不移动正文，点击节点才跳转</textarea></footer>
+<script>window.module={exports:{}};</script><script src="../../chatgpt-conversation-rail.user.js"></script>
+<script>
+const railAPI=window.module.exports;delete window.module;let demoRail;
+const list=document.querySelector('.message-list'),scroll=document.querySelector('.messages-scroll');
+function reset(){demoRail?.stop();list.replaceChildren();const topics=['历史恢复与缓存','节点高亮与跳转','搜索面板与预览','会话隔离','轻量性能'];
+for(let i=0;i<40;i++)for(const self of [true,false]){const article=document.createElement('article');article.className='message-row'+(self?' self':'');article.dataset.messageId=`demo~demo~CalpicoMessage~${self?'user':'reply'}-${i}`;const body=document.createElement('div');body.className='message-body';body.dataset.messageId=article.dataset.messageId;const text=document.createElement('div');text.className='message-text';text.textContent=self?`第 ${i+1} 次提问：${topics[i%topics.length]}，怎样让 Dots 的长对话查找更顺手？`:`第 ${i+1} 条回答：按消息 ID 保留导航节点，按需读取摘要。预览和搜索复用卡片组件，浏览时不滚动正文，点击后才定位。`;body.append(text);const time=document.createElement('time');time.textContent='12:00';article.append(body,time);list.append(article);}
+scroll.scrollTop=600;demoRail=railAPI.start(document,{storage:null});}
+document.querySelector('#reset').onclick=reset;
+document.querySelector('#theme').onclick=()=>document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark';
+document.querySelector('#expand').onclick=()=>{const root=document.querySelector('#duro-conversation-rail').shadowRoot,nav=root.querySelector('nav'),panel=root.querySelector('.preview');nav.dispatchEvent(new PointerEvent('pointerenter'));root.querySelector('.mark[data-key="message:demo~demo~CalpicoMessage~user-8"]').dispatchEvent(new PointerEvent('pointerover',{bubbles:true}));nav.dispatchEvent(new PointerEvent('pointerleave',{relatedTarget:panel}));panel.dispatchEvent(new PointerEvent('pointerenter'));root.querySelector('.search-toggle').click();root.querySelector('.search-input').value='缓存';root.querySelector('.search-form').requestSubmit();for(let i=0;i<3;i++)root.querySelector('.search-list').dispatchEvent(new WheelEvent('wheel',{deltaY:120,bubbles:true,composed:true,cancelable:true}));};
+reset();
+</script></html>

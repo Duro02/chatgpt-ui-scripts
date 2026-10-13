@@ -1,5 +1,12 @@
 # 更新记录
 
+## Conversation Rail 0.4.3 — 2026-10-13
+
+- Adapt Dots message lists using user `.self` articles and stable `data-message-id` values. Pair each user node with its first following text reply and use the actual message scroller.
+- Separate Dots caches by URL and visible message namespace; detect namespace changes even on `/dots/home`. Reuse preview, search, jump, persistence and bounded history loading without private APIs.
+- Resolve Dots theme colors through its own CSS variables while retaining ordinary ChatGPT theme support.
+- Do not infer complete Dots history merely from mounted articles. Validate route transitions, duplicate nested IDs, replies, search, cache isolation and reload initialization; add a standalone Dots structure demo.
+
 ## Conversation Rail 0.4.2 — 2026-10-13
 
 - Clear stale navigation immediately on SPA pushState/replaceState changes, even without transcript mutations or popstate. Guard clicks against stale routes and restore history wrappers on teardown.

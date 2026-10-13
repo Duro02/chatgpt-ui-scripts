@@ -18,7 +18,7 @@
   #results{position:fixed;left:16px;top:80px;width:240px;background:var(--fixture-header);padding:12px;font:12px/1.5 monospace;max-height:70vh;overflow:auto;z-index:60}
   #results:empty{display:none}.sr-only{display:none}
 </style>
-<header><h1>对话导航 · 演示与测试</h1><button id="showsearch">展示搜索与预览</button><button id="demo">展示长对话</button><button id="light">切换明暗</button><button id="persist">验证缓存与按需加载</button><button id="panel">验证七节点预览</button><button id="search">验证左侧搜索</button><button id="all">运行全部回归</button><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="railscroll">验证长列表滚动</button><button id="animation">验证焦点动画</button><button id="selection">验证跳转高亮</button><button id="latest">验证最新节点保留</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button></header>
+<header><h1>对话导航 · 演示与测试</h1><button id="showsearch">展示搜索与预览</button><button id="demo">展示长对话</button><button id="light">切换明暗</button><button id="persist">验证缓存与按需加载</button><button id="panel">验证七节点预览</button><button id="search">验证左侧搜索</button><button id="dots">验证 Dots 适配</button><button id="all">运行全部回归</button><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="railscroll">验证长列表滚动</button><button id="animation">验证焦点动画</button><button id="selection">验证跳转高亮</button><button id="latest">验证最新节点保留</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button></header>
 <div id="scroll"><main id="content" data-thread-find-target="conversation"></main></div>
 <footer><textarea aria-label="草稿">测试草稿：索引和跳转应保留这段输入</textarea></footer><pre id="results"></pre>
 <script>window.module={exports:{}};</script><script src="../chatgpt-conversation-rail.user.js"></script>
@@ -33,6 +33,7 @@ function turn(i,legacy=false){const el=document.createElement('div');el.classNam
   else el.dataset.turnKey='message-'+i;
   el.innerHTML='<h4 class="sr-only">你说：</h4><div data-user-message-bubble="true">第 '+(i+1)+' 轮：长期执行中，哪些变化需要重新理解任务？</div><div class="markdown"><p>常规步骤由固定规则执行。新的目标或授权超出原规则时，再重新确定方案。这是用于验证导航的示例内容。</p></div>';return el;}
 function setup(n,{virtual=false,reverse=false,legacy=false,omitTailWhileIndexing=false}={}){
+  scroll.removeAttribute('data-role');
   controller?.stop();if(content.parentElement!==scroll){scroll.append(content);window.scrollTo(0,0);}if(virtualListener)scroll.removeEventListener('scroll',virtualListener);virtualListener=null;
   content.replaceChildren();content.dataset.audit='';scroll.style.display=reverse?'flex':'block';scroll.style.flexDirection=reverse?'column-reverse':'';
   content.style.flexShrink=reverse?'0':'';content.style.height='';scroll.scrollTop=0;
@@ -435,10 +436,48 @@ async function searchRegression(){
   }catch(e){log('FAIL '+e.stack);}
 }
 document.querySelector('#search').onclick=searchRegression;
+async function dotsRegression(){
+  results.textContent='';const savedPath=location.pathname;
+  const memory=new Map(),storage={getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,v),removeItem:k=>memory.delete(k)};
+  try{
+    controller?.stop();history.replaceState({},'', '/c/dots-switch-test');setup(3);controller.stop();
+    controller=api.start(document,{storage});await sleep(400);controller.flush();
+    check(controller.snapshot().count===3,'普通会话初始节点');
+    history.pushState({},'', '/dots/home');
+    check(controller.snapshot().count===0&&shadow().querySelector('nav').hidden,'仅路由切换、不变动正文时立即清理旧导航');
+    scroll.dataset.role='messages-scroll';const list=document.createElement('div');list.className='message-list';
+    const make=(scope,i,self,text)=>{
+      const el=document.createElement('article');el.className='message-row turn'+(self?' self':'');el.dataset.messageId=`${scope}~${scope}~CalpicoMessage~msg-${i}`;
+      el.innerHTML=`<div class="message-body" data-message-id="${el.dataset.messageId}"><div class="message-text">${text}</div><button hidden>忽略操作按钮</button></div><time>12:00</time>`;
+      if(self)el.style.marginLeft='80px';return el;
+    };
+    for(let i=0;i<8;i++)list.append(make('scope-A',i*2,true,'Dots 提问 '+i+'：如何查找长对话？'),make('scope-A',i*2+1,false,'Dots 回答 '+i+'：使用导航预览和独立搜索。'));
+    content.replaceChildren(list);await sleep(500);
+    check(controller.snapshot().count===8,'Dots 只索引用户卡片，不重复索引内层同 ID 或回答');
+    const root=shadow(),nav=root.querySelector('nav'),panel=root.querySelector('.preview');
+    const key='message:scope-A~scope-A~CalpicoMessage~msg-6',mark=root.querySelector(`.mark[data-key="${key}"]`);
+    nav.dispatchEvent(new PointerEvent('pointerenter'));mark.dispatchEvent(new PointerEvent('pointerover',{bubbles:true}));panel.dispatchEvent(new PointerEvent('pointerenter'));await sleep(350);
+    check(panel.querySelector('.answer').textContent.startsWith('Dots 回答 3'),'Dots 用户节点关联后面的独立回答卡片');
+    root.querySelector('.search-toggle').click();root.querySelector('.search-input').value='Dots 回答 3';root.querySelector('.search-form').requestSubmit();await sleep(350);
+    check(root.querySelector('.search-total').textContent==='1 个匹配节点','Dots 回答可以被已有搜索组件检索');
+    root.querySelector('.search-result').click();await sleep(500);
+    check(controller.snapshot().selectedKey===key&&!nav.hidden&&scroll.scrollTop>0,'Dots 点击节点使用正确滚动容器，导航不会消失');
+    controller.flush();check([...memory.keys()].some(k=>k.includes('dots:/dots/home:scope-A~scope-A')),'Dots 缓存与普通会话隔离');
+    controller.stop();controller=api.start(document,{storage});await sleep(400);
+    check(controller.snapshot().count===8,'Dots 刷新初始化恢复独立索引');
+    list.replaceChildren(make('scope-B',0,true,'另一个 Dots 会话'),make('scope-B',1,false,'独立回答'));await sleep(600);
+    check(controller.snapshot().count===1&&controller.snapshot().entries[0].key.includes('scope-B'),'同 URL 的消息所属前缀改变时不混入旧节点');
+    history.pushState({},'', '/c/dots-switch-test');await sleep(300);
+    check(controller.snapshot().count===3,'离开 Dots 后恢复普通会话缓存');
+    log('ALL DOTS TESTS PASSED');
+  }catch(e){log('FAIL '+e.stack);}
+  finally{controller?.stop();scroll.removeAttribute('data-role');history.replaceState({},'',savedPath);}
+}
+document.querySelector('#dots').onclick=dotsRegression;
 document.querySelector('#all').onclick=async()=>{
   const button=document.querySelector('#all');button.disabled=true;const combined=[];
   try {
-    for(const [name,test] of [['search',searchRegression],['preview panel',previewPanelRegression],['persistence',persistenceRegression],['latest',latestRegression],['selection',selectionRegression],['animation',animationRegression],['rail scroll',railScrollRegression],['hydration',hydrationRegression],['full performance and virtual history',()=>run()]]){
+    for(const [name,test] of [['Dots and route isolation',dotsRegression],['search',searchRegression],['preview panel',previewPanelRegression],['persistence',persistenceRegression],['latest',latestRegression],['selection',selectionRegression],['animation',animationRegression],['rail scroll',railScrollRegression],['hydration',hydrationRegression],['full performance and virtual history',()=>run()]]){
       await test();combined.push(name+'\n'+results.textContent);
       results.textContent=combined.join('\n\n');
       if(combined.at(-1).includes('FAIL '))return;

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.4.2
+// @version      0.4.3
 // @description  Persistent conversation navigation with short marks, previews and on-demand history loading.
 // @author       duro
 // @license      MIT
@@ -30,12 +30,12 @@
   const PANEL_INSET = 6;
   const SEARCH_HEADER = 42 + 28;
   const CSS = `
-    :host { all:initial; color:var(--text-primary,#292722); font:13px/1.5 system-ui,sans-serif;
-      --rail-bg:var(--bg-elevated-primary,#f3f0e9); --rail-muted:var(--text-tertiary,#87837b);
-      --rail-border:var(--border-light,rgba(128,128,128,.25));
+    :host { all:initial; color:var(--text-primary,var(--color-text-primary,#292722)); font:13px/1.5 system-ui,sans-serif;
+      --rail-bg:var(--bg-elevated-primary,var(--color-surface-elevated-secondary,#f3f0e9)); --rail-muted:var(--text-tertiary,var(--color-text-tertiary,#87837b));
+      --rail-border:var(--border-light,var(--color-border,rgba(128,128,128,.25)));
       --panel-radius:14px; --panel-inset:${PANEL_INSET}px; --card-radius:7px;
       --card-hover:color-mix(in srgb,currentColor 7%,var(--rail-bg)); }
-    :host([data-dark]) { color:var(--text-primary,#eeeae2); --rail-bg:var(--bg-elevated-primary,#302f2c); }
+    :host([data-dark]) { color:var(--text-primary,var(--color-text-primary,#eeeae2)); --rail-bg:var(--bg-elevated-primary,var(--color-surface-elevated-secondary,#302f2c)); }
     * { box-sizing:border-box; }
     nav { position:fixed; right:12px; top:var(--rail-center,45vh); width:28px; z-index:50;
       transform:translateY(-50%); pointer-events:auto; }
@@ -361,12 +361,12 @@
     const cache = new Map();
     const buttons = new Map();
     const indexes = new Map();
-    let content = null, scroller = null, items = [], loaded = [], pending = [], mounted = [], route = threadIdentity(win.location.pathname);
+    let content = null, scroller = null, items = [], loaded = [], pending = [], mounted = [], route = pageIdentity().route;
     let selectedKey = null, positioned = [], focusY = null, railMotion = null;
     let chronology = [], transcriptEnd = null, tailKnown = false;
     let staleElements = null, staleUntil = 0, historyComplete = false, activeKey = null, hovered = false, stopped = false;
     let saveTimer = 0, saveIdle = 0, dirty = false, waitingKey = null;
-    let savedThread = conversationId(win.location.pathname);
+    let savedThread = pageIdentity().thread;
     let timer = 0, frame = 0, scan = null, jump = null, restoreJob = null, statusTimer = 0;
     let geometry = { origin: 0, height: 0, max: 0, reverse: false };
     let railHeight = 320;
@@ -376,6 +376,29 @@
     let storage = options.storage;
     if (storage === undefined) { try { storage = win.localStorage; } catch { storage = null; } }
     const store = createIndexStore(storage, stats);
+
+    function isDots() { return /^\/dots(?:\/|$)/.test(win.location.pathname); }
+    function dotsRoot() {
+      if (!isDots()) return null;
+      return [...doc.querySelectorAll('[data-role="messages-scroll"] .message-list')]
+        .find(node => !node.closest('[hidden], [aria-hidden="true"]')) || null;
+    }
+    function pageIdentity() {
+      const path = win.location.pathname;
+      if (!isDots()) return { route: threadIdentity(path), thread: conversationId(path) };
+      const id = dotsRoot()?.querySelector('article.message-row[data-message-id]')?.getAttribute('data-message-id');
+      const parts = id?.split('~');
+      const scope = parts?.length >= 3 && parts[0] && parts[1] ? parts.slice(0, 2).join('~') : null;
+      // The visible message namespace separates Dots accounts/threads sharing /dots/home.
+      return { route: `${path}#${scope || ''}`, thread: scope ? `dots:${path}:${scope}` : null };
+    }
+    function nodeKey(element) {
+      const turn = element.getAttribute('data-turn-key') || element.getAttribute('data-testid');
+      const id = element.getAttribute('data-message-id');
+      return turn ? `turn:${turn}` : id ? `message:${id}` : null;
+    }
+    function promptNode(element) { return isDots() ? element.querySelector('.message-text') : element.querySelector(USER); }
+    function responseNode(item) { return isDots() ? item.responseElement : item.element.querySelector(RESPONSE); }
 
     function toast(text, sticky = false) {
       win.clearTimeout(statusTimer);
@@ -652,8 +675,8 @@
       if (!item?.element?.isConnected) return;
       // Only the central entry is reread; neighbors use bounded cached summaries.
       const oldPrompt = item.prompt, oldAnswer = item.answer;
-      item.prompt = prefix(item.element.querySelector(USER), 180) || item.prompt;
-      item.answer = prefix(item.element.querySelector(RESPONSE), 260) || item.answer;
+      item.prompt = prefix(promptNode(item.element), 180) || item.prompt;
+      item.answer = prefix(responseNode(item), 260) || item.answer;
       if (item.prompt !== oldPrompt || (item.answer || '').slice(0, 140) !== (oldAnswer || '').slice(0, 140)) markDirty();
     }
     function previewCard(key, cards, container, searching) {
@@ -900,6 +923,27 @@
     }
 
     function discover() {
+      if (isDots()) {
+        mounted = [...content.querySelectorAll('article.message-row[data-message-id]')];
+        pending = [];
+        const found = [], keys = new Set();
+        let userTurn = null;
+        for (const element of mounted) {
+          if (element.closest('[hidden], [aria-hidden="true"]')) continue;
+          if (element.classList.contains('self')) {
+            userTurn = null;
+            const user = element.querySelector('.message-text'), key = nodeKey(element);
+            if (!user) { pending.push(element); continue; }
+            if (!key || keys.has(key)) continue;
+            keys.add(key);
+            userTurn = { key, element, user, responseElement: null };
+            found.push(userTurn);
+          } else if (userTurn && !userTurn.responseElement) {
+            userTurn.responseElement = element.querySelector('.message-text');
+          }
+        }
+        return found;
+      }
       const candidates = [...content.querySelectorAll(TURN)];
       mounted = candidates;
       pending = [];
@@ -983,9 +1027,9 @@
         scan?.pendingKeys.delete(item.key);
         const previous = cache.get(item.key);
         // User previews are read once per mounted element, never on every scroll frame.
-        if (!previous || previous.element !== item.element || !previous.prompt) {
+        if (!previous || previous.element !== item.element || previous.responseElement !== item.responseElement || !previous.prompt) {
           item.prompt = prefix(item.user || item.element, 180);
-          item.answer = prefix(item.element.querySelector(RESPONSE), 260);
+          item.answer = prefix(responseNode(item), 260);
         }
         if (!previous || item.prompt !== undefined && (item.prompt !== previous.prompt || (item.answer || '').slice(0, 140) !== (previous.answer || '').slice(0, 140))) changed = true;
         const { user, ...record } = item;
@@ -1003,7 +1047,7 @@
       if (scan) {
         if (measured.length) scan.anchor = measured.at(-1).key;
         for (const element of pending) {
-          const key = `turn:${element.getAttribute('data-turn-key')}`;
+          const key = nodeKey(element);
           if (!cache.has(key)) scan.pendingKeys.add(key);
         }
       }
@@ -1022,11 +1066,11 @@
     }
 
     function checkRoute() {
-      const next = threadIdentity(win.location.pathname);
+      const identity = pageIdentity(), next = identity.route;
       if (next === route) return false;
       flushSaved();
       route = next;
-      savedThread = conversationId(win.location.pathname);
+      savedThread = identity.thread;
       waitingKey = null;
       stopRailMotion();
       staleElements = new Set(loaded);
@@ -1048,6 +1092,7 @@
     }
 
     function preferredRoot() {
+      if (isDots()) return dotsRoot();
       for (const selector of ROOTS) {
         const node = doc.querySelector(selector);
         if (node && !node.closest('[hidden], [aria-hidden="true"]')) return node;
@@ -1171,7 +1216,7 @@
           if (targetIndex === undefined) break;
           const first = positioned[0], last = positioned.at(-1);
           const firstIndex = indexes.get(first?.key), lastIndex = indexes.get(last?.key);
-          const pendingTarget = mounted.some(element => `turn:${element.getAttribute('data-turn-key') || element.getAttribute('data-testid')}` === job.key);
+          const pendingTarget = mounted.some(element => nodeKey(element) === job.key);
           const older = item.top < 0 || firstIndex !== undefined && targetIndex < firstIndex && position() <= 2;
           if (older && !pendingTarget) {
             toast(`正在加载更早的历史以定位第 ${targetIndex + 1} 轮… · Esc 可取消`, true);
@@ -1226,9 +1271,12 @@
         return;
       }
       if (!items.length || historyComplete) return;
+      // Dots may have paged older messages despite mounting every current article.
+      // Only an explicit history scan can establish completeness for this surface.
+      if (isDots()) return;
       // Cached intervals survive virtual unmounts. An uninterrupted range from
       // transcript start to end means there are no undiscovered history nodes.
-      if (pending.some(element => !cache.has(`turn:${element.getAttribute('data-turn-key')}`))) return;
+      if (pending.some(element => !cache.has(nodeKey(element)))) return;
       if (!content.querySelector('[data-turn-key]')) { historyComplete = true; return; }
       const rect = content.getBoundingClientRect();
       const origin = rect.top - viewport().top + position();
@@ -1258,7 +1306,7 @@
       hidePreview();
       let y = 0, steps = 0, bottomPasses = 0, historyTimedOut = false;
       try {
-        while (scan === job && !job.cancelled && job.route === threadIdentity(win.location.pathname) && job.container.isConnected && !doc.hidden) {
+        while (scan === job && !job.cancelled && job.route === pageIdentity().route && job.container.isConnected && !doc.hidden) {
           job.atStart = y === 0;
           measure();
           move(y);
@@ -1288,11 +1336,11 @@
           for (let retry = 0; retry < (y >= geometry.max - 2 ? 20 : 12); retry++) {
             const view = viewport();
             const ready = mounted.some(element => {
-              if (!element.isConnected || !element.querySelector(`${USER}, ${RESPONSE}`)) return false;
+              if (!element.isConnected || !element.querySelector(isDots() ? ".message-text" : `${USER}, ${RESPONSE}`)) return false;
               const rect = element.getBoundingClientRect();
               return rect.height > 0 && rect.bottom > view.top && rect.top < view.bottom;
             });
-            const missingTail = y >= geometry.max - 2 && pending.some(element => !cache.has(`turn:${element.getAttribute("data-turn-key")}`));
+            const missingTail = y >= geometry.max - 2 && pending.some(element => !cache.has(nodeKey(element)));
             if (ready && !missingTail || scan !== job) break;
             await pause(150);
             if (scan !== job) break;
@@ -1336,7 +1384,7 @@
       indexButton.removeAttribute('aria-busy');
       indexButton.setAttribute('aria-label', '点击加载过去的对话');
       render();
-      if (job.route !== threadIdentity(win.location.pathname) || job.container !== scroller || !scroller?.isConnected) return;
+      if (job.route !== pageIdentity().route || job.container !== scroller || !scroller?.isConnected) return;
       selectedKey = cache.has(job.originalSelection) ? job.originalSelection : null;
       measure();
       move((cache.get(job.anchorKey)?.top ?? job.saved + job.offset) - job.offset);

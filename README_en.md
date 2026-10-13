@@ -84,6 +84,8 @@ A standalone rail visually inspired by DSH's TurnNavigator: fixed-pitch horizont
 - A clicked turn stays active until manual transcript interaction. One white focus moves smoothly between turns; overflowing rails support wheel/touch and arrows, PageUp/PageDown, Home/End, with synchronized focus and viewport transitions.
 - The index uses the conversation ID, retaining discovered turns across project-prefix changes and transcript container remounts.
 - Save discovered IDs, order and short previews locally. Reopening restores the rail immediately; unmounted entries appear dim. Clicking them loads earlier pages only as needed, stops at the target and calibrates by ID. Click again or press Esc to cancel; keep the tab visible. Switching conversations saves/restores the corresponding index.
+- Dots (`/dots/...`) uses user `.self` message articles and the first following text reply. Preview, search, jump and cache reuse existing components. Caches are isolated by path and visible message namespace, including namespace changes on the same URL. Completeness requires explicit history scanning.
+- SPA history changes clear stale navigation immediately; clicks also check the current route.
 - Supports current `data-turn-key` and legacy `conversation-turn-*` wrappers, including negative `scrollTop` in a reversed scrollport.
 
 Normal reading and idle time have no polling or ongoing storage I/O. Scrolling uses cached coordinates and binary search, then updates the old and new active marks. Observers watch direct structural containers, not streamed answer text; size changes are coalesced at 180ms. Previews have bounded text/tree traversal, and the rail mounts only roughly 50 buttons regardless of history size. Snapshot writes are debounced for 1.5 seconds and run during idle time, with a final flush on page exit. Saves merge IDs discovered by other tabs of the same conversation, preserving a larger index against a partial snapshot. Scanning, on-demand loading and position correction have time/attempt limits.
@@ -147,3 +149,5 @@ Original script source:
 ChatGPT's DOM changes quickly, and all these scripts depend on the current page structure. If a feature suddenly stops working, you usually need to re-check the relevant DOM nodes or request paths with the browser's developer tools.
 
 Conversation Rail performance: existing-turn layout refreshes process the mounted window without rebuilding the entire cached index. Observer connections and rail attributes update only when changed. See [the audit and reproduction steps](CONVERSATION_RAIL_PERFORMANCE.md).
+
+For the synthetic Dots message-structure demo, serve the repository locally and open `dots/home/`. It contains no personal conversation.
