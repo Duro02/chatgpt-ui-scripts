@@ -1,5 +1,11 @@
 # 更新记录
 
+## Conversation Rail 0.4.7 — 2026-10-13
+
+- Release both user and answer DOM references when Dots messages unmount or their wrapper detaches. Use weak references for stale-route suppression, so old message trees are not retained while waiting for the next conversation.
+- Track/cancel restore timers and resolve pending asynchronous waits on stop. Clear stopped controller indexes and respect ownership of other scripts’ History API wrappers.
+- Add deterministic 100-window resource teardown tests and a real-browser WeakRef pressure fixture. Full Node and Chrome feature regression passes; long-cache refreshes remain independent of cached count and idle has no periodic work.
+
 ## Conversation Rail 0.4.6 — 2026-10-13
 
 - Keep an unloaded navigation target across consecutive server pages. Replace the 2.4-second height-only cutoff with message/geometry progress and a 15-second no-progress grace period; preserve cancellation and the 120-second overall limit.

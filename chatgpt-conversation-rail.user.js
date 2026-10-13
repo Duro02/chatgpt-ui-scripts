@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.4.6
+// @version      0.4.7
 // @description  Persistent conversation navigation with short marks, previews and on-demand history loading.
 // @author       duro
 // @license      MIT
@@ -374,7 +374,8 @@
     let staleElements = null, staleUntil = 0, historyComplete = false, activeKey = null, hovered = false, stopped = false;
     let saveTimer = 0, saveIdle = 0, dirty = false, waitingKey = null;
     let savedThread = pageIdentity().thread;
-    let timer = 0, frame = 0, scan = null, jump = null, restoreJob = null, statusTimer = 0;
+    let timer = 0, frame = 0, scan = null, jump = null, restoreJob = null, restoreTimer = 0, statusTimer = 0;
+    const pauses = new Map();
     let geometry = { origin: 0, height: 0, max: 0, reverse: false };
     let railHeight = 320;
     let observedStructure = new Map(), observedParents = [];
@@ -1078,7 +1079,7 @@
       // Only the preceding mounted window can have newly unmounted elements.
       for (const item of previousPositioned) if (!live.has(item.key)) {
         const record = cache.get(item.key);
-        if (record) record.element = null;
+        if (record) { record.element = null; record.responseElement = null; }
       }
       loaded = measured.map(item => item.element);
       for (const item of measured) {
@@ -1142,8 +1143,9 @@
       route = next;
       savedThread = identity.thread;
       waitingKey = null;
+      cancelRestore();
       stopRailMotion();
-      staleElements = new Set(loaded);
+      staleElements = new WeakSet(loaded);
       staleUntil = Date.now() + 1000;
       historyComplete = false;
       chronology = []; transcriptEnd = null; tailKnown = false;
@@ -1213,7 +1215,7 @@
       scroller?.removeEventListener('scroll', onScroll);
       for (const item of positioned) {
         const record = cache.get(item.key);
-        if (record) record.element = null;
+        if (record) { record.element = null; record.responseElement = null; }
       }
       loaded = pending = mounted = positioned = [];
       content = scroller = null;
@@ -1229,7 +1231,7 @@
       if (!keepPreview) hidePreview();
       const item = cache.get(key);
       if (!item) return;
-      restoreJob = null;
+      cancelRestore();
       const originalSelection = selectedKey;
       selectedKey = key;
       setActive(key);
@@ -1345,7 +1347,14 @@
       }
     }
 
-    const pause = ms => new Promise(resolve => win.setTimeout(resolve, ms));
+    const pause = ms => new Promise(resolve => {
+      const timer = win.setTimeout(() => { pauses.delete(timer); resolve(); }, ms);
+      pauses.set(timer, resolve);
+    });
+    function cancelPauses() {
+      for (const [timer, resolve] of pauses) { win.clearTimeout(timer); resolve(); }
+      pauses.clear();
+    }
     function earlierLoading() {
       const leading = content?.firstElementChild;
       if (!leading || !leading.matches('[role="status"]') && !leading.querySelector('[role="status"]')) return false;
@@ -1470,6 +1479,7 @@
     }
 
     function restore(job) {
+      cancelRestore();
       indexButton.removeAttribute('aria-busy');
       indexButton.setAttribute('aria-label', '点击加载过去的对话');
       render();
@@ -1479,9 +1489,11 @@
       move((cache.get(job.anchorKey)?.top ?? job.saved + job.offset) - job.offset);
       // Keep the original viewport, including when its virtualized anchor remounts.
       restoreJob = job;
-      win.setTimeout(() => {
-        if (restoreJob !== job || job.route !== route || job.container !== scroller) return;
+      restoreTimer = win.setTimeout(() => {
+        restoreTimer = 0;
+        if (restoreJob !== job) return;
         restoreJob = null;
+        if (job.route !== route || job.container !== scroller || stopped) return;
         refresh();
         const anchor = cache.get(job.anchorKey)?.element;
         if (anchor?.isConnected) {
@@ -1491,6 +1503,11 @@
         onScroll();
         follow(true, true);
       }, 280);
+    }
+
+    function cancelRestore() {
+      win.clearTimeout(restoreTimer); restoreTimer = 0;
+      restoreJob = null;
     }
 
     function cancelScan(restorePosition) {
@@ -1516,7 +1533,7 @@
     }
     function releaseSelection() {
       stopRailMotion();
-      restoreJob = null;
+      cancelRestore();
       selectedKey = null;
       cancelJump(false);
     }
@@ -1660,6 +1677,7 @@
       snapshot: () => ({ count: items.length, activeKey, selectedKey, mountedMarks: buttons.size, indexing: Boolean(scan), loadingTarget: jump?.stage === "load", animating: Boolean(railMotion), historyComplete,
         entries: items.map(({ key, top, prompt }) => ({ key, top, prompt })) }),
       stop() {
+        if (stopped) return;
         flushSaved();
         stopped = true;
         hidePreview();
@@ -1670,7 +1688,8 @@
         win.clearTimeout(timer);
         win.clearTimeout(statusTimer);
         win.cancelAnimationFrame(frame);
-        restoreJob = null;
+        cancelRestore();
+        cancelPauses();
         doc.removeEventListener('keydown', interrupt, true);
         doc.removeEventListener('wheel', interrupt, true);
         doc.removeEventListener('touchstart', interrupt, true);
@@ -1681,6 +1700,9 @@
         win.removeEventListener('pagehide', flushSaved);
         win.navigation?.removeEventListener('navigatesuccess', routeSignal);
         for (const { name, original, wrapper } of historyHooks) if (win.history[name] === wrapper) win.history[name] = original;
+        cache.clear(); indexes.clear(); provisionalKeys.clear(); buttons.clear();
+        items = chronology = []; staleElements = null;
+        activeKey = selectedKey = waitingKey = null;
         host.remove();
       },
     };

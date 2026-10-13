@@ -1,0 +1,29 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>导航发布前 · 内存压力验证</title>
+<style>body{margin:24px;background:#20201e;color:#eeeae2;font:15px/1.6 system-ui}button{font:inherit;margin-right:12px;padding:6px 14px}#scroll{height:45vh;overflow-y:auto;overflow-anchor:none;border:1px solid #ffffff22;margin-top:20px}.message-list{padding:16px 15%;}.message-row{min-height:80px}.self{background:#343330;border-radius:14px;padding:10px}.message-text{max-height:130px;overflow:hidden}pre{white-space:pre-wrap;background:#181817;padding:14px;border-radius:12px}</style>
+<h1>导航发布前 · 内存压力验证</h1><p>合成 1,000 条缓存记录，每次仅挂载 7 轮消息；反复替换整段消息树。只保存旧树的弱引用，用于检查垃圾回收。</p><button id="batch">替换 30 次消息窗口</button><button id="stop">停止脚本</button><button id="report">显示资源状态</button>
+<div id="scroll" data-role="messages-scroll"><div class="message-list"></div></div><pre id="results"></pre>
+<script>window.module={exports:{}};</script><script src="../chatgpt-conversation-rail.user.js"></script><script>
+const api=module.exports;delete window.module;const scroll=document.querySelector('#scroll'),results=document.querySelector('#results');let list=scroll.firstElementChild,controller,iteration=0;const oldRoots=[];
+history.replaceState({},'', '/dots/home#memory-audit');
+const key=i=>`message:memory-browser~memory-browser~CalpicoMessage~msg-${i}`;
+function mount(){
+  const next=document.createElement('div');next.className='message-list';
+  const first=iteration*7%994;
+  for(let i=first;i<first+7;i++)for(const user of [true,false]){
+    const row=document.createElement('article');row.className='message-row'+(user?' self':'');row.dataset.messageId=user?key(i).slice(8):`memory-browser~memory-browser~CalpicoMessage~answer-${i}`;
+    const text=document.createElement('div');text.className='message-text';
+    for(let part=0;part<24;part++){const span=document.createElement('span');span.textContent=`${user?'提问':'回答'} ${i} / ${part}：这是合成压力消息，验证已卸载的 DOM 不会被缓存继续引用。`;text.append(span);}
+    row.append(text);next.append(row);
+  }
+  oldRoots.push(new WeakRef(list));list.replaceWith(next);list=next;iteration++;
+}
+mount();oldRoots.length=0;
+const thread='dots:/dots/home:memory-browser~memory-browser',records=Array.from({length:1000},(_,i)=>({key:key(i),top:i*220,bottom:(i+1)*220,prompt:`提问 ${i}`,answer:`回答 ${i}`}));
+const memory=new Map([[api.cacheKey(thread),api.encodeSaved(thread,records,true,220000,true)]]);
+controller=api.start(document,{storage:{getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,v),removeItem:k=>memory.delete(k)}});
+if(controller.snapshot().count!==1000)throw Error('memory fixture did not initialize Dots cache');
+function state(){return {windows:iteration-1,weakRoots:oldRoots.length,liveOldRoots:oldRoots.filter(ref=>ref.deref()).length,cacheCount:controller.snapshot().count,mountedMarks:controller.snapshot().mountedMarks,stats:{...controller.stats},note:'弱引用是否存活取决于自然垃圾回收时机；存活数不等于已证明的泄漏。'};}
+async function batch(count=30){for(let i=0;i<count;i++){mount();await new Promise(r=>setTimeout(r,220));if(controller.snapshot().mountedMarks>52)throw Error('rail DOM exceeded bound');}results.textContent=JSON.stringify(state(),null,2);return {windows:iteration-1,cacheCount:controller.snapshot().count};}
+function stop(){controller.stop();results.textContent=JSON.stringify(state(),null,2);return controller.snapshot().count;}
+window.memoryAudit={batch,state,stop};document.querySelector('#batch').onclick=()=>batch();document.querySelector('#stop').onclick=stop;document.querySelector('#report').onclick=()=>results.textContent=JSON.stringify(state(),null,2);results.textContent=JSON.stringify(state(),null,2);
+</script></html>
