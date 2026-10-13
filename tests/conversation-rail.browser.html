@@ -462,6 +462,17 @@ async function dotsRegression(){
     check(root.querySelector('.search-total').textContent==='1 个匹配节点','Dots 回答可以被已有搜索组件检索');
     root.querySelector('.search-result').click();await sleep(500);
     check(controller.snapshot().selectedKey===key&&!nav.hidden&&scroll.scrollTop>0,'Dots 点击节点使用正确滚动容器，导航不会消失');
+    const profileHolder=document.createElement('div');profileHolder.className='right-0 top-(--thread-floating-content-top-inset)';content.append(profileHolder);
+    const profile=document.createElement('div');profile.dataset.orbitProfile='true';profile.dataset.state='open';profileHolder.append(profile);
+    await sleep(100);
+    check(nav.hidden&&panel.hidden&&root.querySelector('.search-dock').hidden,'Dot 面板打开时隐藏导航并关闭预览和搜索');
+    check(controller.snapshot().count===8,'面板打开时保留节点索引');
+    await sleep(300);check(nav.hidden,'后续刷新不重新显示被隐藏的导航');
+    profile.dataset.state='closed';await sleep(100);
+    check(!nav.hidden,'面板进入关闭状态时恢复原节点');
+    profile.dataset.state='open';await sleep(100);profile.remove();await sleep(100);
+    check(!nav.hidden&&controller.snapshot().count===8,'面板卸载时也恢复原节点，无需重新加载');
+    profileHolder.remove();
     controller.flush();check([...memory.keys()].some(k=>k.includes('dots:/dots/home:scope-A~scope-A')),'Dots 缓存与普通会话隔离');
     controller.stop();controller=api.start(document,{storage});await sleep(400);
     check(controller.snapshot().count===8,'Dots 刷新初始化恢复独立索引');

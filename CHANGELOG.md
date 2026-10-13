@@ -1,5 +1,11 @@
 # 更新记录
 
+## Conversation Rail 0.4.4 — 2026-10-13
+
+- Hide the rail while the Dot profile panel is open; dismiss previews/search and restore the existing node list as soon as the panel closes or unmounts. Preserve indexed nodes and selection.
+- Observe only the small floating-panel branch and its visibility attributes; no transcript geometry reads, history reloading or polling for panel visibility. Clean up the observer on teardown.
+- Verify opening, closing states, removal, blocked interactions and unchanged-state zero DOM writes. Add profile-toggle/outside-click/Esc behavior to the synthetic Dots recording demo.
+
 ## Conversation Rail 0.4.3 — 2026-10-13
 
 - Adapt Dots message lists using user `.self` articles and stable `data-message-id` values. Pair each user node with its first following text reply and use the actual message scroller.

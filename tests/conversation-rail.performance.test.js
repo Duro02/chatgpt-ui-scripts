@@ -32,7 +32,7 @@ function fixture(file, count) {
     el.getBoundingClientRect=()=>rect(i*220-scroll.scrollTop,220+(i===count-1?heightChange:0));content.append(el);
   }
   let source=fs.readFileSync(file,'utf8');
-  source=source.replace('      stats,\n      flush:', '      stats, audit: { refresh, render, watch, schedule },\n      flush:');
+  source=source.replace('      stats,\n      flush:', '      stats, audit: { refresh, render, watch, schedule, syncProfile },\n      flush:');
   source=source.replaceAll('cache.values()', '(stats.cacheWalks = (stats.cacheWalks || 0) + cache.size, cache.values())');
   source=source.replace('function rebuildIndexes() {','function rebuildIndexes() { stats.indexBuilds = (stats.indexBuilds || 0) + 1;');
   w.module={exports:{}};w.eval(source);const api=w.module.exports;
@@ -172,6 +172,21 @@ function dotsRegression(){
   target.dispatchEvent(new f.w.Event('pointerover',{bubbles:true}));panel.dispatchEvent(new f.w.Event('pointerenter'));
   root.querySelector('.search-toggle').click();root.querySelector('.search-input').value='Dots answer 1';root.querySelector('.search-form').dispatchEvent(new f.w.Event('submit',{cancelable:true}));
   assert.equal(root.querySelector('.search-total').textContent,'1 个匹配节点','Dots answers participate in the existing search');
+  const countBefore=f.c.snapshot().count,selectedBefore=f.c.snapshot().selectedKey,bodyBefore=scroller.scrollTop;
+  const floating=f.d.createElement('div');floating.className='right-0 top-(--thread-floating-content-top-inset)';pane.append(floating);
+  const profile=f.d.createElement('div');profile.dataset.orbitProfile='true';profile.dataset.state='open';floating.append(profile);
+  f.c.audit.syncProfile();
+  assert.ok(root.querySelector('nav').hidden&&panel.hidden&&root.querySelector('.search-dock').hidden,'opening Dot profile hides rail and dismisses preview/search');
+  assert.equal(f.c.snapshot().count,countBefore,'profile visibility preserves all indexed nodes');
+  f.c.audit.render();assert.ok(root.querySelector('nav').hidden,'later renders cannot reveal the blocked rail');
+  target.click();assert.equal(scroller.scrollTop,bodyBefore,'hidden navigation cannot initiate a jump');
+  profile.dataset.state='closed';f.c.audit.syncProfile();
+  assert.ok(!root.querySelector('nav').hidden,'closing animation restores the rail without waiting for unmount');
+  assert.equal(f.c.snapshot().selectedKey,selectedBefore,'selected node survives profile visibility changes');
+  profile.dataset.state='open';f.c.audit.syncProfile();profile.remove();f.c.audit.syncProfile();
+  assert.ok(!root.querySelector('nav').hidden,'dialog removal also restores the rail');
+  f.changes.takeRecords();for(let i=0;i<100;i++)f.c.audit.syncProfile();
+  assert.equal(f.changes.takeRecords().length,0,'unchanged profile state produces no DOM writes');
   f.c.flush();const key=f.api.cacheKey('dots:/dots/home:scope-A~scope-A');
   assert.ok(f.memory.has(key),'Dots persists under an independent visible-message namespace');
   const saved=f.api.decodeSaved(f.memory.get(key),'dots:/dots/home:scope-A~scope-A');assert.equal(saved.entries.length,3);

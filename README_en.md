@@ -85,6 +85,7 @@ A standalone rail visually inspired by DSH's TurnNavigator: fixed-pitch horizont
 - The index uses the conversation ID, retaining discovered turns across project-prefix changes and transcript container remounts.
 - Save discovered IDs, order and short previews locally. Reopening restores the rail immediately; unmounted entries appear dim. Clicking them loads earlier pages only as needed, stops at the target and calibrates by ID. Click again or press Esc to cancel; keep the tab visible. Switching conversations saves/restores the corresponding index.
 - Dots (`/dots/...`) uses user `.self` message articles and the first following text reply. Preview, search, jump and cache reuse existing components. Caches are isolated by path and visible message namespace, including namespace changes on the same URL. Completeness requires explicit history scanning.
+- Opening the Dot profile hides navigation and dismisses preview/search. Closing or unmounting restores the same indexed nodes without reloading history. Visibility watches only the small floating-panel branch, with no polling.
 - SPA history changes clear stale navigation immediately; clicks also check the current route.
 - Supports current `data-turn-key` and legacy `conversation-turn-*` wrappers, including negative `scrollTop` in a reversed scrollport.
 

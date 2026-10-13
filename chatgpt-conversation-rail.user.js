@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.4.3
+// @version      0.4.4
 // @description  Persistent conversation navigation with short marks, previews and on-demand history loading.
 // @author       duro
 // @license      MIT
@@ -36,6 +36,7 @@
       --panel-radius:14px; --panel-inset:${PANEL_INSET}px; --card-radius:7px;
       --card-hover:color-mix(in srgb,currentColor 7%,var(--rail-bg)); }
     :host([data-dark]) { color:var(--text-primary,var(--color-text-primary,#eeeae2)); --rail-bg:var(--bg-elevated-primary,var(--color-surface-elevated-secondary,#302f2c)); }
+    :host([data-profile-open]) nav,:host([data-profile-open]) .preview,:host([data-profile-open]) .status { display:none !important; }
     * { box-sizing:border-box; }
     nav { position:fixed; right:12px; top:var(--rail-center,45vh); width:28px; z-index:50;
       transform:translateY(-50%); pointer-events:auto; }
@@ -371,6 +372,7 @@
     let geometry = { origin: 0, height: 0, max: 0, reverse: false };
     let railHeight = 320;
     let observedStructure = new Map(), observedParents = [];
+    let profileBlocked = false, profileTargets = [];
     const stats = { refreshes: 0, geometryReads: 0, scrollFrames: 0, renders: 0, railAnimationFrames: 0, storageReads: 0, storageWrites: 0, searches: 0 };
     let persistenceAvailable = true;
     let storage = options.storage;
@@ -525,7 +527,7 @@
     }
     function render(extraIndex) {
       stats.renders += 1;
-      setAttribute(nav, 'hidden', items.length ? null : '');
+      setAttribute(nav, 'hidden', items.length && !profileBlocked ? null : '');
       setAttribute(indexButton, 'hidden', historyComplete && !scan ? '' : null);
       const offset = indexButton.hidden ? 0 : 1;
       setStyle(marks, 'height', `${(items.length + offset) * PITCH}px`);
@@ -842,7 +844,7 @@
       render();
     }
     function showPreview(button, keyboard = false) {
-      if (!button) return;
+      if (!button || profileBlocked) return;
       const item = cache.get(button.dataset.key);
       if (button !== indexButton && !item) return;
       if (button === indexButton && searchOpen) return;
@@ -889,6 +891,32 @@
     const resize = new win.ResizeObserver(() => schedule());
     const boot = new win.MutationObserver(() => bind());
     const theme = new win.MutationObserver(() => syncTheme());
+    const profileObserver = new win.MutationObserver(() => syncProfile());
+
+    function syncProfile() {
+      if (stopped) return;
+      const panels = isDots() ? [...doc.querySelectorAll('[data-orbit-profile]')] : [];
+      // The floating pane is outside the message list. Watch this small branch,
+      // including dialog unmount/closing state, rather than the whole transcript.
+      const candidates = isDots() ? [...doc.querySelectorAll('[class*="thread-floating-content-top-inset"][class*="right-0"]'), ...panels] : [];
+      const targets = candidates.filter(node => !candidates.some(parent => parent !== node && parent.contains(node)));
+      if (targets.length !== profileTargets.length || targets.some((node, i) => node !== profileTargets[i])) {
+        profileObserver.disconnect();
+        for (const node of targets) profileObserver.observe(node, { childList:true, subtree:true, attributes:true,
+          attributeFilter:['data-state', 'hidden', 'aria-hidden'] });
+        profileTargets = targets;
+      }
+      const blocked = panels.some(panel => panel.getAttribute('data-state') !== 'closed' && !panel.closest('[hidden], [aria-hidden="true"]'));
+      if (blocked === profileBlocked) return;
+      profileBlocked = blocked;
+      setAttribute(host, 'data-profile-open', blocked ? '' : null);
+      if (blocked) {
+        hidePreview(); navInside = hovered = false;
+        stopRailMotion(); cancelScan(true); cancelJump(true);
+        if (nav.contains(shadow.activeElement)) shadow.activeElement.blur();
+      }
+      render();
+    }
 
     function syncTheme() {
       const html = doc.documentElement;
@@ -1103,6 +1131,7 @@
     function bind() {
       if (stopped) return;
       checkRoute();
+      syncProfile();
       const next = preferredRoot();
       if (!next) {
         detach();
@@ -1144,6 +1173,7 @@
     }
 
     function navigate(key, keepPreview = false) {
+      if (profileBlocked) return;
       // Never scroll a previous conversation after a client-side route change.
       if (checkRoute()) { bind(); return; }
       cancelScan(false);
@@ -1289,6 +1319,7 @@
     }
 
     async function buildIndex() {
+      if (profileBlocked) return;
       if (scan) { cancelScan(true); return; }
       if (!scroller || doc.hidden) return;
       const originalSelection = selectedKey;
@@ -1577,6 +1608,7 @@
         detach();
         boot.disconnect();
         theme.disconnect();
+        profileObserver.disconnect(); profileTargets = [];
         win.clearTimeout(timer);
         win.clearTimeout(statusTimer);
         win.cancelAnimationFrame(frame);
