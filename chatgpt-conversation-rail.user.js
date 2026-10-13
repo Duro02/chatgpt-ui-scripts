@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.4.8
+// @version      0.4.9
 // @description  Persistent conversation navigation with short marks, previews and on-demand history loading.
 // @author       duro
 // @license      MIT
@@ -112,6 +112,11 @@
     .search-list { position:relative; overflow:hidden; }
     .search-rows { position:relative; height:100%; }
     .search-count { display:flex; justify-content:space-between; }
+    /* Wheel browsing commits a complete window per frame. Layout tweens must
+       not trail behind recycled cards or temporarily expose empty slots. */
+    .preview[data-browsing] { transition:width 260ms ease; }
+    .search-dock[data-browsing] { transition:width 240ms ease; }
+    [data-browsing] .preview-card { transition:background 140ms ease; }
     .search-progress { opacity:.7; font-variant-numeric:tabular-nums; }
     .search-empty { position:absolute; inset:var(--panel-inset); padding:14px 12px; color:var(--rail-muted); font-size:12px; }
     .status { position:fixed; right:50px; bottom:100px; max-width:300px; padding:8px 12px;
@@ -374,7 +379,8 @@
     let searchOpen = false, searchSubmitted = false, searchMatches = [], searchQuery = '', searchIndex = 0, searchWheel = 0, searchWheelTime = 0;
     let previewPointer = false, previewBoxTop = 100, previewBoxHeight = 118;
     let previewKey = null, previewExpanded = false, previewInside = false, navInside = false, previewKeyboard = false;
-    let previewCloseTimer = 0, previewEntryFrame = 0, previewAnchor = 100, previewWheel = 0, previewWheelTime = 0;
+    let previewCloseTimer = 0, previewAnchor = 100, previewWheel = 0, previewWheelTime = 0, previewFixedTop = null;
+    const previewBrowse = { frame:0, timer:0, target:null, key:null }, searchBrowse = { frame:0, timer:0, target:null, key:null };
     const status = shadow.querySelector('.status');
     const indexButton = shadow.querySelector('.index');
     const focusLine = shadow.querySelector('.focus-line');
@@ -514,15 +520,15 @@
     }
 
     function hidePreview() {
+      cancelBrowse(previewBrowse, preview); cancelBrowse(searchBrowse, searchDock);
       win.clearTimeout(previewCloseTimer); previewCloseTimer = 0;
-      win.cancelAnimationFrame(previewEntryFrame); previewEntryFrame = 0;
       if (preview.hidden && !previewCards.size) return;
       preview.hidden = true;
       setAttribute(preview, 'data-expanded', null);
       previewExpanded = previewInside = previewKeyboard = previewPointer = false;
       hovered = navInside;
       if (previewKey) setAttribute(buttons.get(previewKey) || preview, 'data-preview', null);
-      previewKey = null; previewWheel = 0;
+      previewKey = null; previewWheel = 0; previewFixedTop = null;
       previewCards.clear(); previewWindow.replaceChildren();
       resetSearch();
     }
@@ -715,11 +721,12 @@
       const label = doc.createElement('span');
       const response = doc.createElement('span'); response.hidden = true;
       button.append(number, label, response); container.appendChild(button);
-      card = { button, number, label, response, top: 0, entering: false };
+      card = { button, number, label, response, top: 0 };
       cards.set(key, card);
       return card;
     }
     function resetSearch() {
+      cancelBrowse(searchBrowse, searchDock);
       searchOpen = searchSubmitted = false; searchMatches = []; searchQuery = ''; searchIndex = searchWheel = searchWheelTime = 0;
       searchInput.value = ''; searchButtons.clear(); searchRows.replaceChildren(); searchList.scrollTop = 0;
       setAttribute(searchDock, 'hidden', '');
@@ -749,24 +756,27 @@
       applyPreviewMetrics(searchList, metrics);
       setStyle(searchList, 'height', `${metrics.height - 2}px`);
     }
-    function renderSearch(direction = 0) {
+    function renderSearch() {
       if (!searchSubmitted) return;
       const metrics = previewMetrics(searchIndex, Math.max(1, searchMatches.length), true, SEARCH_HEADER);
       setAttribute(searchEmpty, 'hidden', searchMatches.length ? '' : null);
       setText(searchTotal, `${searchMatches.length} 个匹配节点`);
       setText(searchProgress, searchMatches.length ? `${searchIndex + 1} / ${searchMatches.length}` : '');
-      renderPreviewCards(searchMatches, searchIndex, metrics, searchButtons, searchRows, true, direction, true);
+      renderPreviewCards(searchMatches, searchIndex, metrics, searchButtons, searchRows, true, true);
     }
     function selectSearch(index) {
+      cancelBrowse(searchBrowse, searchDock);
       const next = Math.max(0, Math.min(searchMatches.length - 1, index));
-      if (!searchMatches.length || next === searchIndex) return;
-      const direction = Math.sign(next - searchIndex);
+      if (!searchMatches.length) return;
+      beginBrowse(searchBrowse, searchDock);
+      if (next === searchIndex) return;
       searchIndex = next;
       readPreview(searchMatches[next]);
-      layoutSearch(); renderSearch(direction);
+      layoutSearch(); renderSearch();
     }
     function submitSearch(event) {
       event.preventDefault();
+      cancelBrowse(searchBrowse, searchDock);
       const query = searchInput.value.slice(0, 160).trim();
       searchQuery = query;
       searchMatches = query ? searchNodes(items, query) : [];
@@ -778,12 +788,38 @@
       layoutSearch(); renderSearch();
     }
 
-    // Both panels use the same geometry, card renderer and entry animation.
+    function beginBrowse(state, surface) {
+      setAttribute(surface, 'data-browsing', '');
+      win.clearTimeout(state.timer);
+      state.timer = win.setTimeout(() => {
+        state.timer = 0; setAttribute(surface, 'data-browsing', null);
+      }, 180);
+    }
+    function cancelBrowse(state, surface) {
+      win.cancelAnimationFrame(state.frame); win.clearTimeout(state.timer);
+      state.frame = state.timer = 0; state.target = state.key = null;
+      setAttribute(surface, 'data-browsing', null);
+    }
+    function queueBrowse(state, surface, index, entries, step, apply) {
+      // Clamp each event before merging, so reversal at a boundary is preserved.
+      const base = surface === preview && state.key ? indexes.get(state.key) ?? index : state.target ?? index;
+      state.target = Math.max(0, Math.min(entries.length - 1, base + step));
+      state.key = entries[state.target]?.key || null;
+      beginBrowse(state, surface);
+      if (!state.frame) state.frame = win.requestAnimationFrame(() => {
+        state.frame = 0;
+        const target = state.target, key = state.key; state.target = state.key = null;
+        if (!stopped && target !== null) apply(target, key);
+      });
+    }
+
+    // Both panels share a stable seven-entry window, including at the ends.
     function previewMetrics(index, count, expanded, header = 0) {
       const available = Math.max(140, win.innerHeight - 80 - PANEL_INSET * 2 - 2 - header);
       const centerHeight = Math.round(Math.min(118, Math.max(74, available * .36)) * 100) / 100;
       const rowHeight = Math.round(Math.min(40, Math.max(11, (available - centerHeight) / 6)) * 100) / 100;
-      const before = Math.min(3, index), after = Math.min(3, count - index - 1);
+      const size = Math.min(7, count), start = Math.max(0, Math.min(index - 3, count - size));
+      const before = index - start, after = size - before - 1;
       const centerTop = PANEL_INSET + (expanded ? before * rowHeight : 0);
       const height = centerHeight + PANEL_INSET * 2 + 2 + (expanded ? (before + after) * rowHeight : 0);
       return { before, after, centerTop, centerHeight, rowHeight, height };
@@ -796,12 +832,12 @@
       setStyle(container, '--preview-label-lines', String(labelLines));
       setStyle(container, '--preview-row-padding', `${Math.max(0, Math.min(5, (rowHeight - labelLines * 15) / 2))}px`);
     }
-    function renderPreviewCards(entries, index, metrics, cards, container, expanded, direction, searching = false) {
+    function renderPreviewCards(entries, index, metrics, cards, container, expanded, searching = false) {
       const { before, after, centerTop, centerHeight, rowHeight } = metrics;
       const needed = new Set();
       if (entries.length) for (let slot = -before; slot <= after; slot++) {
         const item = entries[index + slot]; needed.add(item.key);
-        const isNew = !cards.has(item.key), card = previewCard(item.key, cards, container, searching), central = slot === 0;
+        const card = previewCard(item.key, cards, container, searching), central = slot === 0;
         const ordinal = (searching ? indexes.get(item.key) ?? index + slot : index + slot) + 1;
         setAttribute(card.button, 'data-center', central ? '' : null);
         if (searching) setAttribute(card.button, 'data-search-index', String(index + slot));
@@ -815,35 +851,22 @@
         setAttribute(card.response, 'hidden', central ? null : '');
         setText(card.response, central ? item.answer || '点击定位这一轮。' : '');
         card.top = Math.round((slot < 0 ? centerTop + slot * rowHeight : slot > 0 ? centerTop + centerHeight + (slot - 1) * rowHeight : centerTop) * 100) / 100;
-        if (isNew && expanded && direction && !win.matchMedia('(prefers-reduced-motion:reduce)').matches) {
-          card.entering = true;
-          card.button.style.top = `${card.top + direction * rowHeight}px`;
-          card.button.style.opacity = '0';
-        } else if (!card.entering) setStyle(card.button, 'top', `${card.top}px`);
+        setStyle(card.button, 'top', `${card.top}px`);
       }
       for (const [key, card] of cards) if (!needed.has(key)) { card.button.remove(); cards.delete(key); }
-      // One frame for new cards in either panel; keyed movement uses CSS transitions.
-      if (!previewEntryFrame && [...previewCards.values(), ...searchButtons.values()].some(card => card.entering)) {
-        previewEntryFrame = win.requestAnimationFrame(() => {
-          previewEntryFrame = 0;
-          for (const card of [...previewCards.values(), ...searchButtons.values()]) if (card.entering) {
-            card.entering = false; card.button.style.opacity = '';
-            setStyle(card.button, 'top', `${card.top}px`);
-          }
-        });
-      }
     }
-    function renderPreview(direction = 0) {
+    function renderPreview() {
       const index = indexes.get(previewKey);
       if (index === undefined || preview.hidden) return;
       const metrics = previewMetrics(index, items.length, previewExpanded);
       applyPreviewMetrics(preview, metrics);
       setStyle(preview, '--preview-height', `${metrics.height}px`);
       previewBoxHeight = metrics.height;
-      previewBoxTop = Math.max(64, Math.min(win.innerHeight - metrics.height - 16, previewAnchor - metrics.centerTop));
+      previewBoxTop = Math.max(64, Math.min(win.innerHeight - metrics.height - 16, previewFixedTop ?? previewAnchor - metrics.centerTop));
+      previewFixedTop = previewExpanded ? previewBoxTop : null;
       setStyle(host, '--preview-top', `${previewBoxTop}px`);
       layoutSearch(); renderSearch();
-      renderPreviewCards(items, index, metrics, previewCards, previewWindow, previewExpanded, direction);
+      renderPreviewCards(items, index, metrics, previewCards, previewWindow, previewExpanded);
     }
     function expandPreview(event) {
       if (preview.hidden) return;
@@ -856,13 +879,15 @@
       renderPreview();
     }
     function shiftPreview(delta) {
+      cancelBrowse(previewBrowse, preview);
       const index = indexes.get(previewKey);
       if (index === undefined) return;
       const next = Math.max(0, Math.min(items.length - 1, index + delta));
+      beginBrowse(previewBrowse, preview);
       if (next === index) return;
       setAttribute(buttons.get(previewKey) || preview, 'data-preview', null);
       previewKey = items[next].key;
-      readPreview(items[next]); renderPreview(Math.sign(delta));
+      readPreview(items[next]); renderPreview();
       stopRailMotion();
       // Browse the rail along with the panel, without moving the transcript.
       const top = (next + (indexButton.hidden ? 0 : 1)) * PITCH;
@@ -877,11 +902,13 @@
       win.clearTimeout(previewCloseTimer); previewCloseTimer = 0;
       previewKeyboard = keyboard;
       if (previewKey !== item?.key) {
+        cancelBrowse(previewBrowse, preview); previewFixedTop = null;
         setAttribute(buttons.get(previewKey) || preview, 'data-preview', null);
         previewWheel = 0;
       }
       previewKey = item?.key || null;
       previewExpanded = searchOpen;
+      if (!previewExpanded) previewFixedTop = null;
       setAttribute(preview, 'data-expanded', previewExpanded ? '' : null);
       const rect = button.getBoundingClientRect();
       previewAnchor = Math.max(64, Math.min(win.innerHeight - 134, rect.top - 35));
@@ -1119,6 +1146,7 @@
         rebuildIndexes();
       }
       if (retiredProvisional && searchSubmitted) {
+        cancelBrowse(searchBrowse, searchDock);
         const key = searchMatches[searchIndex]?.key, previousIndex = searchIndex;
         const matches = new Map(searchMatches.filter(item => cache.has(item.key)).map(item => [item.key, item]));
         // Only the mounted window is checked for newly confirmed matches.
@@ -1586,7 +1614,10 @@
       previewWheel += event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 80 : 1);
       if (Math.abs(previewWheel) < 36) return;
       const step = Math.sign(previewWheel); previewWheel = 0;
-      shiftPreview(step);
+      queueBrowse(previewBrowse, preview, indexes.get(previewKey), items, step, (index, key) => {
+        const target = indexes.get(key), current = indexes.get(previewKey);
+        if (target !== undefined && current !== undefined) shiftPreview(target - current);
+      });
     }, { passive: false });
     preview.addEventListener('keydown', event => {
       if (searchDock.contains(event.target)) return;
@@ -1609,7 +1640,7 @@
       searchWheel += event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 80 : 1);
       if (Math.abs(searchWheel) < 36) return;
       const step = Math.sign(searchWheel); searchWheel = 0;
-      selectSearch(searchIndex + step);
+      queueBrowse(searchBrowse, searchDock, searchIndex, searchMatches, step, selectSearch);
     }, { passive: false });
     searchRows.addEventListener('click', event => {
       const button = event.target.closest('.search-result');

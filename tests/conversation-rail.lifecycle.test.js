@@ -77,6 +77,10 @@ async function run(){
     assert.deepEqual(f.resources(),{observerTargets:0,listeners:0,timers:0,frames:0,idle:0});assert.equal(f.w.history.pushState,f.originalPush);
   }
   assert.ok(stoppedControllers.every(c=>c.audit.references().cached===0));f.close();
+  f=fixture();const root=f.d.querySelector('#duro-conversation-rail').shadowRoot,panel=root.querySelector('.preview');
+  root.querySelector(`.mark[data-key="${f.key(193)}"]`).dispatchEvent(new f.w.Event('pointerover',{bubbles:true}));panel.dispatchEvent(new f.w.Event('pointerenter'));
+  panel.dispatchEvent(new f.w.WheelEvent('wheel',{deltaY:120,bubbles:true,cancelable:true}));assert.ok(f.resources().frames>0,'wheel browsing queues a bounded frame');
+  f.c.stop();assert.deepEqual(f.resources(),{observerTargets:0,listeners:0,timers:0,frames:0,idle:0},'stop cancels wheel frames and quiet-period timers');f.close();
   console.log(JSON.stringify({result:'PASS',cycles:100,restartCycles:20,cachedRecords:200,mountedUsers:7,mountedAnswers:7,detachedCacheReferences:0,peakObserverTargets:peakTargets,afterStop:{observerTargets:0,listeners:0,timers:0,frames:0,idle:0},checks:['idle save cancellation','route restore cancellation','weak stale suppression','external history ownership','stopped controller release','target/index wait teardown','repeated start/stop']},null,2));
 }
 run().catch(e=>{console.error(e);process.exitCode=1;});

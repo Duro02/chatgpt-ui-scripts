@@ -1,5 +1,11 @@
 # 更新记录
 
+## Conversation Rail 0.4.9 — 2026-10-13
+
+- Stabilize both expanded preview and search windows during fast wheel browsing: fill edge windows with up to seven real neighbors and keep the preview shell position fixed. Preserve equal first/last insets and compact short lists.
+- Coalesce wheel targets per frame, preserving bound reversals and message IDs through pagination. Recycled cards fill immediately; browsing temporarily suppresses layout/opacity tweens while opening transitions remain.
+- Cancel pending wheel frames/timers on close, stop and query changes. Verify rapid bidirectional browsing frame by frame, shared search behavior and resource teardown; no transcript scans or geometry reads are added to the wheel path.
+
 ## Conversation Rail 0.4.8 — 2026-10-13
 
 - Preserve the newest cached suffix when the 10,000-entry or serialized character limit is exceeded, rather than silently abandoning the entire save. Keep storage budgets unchanged and mark trimmed history incomplete.

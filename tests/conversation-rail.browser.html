@@ -391,8 +391,8 @@ async function previewPanelRegression(){
     check(panel.querySelector('[data-center]').dataset.key==='turn:message-15','原悬停节点保持在中间');
     check([...panel.querySelectorAll('.preview-card:not([data-center])')].every(card=>!card.querySelector('.preview-response').textContent),'上下六个邻居仅显示用户消息');
     const promoted=panel.querySelector('[data-key="turn:message-16"]'), before=scroll.scrollTop, readingKey=c.snapshot().activeKey;
-    const wheel=new WheelEvent('wheel',{deltaY:120,bubbles:true,composed:true,cancelable:true});panel.dispatchEvent(wheel);await sleep(350);
-    check(wheel.defaultPrevented&&panel.querySelector('[data-center]')===promoted,'滚轮复用相邻卡片并将其平滑提升到中央');
+    const wheel=new WheelEvent('wheel',{deltaY:120,bubbles:true,composed:true,cancelable:true});panel.dispatchEvent(wheel);await waitUntil(()=>panel.querySelector('[data-center]')?.dataset.key==='turn:message-16');
+    check(wheel.defaultPrevented&&panel.querySelector('[data-center]')===promoted,'滚轮复用相邻卡片并将其提升到中央');
     check(panel.querySelector('[data-center]').dataset.key==='turn:message-16','下滚一格预览下一轮');
     check(scroll.scrollTop===before&&c.snapshot().activeKey===readingKey,'浏览预览不滚动正文或改变阅读高亮');
     await waitUntil(()=>{const a=promoted.getBoundingClientRect(),b=panel.querySelector('.preview-card:not([data-center])')?.getBoundingClientRect();return b&&a.height>b.height&&a.width>b.width;});
@@ -400,13 +400,13 @@ async function previewPanelRegression(){
     check(center.height>side.height&&center.width>side.width,'中央问答预览更大，邻居更窄');
     const box=panel.getBoundingClientRect();check(box.top>=63&&box.bottom<=innerHeight-15,'七节点面板保持在窗口范围内');
     const idle={...c.stats};await sleep(400);check(c.stats.refreshes===idle.refreshes&&c.stats.railAnimationFrames===idle.railAnimationFrames,'展开后空闲没有持续扫描或动画帧');
-    for(let i=0;i<60;i++)panel.dispatchEvent(new WheelEvent('wheel',{deltaY:120,bubbles:true,composed:true,cancelable:true}));await sleep(300);
-    check(panel.querySelector('[data-center]').dataset.key==='turn:message-39'&&panel.querySelectorAll('.preview-card').length===4,'到末尾停止，显示实际存在的邻居');
+    for(let i=0;i<60;i++)panel.dispatchEvent(new WheelEvent('wheel',{deltaY:120,bubbles:true,composed:true,cancelable:true}));await waitUntil(()=>panel.querySelector('[data-center]')?.dataset.key==='turn:message-39');
+    check(panel.querySelector('[data-center]').dataset.key==='turn:message-39'&&panel.querySelectorAll('.preview-card').length===7,'到末尾停止，用真实邻居保持七节点窗口');
     await waitUntil(()=>{const o=panel.querySelector('.preview-window').getBoundingClientRect(),c=panel.querySelector('[data-center]').getBoundingClientRect();return o.bottom-c.bottom>=5&&Math.abs(o.bottom-c.bottom-(o.width-c.width)/2)<1.5;});
     const endOuter=panel.querySelector('.preview-window').getBoundingClientRect(),endCard=panel.querySelector('[data-center]').getBoundingClientRect();
     check(endOuter.bottom-endCard.bottom>=5&&Math.abs(endOuter.bottom-endCard.bottom-(endOuter.width-endCard.width)/2)<1.5,'末尾高亮的底部留白与左右留白一致');
-    for(let i=0;i<60;i++)panel.dispatchEvent(new WheelEvent('wheel',{deltaY:-120,bubbles:true,composed:true,cancelable:true}));await sleep(300);
-    check(panel.querySelector('[data-center]').dataset.key==='turn:message-0'&&panel.querySelectorAll('.preview-card').length===4,'到开头停止，不出现空白占位节点');
+    for(let i=0;i<60;i++)panel.dispatchEvent(new WheelEvent('wheel',{deltaY:-120,bubbles:true,composed:true,cancelable:true}));await waitUntil(()=>panel.querySelector('[data-center]')?.dataset.key==='turn:message-0');
+    check(panel.querySelector('[data-center]').dataset.key==='turn:message-0'&&panel.querySelectorAll('.preview-card').length===7,'到开头停止，七节点窗口没有空白占位');
     await waitUntil(()=>{const o=panel.querySelector('.preview-window').getBoundingClientRect(),c=panel.querySelector('[data-center]').getBoundingClientRect();return c.top-o.top>=5&&Math.abs(c.top-o.top-(o.width-c.width)/2)<1.5;});
     const headOuter=panel.querySelector('.preview-window').getBoundingClientRect(),headCard=panel.querySelector('[data-center]').getBoundingClientRect();
     check(headCard.top-headOuter.top>=5&&Math.abs(headCard.top-headOuter.top-(headOuter.width-headCard.width)/2)<1.5,'首节点高亮的顶部留白与左右留白一致');
@@ -424,6 +424,48 @@ async function previewPanelRegression(){
   }catch(e){log('FAIL '+e.stack);}
 }
 document.querySelector('#panel').onclick=previewPanelRegression;
+async function rapidPanelRegression(){
+  results.textContent='';
+  try{
+    const c=setup(80);await sleep(400);
+    const root=shadow(),nav=root.querySelector('nav'),panel=root.querySelector('.preview'),well=root.querySelector('.preview-window');
+    root.querySelector('.mark[data-key="turn:message-35"]').dispatchEvent(new PointerEvent('pointerover',{bubbles:true}));panel.dispatchEvent(new PointerEvent('pointerenter'));await sleep(350);
+    check(!panel.hidden&&panel.hasAttribute('data-expanded')&&well.querySelectorAll('.preview-card').length===7,'快速滚轮夹具已展开真实七节点窗口');
+    const initial=panel.getBoundingClientRect(),reading=scroll.scrollTop,stats={...c.stats};
+    function sample(surface,container,selector,base){
+      const box=surface.getBoundingClientRect(),view=container.getBoundingClientRect();
+      if(Math.abs(box.height-base.height)>1||Math.abs(box.top-base.top)>1)throw Error('快速浏览中面板尺寸或位置变化');
+      const rows=[...container.querySelectorAll(selector)].map(card=>({box:card.getBoundingClientRect(),opacity:parseFloat(getComputedStyle(card).opacity)})).sort((a,b)=>a.box.top-b.box.top);
+      if(rows.length!==7||rows.some(row=>row.opacity<.99))throw Error('窗口没有立即补齐七张可见真实卡片');
+      let bottom=view.top+7;
+      for(const row of rows){if(row.box.top>bottom+1.5)throw Error('卡片之间出现空白缝隙');bottom=Math.max(bottom,row.box.bottom);}
+      if(bottom<view.bottom-8.5)throw Error('列表底部出现空白');
+    }
+    async function burst(surface,container,selector,base,shell=surface){
+      for(const direction of [1,-1,1,-1])for(let frame=0;frame<16;frame++){
+        for(let j=0;j<8;j++)surface.dispatchEvent(new WheelEvent('wheel',{deltaY:direction*120,bubbles:true,composed:true,cancelable:true}));
+        await new Promise(requestAnimationFrame);sample(shell,container,selector,base);
+      }
+    }
+    await burst(panel,well,'.preview-card',initial);
+    check(scroll.scrollTop===reading&&c.stats.refreshes===stats.refreshes,'快速预览滚轮不移动正文或刷新索引');
+    check(panel.querySelector('[data-center]').dataset.key==='turn:message-0','快速往返后到达首节点，没有输入积压');
+    check(panel.querySelectorAll('.preview-card').length===7,'首尾保持七个真实节点，外壳高度稳定');
+    check([...well.querySelectorAll('.preview-card')].every(card=>getComputedStyle(card).transitionProperty==='background'),'滚动期间没有追赶旧位置和尺寸的过渡');
+    const dock=root.querySelector('.search-dock');root.querySelector('.search-toggle').click();root.querySelector('.search-input').value='第';root.querySelector('.search-form').requestSubmit();await sleep(350);
+    const list=root.querySelector('.search-list'),rows=root.querySelector('.search-rows'),searchBase=dock.getBoundingClientRect(),queries=c.stats.searches,rightKey=well.querySelector('[data-center]').dataset.key;
+    await burst(list,rows,'.search-result',searchBase,dock);
+    check(c.stats.searches===queries&&well.querySelector('[data-center]').dataset.key===rightKey,'搜索快速滚轮不重搜，也不移动右侧预览焦点');
+    check(rows.querySelector('[data-center]').dataset.searchIndex==='0','搜索首尾快速往返后没有延迟补位');
+    list.dispatchEvent(new WheelEvent('wheel',{deltaY:120,bubbles:true,composed:true,cancelable:true}));
+    root.querySelector('.search-input').value='第 42 轮';root.querySelector('.search-form').requestSubmit();await new Promise(requestAnimationFrame);
+    check(rows.querySelector('[data-center]').dataset.key==='turn:message-41','新搜索不会被上一组待绘制的滚轮输入覆盖');
+    await sleep(250);check(!panel.hasAttribute('data-browsing')&&!dock.hasAttribute('data-browsing'),'停止滚动后结束浏览任务，恢复展开过渡');
+    check(c.snapshot().mountedMarks<=52&&rows.querySelectorAll('.search-result').length<=7,'快速浏览的 DOM 仍有界');
+    log('ALL RAPID PANEL TESTS PASSED');
+  }catch(e){log('FAIL '+e.stack);}
+}
+const rapidButton=document.createElement('button');rapidButton.id='rapidpanel';rapidButton.textContent='验证快速预览滚轮';document.querySelector('#panel').after(rapidButton);rapidButton.onclick=rapidPanelRegression;
 async function searchRegression(){
   results.textContent='';
   try{
@@ -458,26 +500,26 @@ async function searchRegression(){
       if(edge==='末结果'||edge==='单结果')check(Math.abs(shell.bottom-box.bottom-gap)<1,edge+'：高亮底部留白与左右一致');
       check(parseFloat(getComputedStyle(surface).borderRadius)===14&&parseFloat(getComputedStyle(searchCenter()).borderRadius)===7,edge+'：内外圆角统一');
     };
-    await waitUntil(()=>Math.abs(dock.getBoundingClientRect().height-parseFloat(dock.style.getPropertyValue('--search-height')))<1);
+    await waitUntil(()=>Math.abs(dock.getBoundingClientRect().height-parseFloat(dock.style.getPropertyValue('--search-height')))<.1);
     checkSearchInsets('首结果');
     const rightStyle=getComputedStyle(panel.querySelector('.preview-window > [data-center]')),leftStyle=getComputedStyle(searchCenter());
     check(leftStyle.fontSize===rightStyle.fontSize&&leftStyle.backgroundColor===rightStyle.backgroundColor&&leftStyle.borderRadius===rightStyle.borderRadius,'搜索中央卡片复用右侧字体、高亮和圆角');
     const bodyBefore=scroll.scrollTop,rightKey=panel.querySelector('.preview-window > [data-center]').dataset.key,searchCount=c.stats.searches;
     const reused=searchCenter();
-    list.dispatchEvent(new WheelEvent('wheel',{deltaY:120,bubbles:true,composed:true,cancelable:true}));await sleep(350);
+    list.dispatchEvent(new WheelEvent('wheel',{deltaY:120,bubbles:true,composed:true,cancelable:true}));await waitUntil(()=>searchCenter()?.dataset.searchIndex==='1');
     check(searchCenter().dataset.searchIndex==='1'&&rows.querySelector(`[data-key="${reused.dataset.key}"]`)===reused,'搜索滚轮切换中央节点并复用卡片');
     check(rows.querySelectorAll('.search-result').length<=7&&[...rows.querySelectorAll('.search-result:not([data-center])')].every(row=>row.querySelector('.preview-response').hidden),'搜索邻居只显示提问，结果最多七张');
     check(scroll.scrollTop===bodyBefore&&panel.querySelector('.preview-window > [data-center]').dataset.key===rightKey&&c.stats.searches===searchCount,'搜索浏览独立于正文和右侧预览，且不重新查询');
     searchCenter().dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true,composed:true,cancelable:true}));await sleep(350);
-    await waitUntil(()=>Math.abs(dock.getBoundingClientRect().height-parseFloat(dock.style.getPropertyValue('--search-height')))<1);
+    await waitUntil(()=>Math.abs(dock.getBoundingClientRect().height-parseFloat(dock.style.getPropertyValue('--search-height')))<.1);
     check(searchCenter().dataset.searchIndex==='39','键盘 End 到达最后搜索结果');checkSearchInsets('末结果');
     searchCenter().dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true,composed:true,cancelable:true}));await sleep(350);
     input.value='恢复步骤 58';form.requestSubmit();await sleep(350);
-    await waitUntil(()=>Math.abs(dock.getBoundingClientRect().height-parseFloat(dock.style.getPropertyValue('--search-height')))<1);
+    await waitUntil(()=>Math.abs(dock.getBoundingClientRect().height-parseFloat(dock.style.getPropertyValue('--search-height')))<.1);
     check(root.querySelector('.search-total').textContent==='1 个匹配节点','单结果搜索');checkSearchInsets('单结果');
     check(searchCenter().querySelector('.answer').textContent==='检查流程 58'&&!searchCenter().querySelector('.answer').hidden,'仅用户提问命中时也默认显示回答摘要');
     input.value='恢复';form.requestSubmit();await sleep(350);
-    const queryCount=c.stats.searches;panel.dispatchEvent(new WheelEvent('wheel',{deltaY:120,bubbles:true,composed:true,cancelable:true}));await sleep(300);
+    const queryCount=c.stats.searches,rightBeforeWheel=panel.querySelector('.preview-window > [data-center]').dataset.key;panel.dispatchEvent(new WheelEvent('wheel',{deltaY:120,bubbles:true,composed:true,cancelable:true}));await waitUntil(()=>panel.querySelector('.preview-window > [data-center]')?.dataset.key!==rightBeforeWheel);
     check(!panel.hidden&&dock.hasAttribute('data-results')&&input.value==='恢复'&&c.stats.searches===queryCount,'右侧预览滚轮切换时左侧结果保持且不重搜');
     panel.dispatchEvent(new PointerEvent('pointerleave',{relatedTarget:nav}));nav.dispatchEvent(new PointerEvent('pointerenter'));root.querySelector('.scroller').scrollTop+=60;await sleep(300);
     check(!panel.hidden&&dock.hasAttribute('data-results'),'回到横线列表滚动时搜索结果仍保留');
@@ -562,7 +604,7 @@ document.querySelector('#dots').onclick=dotsRegression;
 document.querySelector('#all').onclick=async()=>{
   const button=document.querySelector('#all');button.disabled=true;const combined=[];
   try {
-    for(const [name,test] of [['Dots and route isolation',dotsRegression],['search',searchRegression],['preview panel',previewPanelRegression],['persistence',persistenceRegression],['multipage target jump',historyJumpRegression],['latest',latestRegression],['selection',selectionRegression],['animation',animationRegression],['rail scroll',railScrollRegression],['hydration',hydrationRegression],['full performance and virtual history',()=>run()]]){
+    for(const [name,test] of [['Dots and route isolation',dotsRegression],['search',searchRegression],['preview panel',previewPanelRegression],['rapid panel',rapidPanelRegression],['persistence',persistenceRegression],['multipage target jump',historyJumpRegression],['latest',latestRegression],['selection',selectionRegression],['animation',animationRegression],['rail scroll',railScrollRegression],['hydration',hydrationRegression],['full performance and virtual history',()=>run()]]){
       await test();combined.push(name+'\n'+results.textContent);
       results.textContent=combined.join('\n\n');
       if(combined.at(-1).includes('FAIL '))return;
