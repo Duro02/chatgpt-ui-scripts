@@ -1,5 +1,10 @@
 # 更新记录
 
+## Conversation Rail 0.3.2 — 2026-10-13
+
+- Reserve equal inset space at the top and bottom of preview cards, including the first and last conversation nodes. Adjust the central highlight radius to fit the outer shell.
+- Include the inset in viewport height calculations and verify first/last highlight gaps against horizontal gaps.
+
 ## Conversation Rail 0.3.1 — 2026-10-13
 
 - Keep the single hover bubble flat. Apply the inner central-card highlight and card hover backgrounds only after the pointer enters and expands the panel.

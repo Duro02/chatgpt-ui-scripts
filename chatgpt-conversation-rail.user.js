@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.3.1
+// @version      0.3.2
 // @description  Persistent conversation navigation with short marks, previews and on-demand history loading.
 // @author       duro
 // @license      MIT
@@ -69,7 +69,7 @@
       transition:top 240ms cubic-bezier(.2,.85,.25,1),height 240ms cubic-bezier(.2,.85,.25,1),
         width 240ms cubic-bezier(.2,.85,.25,1),opacity 180ms ease,background 140ms ease; }
     .preview-card[data-center] { width:calc(100% - 12px); height:var(--preview-center-height,118px);
-      padding-top:10px; color:inherit; }
+      padding-top:10px; color:inherit; border-radius:7px; }
     .preview[data-expanded] .preview-card[data-center] { background:color-mix(in srgb,currentColor 5%,var(--rail-bg)); }
     .preview[data-expanded] .preview-card:hover { background:color-mix(in srgb,currentColor 8%,var(--rail-bg)); }
     .preview-card:focus-visible { outline:1px solid currentColor; outline-offset:-2px; }
@@ -609,12 +609,13 @@
     function renderPreview(direction = 0) {
       const index = indexes.get(previewKey);
       if (index === undefined || preview.hidden) return;
-      const available = Math.max(140, win.innerHeight - 80);
+      const inset = 6;
+      const available = Math.max(140, win.innerHeight - 80 - inset * 2 - 2);
       const centerHeight = Math.round(Math.min(118, Math.max(74, available * .36)) * 100) / 100;
       const rowHeight = Math.round(Math.min(40, Math.max(11, (available - centerHeight) / 6)) * 100) / 100;
       const before = Math.min(3, index), after = Math.min(3, items.length - index - 1);
-      const centerTop = previewExpanded ? before * rowHeight : 0;
-      const height = centerHeight + (previewExpanded ? (before + after) * rowHeight : 0);
+      const centerTop = inset + (previewExpanded ? before * rowHeight : 0);
+      const height = centerHeight + inset * 2 + 2 + (previewExpanded ? (before + after) * rowHeight : 0);
       setStyle(preview, '--preview-center-height', `${centerHeight}px`);
       setStyle(preview, '--preview-row-height', `${rowHeight}px`);
       setStyle(preview, '--preview-height', `${height}px`);

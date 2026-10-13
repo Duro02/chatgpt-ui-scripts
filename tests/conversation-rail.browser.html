@@ -340,8 +340,14 @@ async function previewPanelRegression(){
     const idle={...c.stats};await sleep(400);check(c.stats.refreshes===idle.refreshes&&c.stats.railAnimationFrames===idle.railAnimationFrames,'展开后空闲没有持续扫描或动画帧');
     for(let i=0;i<60;i++)panel.dispatchEvent(new WheelEvent('wheel',{deltaY:120,bubbles:true,composed:true,cancelable:true}));await sleep(300);
     check(panel.querySelector('[data-center]').dataset.key==='turn:message-39'&&panel.querySelectorAll('.preview-card').length===4,'到末尾停止，显示实际存在的邻居');
+    await waitUntil(()=>{const o=panel.querySelector('.preview-window').getBoundingClientRect(),c=panel.querySelector('[data-center]').getBoundingClientRect();return o.bottom-c.bottom>=5&&Math.abs(o.bottom-c.bottom-(o.width-c.width)/2)<1.5;});
+    const endOuter=panel.querySelector('.preview-window').getBoundingClientRect(),endCard=panel.querySelector('[data-center]').getBoundingClientRect();
+    check(endOuter.bottom-endCard.bottom>=5&&Math.abs(endOuter.bottom-endCard.bottom-(endOuter.width-endCard.width)/2)<1.5,'末尾高亮的底部留白与左右留白一致');
     for(let i=0;i<60;i++)panel.dispatchEvent(new WheelEvent('wheel',{deltaY:-120,bubbles:true,composed:true,cancelable:true}));await sleep(300);
     check(panel.querySelector('[data-center]').dataset.key==='turn:message-0'&&panel.querySelectorAll('.preview-card').length===4,'到开头停止，不出现空白占位节点');
+    await waitUntil(()=>{const o=panel.querySelector('.preview-window').getBoundingClientRect(),c=panel.querySelector('[data-center]').getBoundingClientRect();return c.top-o.top>=5&&Math.abs(c.top-o.top-(o.width-c.width)/2)<1.5;});
+    const headOuter=panel.querySelector('.preview-window').getBoundingClientRect(),headCard=panel.querySelector('[data-center]').getBoundingClientRect();
+    check(headCard.top-headOuter.top>=5&&Math.abs(headCard.top-headOuter.top-(headOuter.width-headCard.width)/2)<1.5,'首节点高亮的顶部留白与左右留白一致');
     panel.querySelector('[data-center]').focus();
     panel.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,composed:true,cancelable:true}));await sleep(300);
     check(panel.querySelector('[data-center]').dataset.key==='turn:message-1','键盘上下键也可以浏览中央预览');
