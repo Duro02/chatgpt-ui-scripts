@@ -73,7 +73,9 @@ Suggested combinations:
 
 Move left from a hovered rail mark into its bubble to expand up to seven neighboring turns. The center shows the question and answer; three smaller prompts appear on each side. Wheel or arrow keys browse previews without moving the transcript; click a card to navigate. Leaving dismisses the panel, and Esc closes it immediately.
 
-After expansion, a circular search button appears at the panel’s left midpoint. Click to expand a pill input leftward, then press Enter to reveal matching cached question/answer summaries. Space-separated keywords must all match. Results scroll independently and stay open while browsing the right preview or rail; clicking a result navigates by ID without synchronizing the right preview. Leaving the entire group dismisses it even if the input is focused. Undiscovered history must be indexed first.
+After expansion, a circular search button appears at the panel’s left midpoint. Click to expand a pill input leftward, then press Enter to reveal matching cached question/answer summaries. Space-separated keywords must all match. Results reuse the seven-card preview: the center always shows both question and answer summaries, while neighbors show user prompts only. Wheel/arrow/Home/End browse matches independently and results stay open while browsing the right preview or rail; clicking a result navigates by ID without synchronizing the right preview. Leaving the entire group dismisses it even if the input is focused. Undiscovered history must be indexed first.
+
+Search and preview reuse card geometry, keyed transitions, shell/card radii, insets and hover colors. First/last highlights keep equal shell gutters. A match position indicator tracks the left panel independently of the right preview.
 
 A standalone rail visually inspired by DSH's TurnNavigator: fixed-pitch horizontal marks, a longer/brighter active mark, and prompt/answer previews on hover or keyboard focus. It does not include the archived script's backup or Prompt manager.
 

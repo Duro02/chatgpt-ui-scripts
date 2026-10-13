@@ -2,21 +2,23 @@
 <html lang="zh-CN" class="dark"><meta charset="utf-8"><title>对话导航 · 浏览器验证</title>
 <style>
   :root{--text-primary:#eeeae2;--text-tertiary:#969187;--bg-elevated-primary:#302f2c;--border-light:#ffffff22;color-scheme:dark}
-  *{box-sizing:border-box}body{margin:0;background:#20201e;color:#eeeae2;font:15px/1.7 system-ui}
-  header{height:64px;display:flex;align-items:center;gap:18px;padding:10px 28px;background:#181817}
+  :root{--fixture-page:#20201e;--fixture-header:#181817;--fixture-user:#2e2c27;--fixture-answer:#d6d1c5;--fixture-input:#30302b;--fixture-rule:#ffffff10}
+  :root:not(.dark){--fixture-page:#f7f5ef;--fixture-header:#ebe7df;--fixture-user:#e8e3d8;--fixture-answer:#625e55;--fixture-input:#e7e2d8;--fixture-rule:#29272218}
+  *{box-sizing:border-box}body{margin:0;background:var(--fixture-page);color:var(--text-primary);font:15px/1.7 system-ui}
+  header{height:64px;display:flex;align-items:center;gap:18px;padding:10px 28px;background:var(--fixture-header)}
   header{overflow-x:auto;white-space:nowrap}header>*{flex-shrink:0}
   button{cursor:pointer;font:inherit;padding:5px 12px}h1{font-size:16px;margin:0}
   #scroll{height:calc(100vh - 160px);overflow-y:auto;position:relative;overflow-anchor:none}
   #content{width:min(760px,calc(100% - 120px));margin:0 auto}
-  .turn{padding:24px 0;min-height:180px;border-bottom:1px solid #ffffff10}
-  [data-user-message-bubble]{background:#2e2c27;border-radius:18px;padding:12px 18px;margin-left:80px}
-  .markdown{font-family:Georgia,serif;padding:12px 0;color:#d6d1c5}
-  footer{height:96px;padding:12px max(80px,calc((100vw - 760px)/2));background:#20201e}
-  textarea{width:100%;height:55px;border:0;border-radius:20px;padding:15px;font:inherit;background:#30302b}
-  #results{position:fixed;left:16px;top:80px;width:240px;background:#171715e8;padding:12px;font:12px/1.5 monospace;max-height:70vh;overflow:auto;z-index:60}
+  .turn{padding:24px 0;min-height:180px;border-bottom:1px solid var(--fixture-rule)}
+  [data-user-message-bubble]{background:var(--fixture-user);border-radius:18px;padding:12px 18px;margin-left:80px}
+  .markdown{font-family:Georgia,serif;padding:12px 0;color:var(--fixture-answer)}
+  footer{height:96px;padding:12px max(80px,calc((100vw - 760px)/2));background:var(--fixture-page)}
+  textarea{width:100%;height:55px;border:0;border-radius:20px;padding:15px;font:inherit;background:var(--fixture-input);color:var(--text-primary)}
+  #results{position:fixed;left:16px;top:80px;width:240px;background:var(--fixture-header);padding:12px;font:12px/1.5 monospace;max-height:70vh;overflow:auto;z-index:60}
   #results:empty{display:none}.sr-only{display:none}
 </style>
-<header><h1>ChatGPT 横线导航 · 测试页面</h1><button id="persist">验证缓存与按需加载</button><button id="panel">验证七节点预览</button><button id="search">验证左侧搜索</button><button id="all">运行全部回归</button><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="railscroll">验证长列表滚动</button><button id="animation">验证焦点动画</button><button id="selection">验证跳转高亮</button><button id="latest">验证最新节点保留</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button><button id="demo">展示长对话</button><button id="light">切换明暗</button></header>
+<header><h1>对话导航 · 演示与测试</h1><button id="showsearch">展示搜索与预览</button><button id="demo">展示长对话</button><button id="light">切换明暗</button><button id="persist">验证缓存与按需加载</button><button id="panel">验证七节点预览</button><button id="search">验证左侧搜索</button><button id="all">运行全部回归</button><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="railscroll">验证长列表滚动</button><button id="animation">验证焦点动画</button><button id="selection">验证跳转高亮</button><button id="latest">验证最新节点保留</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button></header>
 <div id="scroll"><main id="content" data-thread-find-target="conversation"></main></div>
 <footer><textarea aria-label="草稿">测试草稿：索引和跳转应保留这段输入</textarea></footer><pre id="results"></pre>
 <script>window.module={exports:{}};</script><script src="../chatgpt-conversation-rail.user.js"></script>
@@ -384,11 +386,39 @@ async function searchRegression(){
     const centerBefore=panel.querySelector('[data-center]').dataset.key;input.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,composed:true,cancelable:true}));
     check(panel.querySelector('[data-center]').dataset.key===centerBefore,'搜索输入框上下键不切换右侧预览');
     form.requestSubmit();await sleep(350);
-    check(dock.hasAttribute('data-results')&&root.querySelector('.search-count').textContent==='40 个匹配节点','提交后胶囊展开匹配提问和回答摘要的列表');
-    check(root.querySelectorAll('.search-result').length<=16,'搜索结果只渲染可见窗口');
+    check(dock.hasAttribute('data-results')&&root.querySelector('.search-total').textContent==='40 个匹配节点','提交后胶囊展开匹配提问和回答摘要的列表');
+    check(root.querySelectorAll('.search-result').length<=7,'搜索结果只渲染可见窗口');
+    await waitUntil(()=>{const box=dock.getBoundingClientRect();return box.left>=10&&box.top>=63&&box.bottom<=innerHeight-15&&Math.abs(box.height-parseFloat(dock.style.getPropertyValue('--search-height')))<1;});
     const searchBox=dock.getBoundingClientRect();check(searchBox.left>=10&&searchBox.top>=63&&searchBox.bottom<=innerHeight-15,'左侧搜索结果保持在窗口边界内');
-    const bodyBefore=scroll.scrollTop;list.scrollTop=900;await sleep(100);
-    check(scroll.scrollTop===bodyBefore&&root.querySelectorAll('.search-result').length<=16,'结果列表独立滚动且渲染有界');
+    const surface=root.querySelector('.search-surface'),rows=root.querySelector('.search-rows');
+    const searchCenter=()=>rows.querySelector('[data-center]');
+    const checkSearchInsets=(edge)=>{
+      const shell=surface.getBoundingClientRect(),well=list.getBoundingClientRect(),box=searchCenter().getBoundingClientRect();
+      const gap=box.left-shell.left;
+      check(gap>=6&&Math.abs(shell.right-box.right-gap)<1,edge+'：高亮左右留白一致');
+      if(edge==='首结果'||edge==='单结果')check(Math.abs(box.top-root.querySelector('.search-count').getBoundingClientRect().bottom-gap)<1,edge+'：高亮顶部留白与左右一致');
+      if(edge==='末结果'||edge==='单结果')check(Math.abs(shell.bottom-box.bottom-gap)<1,edge+'：高亮底部留白与左右一致');
+      check(parseFloat(getComputedStyle(surface).borderRadius)===14&&parseFloat(getComputedStyle(searchCenter()).borderRadius)===7,edge+'：内外圆角统一');
+    };
+    await waitUntil(()=>Math.abs(dock.getBoundingClientRect().height-parseFloat(dock.style.getPropertyValue('--search-height')))<1);
+    checkSearchInsets('首结果');
+    const rightStyle=getComputedStyle(panel.querySelector('.preview-window > [data-center]')),leftStyle=getComputedStyle(searchCenter());
+    check(leftStyle.fontSize===rightStyle.fontSize&&leftStyle.backgroundColor===rightStyle.backgroundColor&&leftStyle.borderRadius===rightStyle.borderRadius,'搜索中央卡片复用右侧字体、高亮和圆角');
+    const bodyBefore=scroll.scrollTop,rightKey=panel.querySelector('.preview-window > [data-center]').dataset.key,searchCount=c.stats.searches;
+    const reused=searchCenter();
+    list.dispatchEvent(new WheelEvent('wheel',{deltaY:120,bubbles:true,composed:true,cancelable:true}));await sleep(350);
+    check(searchCenter().dataset.searchIndex==='1'&&rows.querySelector(`[data-key="${reused.dataset.key}"]`)===reused,'搜索滚轮切换中央节点并复用卡片');
+    check(rows.querySelectorAll('.search-result').length<=7&&[...rows.querySelectorAll('.search-result:not([data-center])')].every(row=>row.querySelector('.preview-response').hidden),'搜索邻居只显示提问，结果最多七张');
+    check(scroll.scrollTop===bodyBefore&&panel.querySelector('.preview-window > [data-center]').dataset.key===rightKey&&c.stats.searches===searchCount,'搜索浏览独立于正文和右侧预览，且不重新查询');
+    searchCenter().dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true,composed:true,cancelable:true}));await sleep(350);
+    await waitUntil(()=>Math.abs(dock.getBoundingClientRect().height-parseFloat(dock.style.getPropertyValue('--search-height')))<1);
+    check(searchCenter().dataset.searchIndex==='39','键盘 End 到达最后搜索结果');checkSearchInsets('末结果');
+    searchCenter().dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true,composed:true,cancelable:true}));await sleep(350);
+    input.value='恢复步骤 58';form.requestSubmit();await sleep(350);
+    await waitUntil(()=>Math.abs(dock.getBoundingClientRect().height-parseFloat(dock.style.getPropertyValue('--search-height')))<1);
+    check(root.querySelector('.search-total').textContent==='1 个匹配节点','单结果搜索');checkSearchInsets('单结果');
+    check(searchCenter().querySelector('.answer').textContent==='检查流程 58'&&!searchCenter().querySelector('.answer').hidden,'仅用户提问命中时也默认显示回答摘要');
+    input.value='恢复';form.requestSubmit();await sleep(350);
     const queryCount=c.stats.searches;panel.dispatchEvent(new WheelEvent('wheel',{deltaY:120,bubbles:true,composed:true,cancelable:true}));await sleep(300);
     check(!panel.hidden&&dock.hasAttribute('data-results')&&input.value==='恢复'&&c.stats.searches===queryCount,'右侧预览滚轮切换时左侧结果保持且不重搜');
     panel.dispatchEvent(new PointerEvent('pointerleave',{relatedTarget:nav}));nav.dispatchEvent(new PointerEvent('pointerenter'));root.querySelector('.scroller').scrollTop+=60;await sleep(300);
@@ -420,8 +450,24 @@ document.querySelector('#run').onclick=()=>run();
 document.querySelector('#virtual').onclick=()=>run(true);
 document.querySelector('#preview').onclick=async()=>{results.textContent='';setup(3);await sleep(400);const response=content.querySelector('.markdown');response.className='';response.setAttribute('data-chatgpt-search-unit-key','fallback-turn-0:2:assistant');response.textContent='新版回答摘要验证';shadow().querySelector('.mark[data-key]').focus();check(shadow().querySelector('.answer').textContent==='新版回答摘要验证','新版回答摘要标记兼容');log('ALL TESTS PASSED');};
 document.querySelector('#demo').onclick=()=>{results.textContent='';if(content.parentElement!==scroll){scroll.append(content);scroll.style.display='block';window.scrollTo(0,0);}setup(120);scroll.scrollTop=600;};
+document.querySelector('#showsearch').onclick=async()=>{
+  document.querySelector('header').scrollLeft=0;results.textContent='';setup(120);controller.stop();
+  const topics=['历史加载与缓存','导航焦点与平滑跳转','搜索面板的间距和圆角','性能与按需渲染','首尾节点边界','持久化恢复','滚轮浏览与预览'];
+  [...content.children].forEach((el,i)=>{
+    el.querySelector('[data-user-message-bubble]').textContent=`第 ${i+1} 轮：${topics[i%topics.length]}，怎样让长对话查找更顺手？`;
+    el.querySelector('.markdown').textContent='保留已加载的节点摘要，按需恢复正文。统一面板留白、圆角和交互反馈，避免浏览时反复扫描整个对话。';
+  });
+  controller=api.start(document,{storage:null});scroll.scrollTop=600;await sleep(400);
+  const root=shadow(),nav=root.querySelector('nav'),panel=root.querySelector('.preview');
+  nav.dispatchEvent(new PointerEvent('pointerenter'));root.querySelector('.mark[data-key="turn:message-8"]').dispatchEvent(new PointerEvent('pointerover',{bubbles:true}));
+  nav.dispatchEvent(new PointerEvent('pointerleave',{relatedTarget:panel}));panel.dispatchEvent(new PointerEvent('pointerenter'));
+  root.querySelector('.search-toggle').click();root.querySelector('.search-input').value='搜索';root.querySelector('.search-form').requestSubmit();
+  for(let i=0;i<3;i++)root.querySelector('.search-list').dispatchEvent(new WheelEvent('wheel',{deltaY:120,bubbles:true,composed:true,cancelable:true}));
+};
 document.querySelector('#light').onclick=()=>{document.documentElement.classList.toggle('dark');const dark=document.documentElement.classList.contains('dark');
   document.documentElement.style.colorScheme=dark?'dark':'light';document.documentElement.style.setProperty('--text-primary',dark?'#eeeae2':'#292722');
+  document.documentElement.style.setProperty('--text-tertiary',dark?'#969187':'#7f7a70');
+  document.documentElement.style.setProperty('--border-light',dark?'#ffffff22':'#29272222');
   document.documentElement.style.setProperty('--bg-elevated-primary',dark?'#302f2c':'#f3f0e9');document.body.style.background=dark?'#20201e':'#f7f5ef';document.body.style.color=dark?'#eeeae2':'#292722';};
 setup(12);
 </script></html>

@@ -1,5 +1,12 @@
 # 更新记录
 
+## Conversation Rail 0.4.1 — 2026-10-13
+
+- Reuse the preview's geometry, card renderer and keyed CSS transitions for search results: one central question/answer with up to three smaller user prompts above and below.
+- Always show the central result's answer summary, including question-only matches. Wheel/arrow/Home/End browse matching nodes without moving the transcript or right-hand candidate; clicks navigate and retain both panels.
+- Share shell/card radii, insets and hover colors. Keep equal first/last highlight gutters; center the search submit button inside its pill and fit neighboring labels to their row height.
+- Bound each panel to seven cards with no background search. Verify boundary geometry, card reuse, keyboard/wheel independence and question-only answers. Add a “展示搜索与预览” control for recording the local fixture.
+
 ## Conversation Rail 0.4.0 — 2026-10-13
 
 - Add a circular search button at the preview panel’s left midpoint. Expand it leftward into a matching pill input, then into an independently scrolling result list on submission.

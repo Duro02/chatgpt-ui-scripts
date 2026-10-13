@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.4.0
+// @version      0.4.1
 // @description  Persistent conversation navigation with short marks, previews and on-demand history loading.
 // @author       duro
 // @license      MIT
@@ -27,10 +27,14 @@
   const RESPONSE = '[data-chatgpt-search-unit-key$=":assistant"], [data-message-author-role="assistant"], .markdown, .prose';
   const PITCH = 10;
   const OVERSCAN = 4;
+  const PANEL_INSET = 6;
+  const SEARCH_HEADER = 42 + 28;
   const CSS = `
     :host { all:initial; color:var(--text-primary,#292722); font:13px/1.5 system-ui,sans-serif;
       --rail-bg:var(--bg-elevated-primary,#f3f0e9); --rail-muted:var(--text-tertiary,#87837b);
-      --rail-border:var(--border-light,rgba(128,128,128,.25)); }
+      --rail-border:var(--border-light,rgba(128,128,128,.25));
+      --panel-radius:14px; --panel-inset:${PANEL_INSET}px; --card-radius:7px;
+      --card-hover:color-mix(in srgb,currentColor 7%,var(--rail-bg)); }
     :host([data-dark]) { color:var(--text-primary,#eeeae2); --rail-bg:var(--bg-elevated-primary,#302f2c); }
     * { box-sizing:border-box; }
     nav { position:fixed; right:12px; top:var(--rail-center,45vh); width:28px; z-index:50;
@@ -61,23 +65,23 @@
       transition:height 260ms cubic-bezier(.2,.85,.25,1),top 260ms cubic-bezier(.2,.85,.25,1),width 260ms ease; }
     /* A small hit area bridges the gap from the rail into the bubble. */
     .preview::after { content:''; position:absolute; left:100%; width:14px; top:0; height:100%; }
-    .preview-window { position:relative; height:100%; overflow:hidden; border-radius:14px;
+    .preview-window { position:relative; height:100%; overflow:hidden; border-radius:var(--panel-radius);
       background:var(--rail-bg); border:1px solid var(--rail-border); box-shadow:0 8px 24px #0003; }
     .preview-card { position:absolute; left:50%; width:calc(100% - 32px); height:var(--preview-row-height,40px);
-      transform:translateX(-50%); padding:6px 8px 6px 28px; text-align:left; border:0; border-radius:9px;
+      transform:translateX(-50%); padding:var(--preview-row-padding,5px) 8px var(--preview-row-padding,5px) 28px; text-align:left; border:0; border-radius:var(--card-radius);
       background:transparent; color:var(--rail-muted); overflow:hidden;
       transition:top 240ms cubic-bezier(.2,.85,.25,1),height 240ms cubic-bezier(.2,.85,.25,1),
         width 240ms cubic-bezier(.2,.85,.25,1),opacity 180ms ease,background 140ms ease; }
-    .preview-card[data-center] { width:calc(100% - 12px); height:var(--preview-center-height,118px);
-      padding-top:10px; color:inherit; border-radius:7px; }
+    .preview-card[data-center] { width:calc(100% - var(--panel-inset) * 2); height:var(--preview-center-height,118px);
+      padding-top:10px; color:inherit; border-radius:var(--card-radius); }
     .preview[data-expanded] .preview-card[data-center] { background:color-mix(in srgb,currentColor 5%,var(--rail-bg)); }
-    .preview[data-expanded] .preview-card:hover { background:color-mix(in srgb,currentColor 8%,var(--rail-bg)); }
+    .preview[data-expanded] .preview-card:hover { background:var(--card-hover); }
     .preview-card:focus-visible { outline:1px solid currentColor; outline-offset:-2px; }
     .preview:not([data-expanded]) .preview-card:not([data-center]) { opacity:0; pointer-events:none; }
     .preview-number { position:absolute; left:8px; top:9px; font-size:10px; opacity:.55; }
     .prompt,.answer,.preview-label { display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; white-space:pre-wrap; }
     .prompt { font-weight:600; -webkit-line-clamp:2; }
-    .preview-label { font-size:12px; line-height:1.35; -webkit-line-clamp:2; }
+    .preview-label { font-size:12px; line-height:15px; -webkit-line-clamp:var(--preview-label-lines,2); }
     .answer { margin-top:4px; color:var(--rail-muted); font-size:12px; -webkit-line-clamp:3; }
     .mark[data-preview]::before { transform:scaleX(.9); opacity:.9; }
     .search-dock { position:absolute; right:calc(100% + 10px); top:var(--search-top,50%);
@@ -88,12 +92,12 @@
       border:1px solid var(--rail-border); border-radius:18px; box-shadow:0 8px 24px #0003;
       transition:border-radius 240ms ease; }
     .search-dock[data-open] .search-surface { border-radius:22px; }
-    .search-dock[data-results] .search-surface { border-radius:16px; }
+    .search-dock[data-results] .search-surface { border-radius:var(--panel-radius); }
     .search-toggle,.search-submit { display:grid; place-items:center; padding:0; width:34px; height:34px;
       border:0; border-radius:50%; background:transparent; color:inherit; }
     .search-toggle:hover,.search-submit:hover { background:color-mix(in srgb,currentColor 8%,var(--rail-bg)); }
     .search-toggle svg,.search-submit svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.7; }
-    .search-form { height:44px; display:flex; align-items:center; padding:0 4px 0 13px; gap:4px; }
+    .search-form { height:42px; display:flex; align-items:center; padding:0 4px 0 13px; gap:4px; }
     .search-input { min-width:0; width:100%; flex:1; border:0; outline:0; background:transparent;
       color:inherit; font:13px/1.4 system-ui,sans-serif; }
     .search-input::placeholder { color:var(--rail-muted); }
@@ -104,18 +108,11 @@
     .search-submit { flex-shrink:0; }
     .search-surface:focus-within { border-color:color-mix(in srgb,currentColor 35%,var(--rail-border)); }
     .search-count { height:28px; padding:3px 13px; color:var(--rail-muted); font-size:11px; }
-    .search-list { position:relative; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin;
-      scrollbar-color:var(--rail-border) transparent; }
-    .search-rows { position:relative; }
-    .search-result { position:absolute; left:6px; width:calc(100% - 12px); height:52px; padding:7px 8px 7px 30px;
-      border:0; border-radius:9px; text-align:left; color:inherit; background:transparent; }
-    .search-result:hover,.search-result:focus-visible { background:color-mix(in srgb,currentColor 7%,var(--rail-bg)); }
-    .search-result:focus-visible { outline:1px solid currentColor; outline-offset:-1px; }
-    .search-result-number { position:absolute; left:7px; top:9px; font-size:10px; color:var(--rail-muted); }
-    .search-result-label,.search-result-answer { display:-webkit-box; -webkit-box-orient:vertical;
-      -webkit-line-clamp:1; overflow:hidden; font-size:12px; line-height:18px; }
-    .search-result-answer { font-size:11px; color:var(--rail-muted); }
-    .search-empty { padding:14px 12px; color:var(--rail-muted); font-size:12px; }
+    .search-list { position:relative; overflow:hidden; }
+    .search-rows { position:relative; height:100%; }
+    .search-count { display:flex; justify-content:space-between; }
+    .search-progress { opacity:.7; font-variant-numeric:tabular-nums; }
+    .search-empty { position:absolute; inset:var(--panel-inset); padding:14px 12px; color:var(--rail-muted); font-size:12px; }
     .status { position:fixed; right:50px; bottom:100px; max-width:300px; padding:8px 12px;
       border-radius:8px; background:var(--rail-bg); color:inherit; box-shadow:0 4px 18px #0002; }
     [hidden] { display:none !important; }
@@ -333,7 +330,7 @@
       <div class="preview" role="region" aria-label="对话节点预览" id="rail-preview" hidden><div class="preview-window"></div><div class="search-dock" hidden><div class="search-surface">
         <button class="search-toggle" type="button" aria-label="搜索对话节点" title="搜索已索引的提问和回答摘要"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m15.5 15.5 5 5"></path></svg></button>
         <form class="search-form" hidden><input class="search-input" type="search" maxlength="160" placeholder="搜索节点摘要" aria-label="搜索节点摘要" autocomplete="off"><button class="search-submit" type="submit" aria-label="执行搜索"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m15.5 15.5 5 5"></path></svg></button></form>
-        <div class="search-count" role="status" aria-live="polite" hidden></div><div class="search-list" aria-label="匹配的对话节点" hidden><div class="search-rows"></div><div class="search-empty" hidden>没有匹配的节点摘要</div></div>
+        <div class="search-count" role="status" aria-live="polite" hidden><span class="search-total"></span><span class="search-progress"></span></div><div class="search-list" aria-label="匹配的对话节点" hidden><div class="search-rows"></div><div class="search-empty" hidden>没有匹配的节点摘要</div></div>
       </div></div></div>
       <div class="status" role="status" hidden></div>`;
     doc.body.appendChild(host);
@@ -348,11 +345,13 @@
     const searchForm = shadow.querySelector('.search-form');
     const searchInput = shadow.querySelector('.search-input');
     const searchCount = shadow.querySelector('.search-count');
+    const searchTotal = shadow.querySelector('.search-total');
+    const searchProgress = shadow.querySelector('.search-progress');
     const searchList = shadow.querySelector('.search-list');
     const searchRows = shadow.querySelector('.search-rows');
     const searchEmpty = shadow.querySelector('.search-empty');
     const searchButtons = new Map();
-    let searchOpen = false, searchSubmitted = false, searchMatches = [], searchWords = [], searchFrame = 0, searchListHeight = 52;
+    let searchOpen = false, searchSubmitted = false, searchMatches = [], searchIndex = 0, searchWheel = 0, searchWheelTime = 0;
     let previewPointer = false, previewBoxTop = 100, previewBoxHeight = 118;
     let previewKey = null, previewExpanded = false, previewInside = false, navInside = false, previewKeyboard = false;
     let previewCloseTimer = 0, previewEntryFrame = 0, previewAnchor = 100, previewWheel = 0, previewWheelTime = 0;
@@ -657,22 +656,21 @@
       item.answer = prefix(item.element.querySelector(RESPONSE), 260) || item.answer;
       if (item.prompt !== oldPrompt || (item.answer || '').slice(0, 140) !== (oldAnswer || '').slice(0, 140)) markDirty();
     }
-    function previewCard(key) {
-      let card = previewCards.get(key);
+    function previewCard(key, cards, container, searching) {
+      let card = cards.get(key);
       if (card) return card;
       const button = doc.createElement('button');
-      button.type = 'button'; button.className = 'preview-card'; button.dataset.key = key;
+      button.type = 'button'; button.className = searching ? 'preview-card search-result' : 'preview-card'; button.dataset.key = key;
       const number = doc.createElement('span'); number.className = 'preview-number';
       const label = doc.createElement('span');
       const response = doc.createElement('span'); response.hidden = true;
-      button.append(number, label, response); previewWindow.appendChild(button);
+      button.append(number, label, response); container.appendChild(button);
       card = { button, number, label, response, top: 0, entering: false };
-      previewCards.set(key, card);
+      cards.set(key, card);
       return card;
     }
     function resetSearch() {
-      win.cancelAnimationFrame(searchFrame); searchFrame = 0;
-      searchOpen = searchSubmitted = false; searchMatches = []; searchWords = [];
+      searchOpen = searchSubmitted = false; searchMatches = []; searchIndex = searchWheel = searchWheelTime = 0;
       searchInput.value = ''; searchButtons.clear(); searchRows.replaceChildren(); searchList.scrollTop = 0;
       setAttribute(searchDock, 'hidden', '');
       setAttribute(searchDock, 'data-open', null); setAttribute(searchDock, 'data-results', null);
@@ -684,8 +682,8 @@
       const normalWidth = Math.min(300, Math.max(128, win.innerWidth - 90));
       const mainWidth = searchOpen ? Math.min(normalWidth, Math.max(128, space - 230)) : normalWidth;
       const width = searchOpen ? Math.min(300, Math.max(120, space - mainWidth - 10)) : 36;
-      const height = !searchOpen ? 36 : searchSubmitted
-        ? Math.min(Math.max(124, win.innerHeight - 80), 72 + Math.max(1, Math.min(8, searchMatches.length)) * 52) : 44;
+      const metrics = previewMetrics(searchIndex, Math.max(1, searchMatches.length), true, SEARCH_HEADER);
+      const height = !searchOpen ? 36 : searchSubmitted ? SEARCH_HEADER + metrics.height : 44;
       const center = Math.max(64 + height / 2, Math.min(win.innerHeight - 16 - height / 2, previewBoxTop + previewBoxHeight / 2));
       setStyle(preview, '--preview-width', `${mainWidth}px`);
       setStyle(searchDock, '--search-width', `${width}px`);
@@ -698,111 +696,103 @@
       setAttribute(searchForm, 'hidden', searchOpen ? null : '');
       setAttribute(searchCount, 'hidden', searchSubmitted ? null : '');
       setAttribute(searchList, 'hidden', searchSubmitted ? null : '');
-      searchListHeight = Math.max(52, height - 72);
-      setStyle(searchList, 'height', `${searchListHeight}px`);
+      applyPreviewMetrics(searchList, metrics);
+      setStyle(searchList, 'height', `${metrics.height - 2}px`);
     }
-    function searchSnippet(text) {
-      const lower = text.toLowerCase();
-      const first = searchWords.map(word => lower.indexOf(word)).filter(index => index >= 0).sort((a, b) => a - b)[0] || 0;
-      const start = Math.max(0, first - 24);
-      return `${start ? '…' : ''}${text.slice(start, start + 110)}${start + 110 < text.length ? '…' : ''}`;
-    }
-    function renderSearch(extraIndex) {
+    function renderSearch(direction = 0) {
       if (!searchSubmitted) return;
-      setStyle(searchRows, 'height', `${searchMatches.length * 52}px`);
+      const metrics = previewMetrics(searchIndex, Math.max(1, searchMatches.length), true, SEARCH_HEADER);
       setAttribute(searchEmpty, 'hidden', searchMatches.length ? '' : null);
-      const start = Math.max(0, Math.floor(searchList.scrollTop / 52) - 2);
-      const end = Math.min(searchMatches.length, Math.ceil((searchList.scrollTop + searchListHeight) / 52) + 2);
-      const visible = Array.from({ length: Math.max(0, end - start) }, (_, i) => start + i);
-      if (Number.isInteger(extraIndex) && extraIndex >= 0 && extraIndex < searchMatches.length && !visible.includes(extraIndex)) visible.push(extraIndex);
-      const needed = new Set();
-      for (const i of visible) {
-        const item = searchMatches[i]; needed.add(item.key);
-        let row = searchButtons.get(item.key);
-        if (!row) {
-          const button = doc.createElement('button'); button.type = 'button'; button.className = 'search-result'; button.dataset.key = item.key;
-          const number = doc.createElement('span'); number.className = 'search-result-number';
-          const label = doc.createElement('span'); label.className = 'search-result-label';
-          const answer = doc.createElement('span'); answer.className = 'search-result-answer';
-          button.append(number, label, answer); searchRows.append(button);
-          row = { button, number, label, answer }; searchButtons.set(item.key, row);
-        }
-        setStyle(row.button, 'top', `${i * 52}px`);
-        setAttribute(row.button, 'data-search-index', String(i));
-        setAttribute(row.button, 'aria-label', `跳到第 ${(indexes.get(item.key) ?? i) + 1} 轮：${item.prompt || '尚未加载的提问'}`);
-        setText(row.number, String((indexes.get(item.key) ?? i) + 1));
-        setText(row.label, searchSnippet(item.prompt || '尚未加载的提问'));
-        const answerMatch = searchWords.some(word => (item.answer || '').normalize('NFKC').toLowerCase().includes(word));
-        setText(row.answer, answerMatch ? searchSnippet(item.answer || '') : '');
-      }
-      for (const [key, row] of searchButtons) if (!needed.has(key) && shadow.activeElement !== row.button) {
-        row.button.remove(); searchButtons.delete(key);
-      }
+      setText(searchTotal, `${searchMatches.length} 个匹配节点`);
+      setText(searchProgress, searchMatches.length ? `${searchIndex + 1} / ${searchMatches.length}` : '');
+      renderPreviewCards(searchMatches, searchIndex, metrics, searchButtons, searchRows, true, direction, true);
+    }
+    function selectSearch(index) {
+      const next = Math.max(0, Math.min(searchMatches.length - 1, index));
+      if (!searchMatches.length || next === searchIndex) return;
+      const direction = Math.sign(next - searchIndex);
+      searchIndex = next;
+      readPreview(searchMatches[next]);
+      layoutSearch(); renderSearch(direction);
     }
     function submitSearch(event) {
       event.preventDefault();
       const query = searchInput.value.slice(0, 160).trim();
-      searchWords = query.normalize('NFKC').toLowerCase().split(/\s+/).filter(Boolean);
       searchMatches = query ? searchNodes(items, query) : [];
       searchSubmitted = Boolean(query);
       if (query) stats.searches++;
-      searchList.scrollTop = 0;
+      searchIndex = searchWheel = searchWheelTime = 0;
+      readPreview(searchMatches[0]);
       searchButtons.clear(); searchRows.replaceChildren();
-      setText(searchCount, `${searchMatches.length} 个匹配节点`);
       layoutSearch(); renderSearch();
     }
 
-    function renderPreview(direction = 0) {
-      const index = indexes.get(previewKey);
-      if (index === undefined || preview.hidden) return;
-      const inset = 6;
-      const available = Math.max(140, win.innerHeight - 80 - inset * 2 - 2);
+    // Both panels use the same geometry, card renderer and entry animation.
+    function previewMetrics(index, count, expanded, header = 0) {
+      const available = Math.max(140, win.innerHeight - 80 - PANEL_INSET * 2 - 2 - header);
       const centerHeight = Math.round(Math.min(118, Math.max(74, available * .36)) * 100) / 100;
       const rowHeight = Math.round(Math.min(40, Math.max(11, (available - centerHeight) / 6)) * 100) / 100;
-      const before = Math.min(3, index), after = Math.min(3, items.length - index - 1);
-      const centerTop = inset + (previewExpanded ? before * rowHeight : 0);
-      const height = centerHeight + inset * 2 + 2 + (previewExpanded ? (before + after) * rowHeight : 0);
-      setStyle(preview, '--preview-center-height', `${centerHeight}px`);
-      setStyle(preview, '--preview-row-height', `${rowHeight}px`);
-      setStyle(preview, '--preview-height', `${height}px`);
-      previewBoxHeight = height;
-      previewBoxTop = Math.max(64, Math.min(win.innerHeight - height - 16, previewAnchor - centerTop));
-      setStyle(host, '--preview-top', `${previewBoxTop}px`);
-      layoutSearch();
+      const before = Math.min(3, index), after = Math.min(3, count - index - 1);
+      const centerTop = PANEL_INSET + (expanded ? before * rowHeight : 0);
+      const height = centerHeight + PANEL_INSET * 2 + 2 + (expanded ? (before + after) * rowHeight : 0);
+      return { before, after, centerTop, centerHeight, rowHeight, height };
+    }
+    function applyPreviewMetrics(container, metrics) {
+      const { centerHeight, rowHeight } = metrics;
+      setStyle(container, '--preview-center-height', `${centerHeight}px`);
+      setStyle(container, '--preview-row-height', `${rowHeight}px`);
+      const labelLines = rowHeight >= 34 ? 2 : 1;
+      setStyle(container, '--preview-label-lines', String(labelLines));
+      setStyle(container, '--preview-row-padding', `${Math.max(0, Math.min(5, (rowHeight - labelLines * 15) / 2))}px`);
+    }
+    function renderPreviewCards(entries, index, metrics, cards, container, expanded, direction, searching = false) {
+      const { before, after, centerTop, centerHeight, rowHeight } = metrics;
       const needed = new Set();
-      for (let slot = -before; slot <= after; slot++) {
-        const item = items[index + slot]; needed.add(item.key);
-        const isNew = !previewCards.has(item.key), card = previewCard(item.key), central = slot === 0;
+      if (entries.length) for (let slot = -before; slot <= after; slot++) {
+        const item = entries[index + slot]; needed.add(item.key);
+        const isNew = !cards.has(item.key), card = previewCard(item.key, cards, container, searching), central = slot === 0;
+        const ordinal = (searching ? indexes.get(item.key) ?? index + slot : index + slot) + 1;
         setAttribute(card.button, 'data-center', central ? '' : null);
-        setAttribute(card.button, 'aria-label', `跳到第 ${index + slot + 1} 轮：${item.prompt || '尚未加载的提问'}`);
-        setAttribute(card.button, 'tabindex', central || previewExpanded ? '0' : '-1');
-        setAttribute(card.button, 'aria-hidden', central || previewExpanded ? null : 'true');
-        setText(card.number, String(index + slot + 1));
+        if (searching) setAttribute(card.button, 'data-search-index', String(index + slot));
+        setAttribute(card.button, 'aria-label', `跳到第 ${ordinal} 轮：${item.prompt || '尚未加载的提问'}`);
+        setAttribute(card.button, 'tabindex', central || expanded ? '0' : '-1');
+        setAttribute(card.button, 'aria-hidden', central || expanded ? null : 'true');
+        setText(card.number, String(ordinal));
         setAttribute(card.label, 'class', central ? 'prompt' : 'preview-label');
         setText(card.label, item.prompt || '尚未加载的提问');
         setAttribute(card.response, 'class', central ? 'answer' : 'preview-response');
         setAttribute(card.response, 'hidden', central ? null : '');
-        if (central) {
-          setText(card.response, item.answer || '点击定位这一轮。');
-        } else setText(card.response, '');
+        setText(card.response, central ? item.answer || '点击定位这一轮。' : '');
         card.top = Math.round((slot < 0 ? centerTop + slot * rowHeight : slot > 0 ? centerTop + centerHeight + (slot - 1) * rowHeight : centerTop) * 100) / 100;
-        if (isNew && previewExpanded && direction && !win.matchMedia('(prefers-reduced-motion:reduce)').matches) {
+        if (isNew && expanded && direction && !win.matchMedia('(prefers-reduced-motion:reduce)').matches) {
           card.entering = true;
           card.button.style.top = `${card.top + direction * rowHeight}px`;
           card.button.style.opacity = '0';
         } else if (!card.entering) setStyle(card.button, 'top', `${card.top}px`);
       }
-      for (const [key, card] of previewCards) if (!needed.has(key)) { card.button.remove(); previewCards.delete(key); }
-      // One bounded entry frame; card movement itself uses CSS transitions.
-      if (!previewEntryFrame && [...previewCards.values()].some(card => card.entering)) {
+      for (const [key, card] of cards) if (!needed.has(key)) { card.button.remove(); cards.delete(key); }
+      // One frame for new cards in either panel; keyed movement uses CSS transitions.
+      if (!previewEntryFrame && [...previewCards.values(), ...searchButtons.values()].some(card => card.entering)) {
         previewEntryFrame = win.requestAnimationFrame(() => {
           previewEntryFrame = 0;
-          for (const card of previewCards.values()) if (card.entering) {
+          for (const card of [...previewCards.values(), ...searchButtons.values()]) if (card.entering) {
             card.entering = false; card.button.style.opacity = '';
             setStyle(card.button, 'top', `${card.top}px`);
           }
         });
       }
+    }
+    function renderPreview(direction = 0) {
+      const index = indexes.get(previewKey);
+      if (index === undefined || preview.hidden) return;
+      const metrics = previewMetrics(index, items.length, previewExpanded);
+      applyPreviewMetrics(preview, metrics);
+      setStyle(preview, '--preview-height', `${metrics.height}px`);
+      previewBoxHeight = metrics.height;
+      previewBoxTop = Math.max(64, Math.min(win.innerHeight - metrics.height - 16, previewAnchor - metrics.centerTop));
+      setStyle(host, '--preview-top', `${previewBoxTop}px`);
+      layoutSearch(); renderSearch();
+      renderPreviewCards(items, index, metrics, previewCards, previewWindow, previewExpanded, direction);
     }
     function expandPreview(event) {
       if (preview.hidden) return;
@@ -847,14 +837,16 @@
       preview.hidden = false;
       if (button === indexButton) {
         previewCards.clear(); previewWindow.replaceChildren();
-        const card = previewCard('history');
+        const metrics = previewMetrics(0, 1, false);
+        applyPreviewMetrics(preview, metrics);
+        const card = previewCard('history', previewCards, previewWindow, false);
         card.button.removeAttribute('data-key'); card.button.dataset.history = '';
-        card.button.setAttribute('data-center', ''); card.button.style.top = '0px';
+        card.button.setAttribute('data-center', ''); card.button.style.top = `${metrics.centerTop}px`;
         card.label.className = 'prompt'; card.response.className = 'answer';
         card.label.textContent = scan ? '正在加载过去的对话，点击取消' : '点击加载过去的对话';
         card.number.textContent = ''; card.response.textContent = ''; card.response.hidden = true;
         setAttribute(searchDock, 'hidden', '');
-        setStyle(preview, '--preview-height', '118px');
+        setStyle(preview, '--preview-height', `${metrics.height}px`);
         setStyle(host, '--preview-top', `${previewAnchor}px`);
       } else {
         readPreview(item); renderPreview();
@@ -1439,31 +1431,34 @@
     });
     searchForm.addEventListener('submit', submitSearch);
     searchDock.addEventListener('wheel', event => {
-      event.stopPropagation();
-      if (!searchList.contains(event.target)) event.preventDefault();
+      event.stopPropagation(); event.preventDefault();
+      if (!searchList.contains(event.target) || !searchMatches.length || !event.deltaY) return;
+      if (event.timeStamp - searchWheelTime > 160) searchWheel = 0;
+      searchWheelTime = event.timeStamp;
+      searchWheel += event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 80 : 1);
+      if (Math.abs(searchWheel) < 36) return;
+      const step = Math.sign(searchWheel); searchWheel = 0;
+      selectSearch(searchIndex + step);
     }, { passive: false });
-    searchList.addEventListener('scroll', () => {
-      if (!searchFrame) searchFrame = win.requestAnimationFrame(() => { searchFrame = 0; renderSearch(); });
-    }, { passive: true });
     searchRows.addEventListener('click', event => {
       const button = event.target.closest('.search-result');
-      if (button?.dataset.key) navigate(button.dataset.key, true);
+      if (button?.dataset.key) {
+        selectSearch(Number(button.dataset.searchIndex));
+        navigate(button.dataset.key, true);
+      }
     });
     searchRows.addEventListener('keydown', event => {
       const button = event.target.closest('.search-result');
       if (!button) return;
-      const index = Number(button.dataset.searchIndex);
-      let next = index;
+      let next = Number(button.dataset.searchIndex);
       if (event.key === 'ArrowDown') next++;
       else if (event.key === 'ArrowUp') next--;
       else if (event.key === 'Home') next = 0;
       else if (event.key === 'End') next = searchMatches.length - 1;
       else return;
       event.preventDefault();
-      next = Math.max(0, Math.min(searchMatches.length - 1, next));
-      searchList.scrollTop = Math.max(0, next * 52 - searchListHeight / 2);
-      renderSearch(next);
-      searchButtons.get(searchMatches[next]?.key)?.button.focus({ preventScroll: true });
+      selectSearch(next);
+      searchButtons.get(searchMatches[searchIndex]?.key)?.button.focus({ preventScroll: true });
     });
     marks.addEventListener('pointerover', event => showPreview(event.target.closest('button')));
     marks.addEventListener('focusin', event => showPreview(event.target.closest('button'), true));
