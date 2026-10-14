@@ -164,6 +164,29 @@ function routeRegression(){
   assert.notEqual(f.w.history.pushState,historyHook,'history hooks are restored on teardown');
   f.close();
 }
+function mixedRouteRegression(){
+  const f=fixture(current,100),old=[...f.content.children];
+  const fresh=(key,top=0)=>{const e=f.d.createElement('div');e.dataset.turnKey=key;e.innerHTML='<div data-user-message-bubble>'+key+'</div>';
+    e.getBoundingClientRect=()=>({top,bottom:top+220,height:220});return e;};
+  f.w.history.pushState({},'', '/c/mixed-new');
+  f.content.append(fresh('new-thread'));
+  f.c.audit.refresh();
+  assert.deepEqual(Array.from(f.c.snapshot().entries,i=>i.key),['turn:new-thread'],'mixed old and new DOM admits only the new route nodes');
+  f.advance(5000);f.c.audit.refresh();
+  assert.equal(f.c.snapshot().count,1,'previous-route nodes are still excluded after the old one-second deadline');
+  const invisible=fresh('invisible-foreign');invisible.getBoundingClientRect=()=>({top:0,bottom:0,height:0});f.content.append(invisible);f.c.audit.refresh();
+  assert.equal(f.c.snapshot().count,1,'zero-height hidden nodes do not enter the live index');
+  old[0].dataset.turnKey='reused-new';f.c.audit.refresh();
+  assert.ok(f.c.snapshot().entries.some(i=>i.key==='turn:reused-new'),'a reused element with a new identity is accepted');
+  f.c.flush();const saved=f.api.decodeSaved(f.memory.get(f.api.cacheKey('mixed-new')),'mixed-new');
+  assert.equal(saved.entries.length,2,'persisted new-route cache excludes hidden and old nodes');
+  f.w.history.replaceState({},'', '/c/third-new');f.c.audit.refresh();
+  assert.equal(f.c.snapshot().count,0,'rapid subsequent routes do not forget older stale elements');
+  f.content.replaceChildren(fresh('message-99'));f.c.audit.refresh();
+  assert.equal(f.c.snapshot().count,1,'a fresh mount with an old message ID remains accepted');
+  f.close();
+  console.log('Route isolation: mixed DOM, slow transitions, zero-height nodes, reused and remounted identities passed');
+}
 function dotsRegression(){
   const f=fixture(current,100),pane=f.d.createElement('main');pane.className='thread-pane';
   const scroller=f.d.createElement('div');scroller.dataset.role='messages-scroll';scroller.style.overflowY='auto';
@@ -237,6 +260,7 @@ function dotsRegression(){
   recovered.stop();f.close();
 }
 routeRegression();
+mixedRouteRegression();
 dotsRegression();
 previewRegression();
 for(const count of [100,1000,10000]){if(baseline)run(baseline,'0.2.0',count,false);run(current,'current',count,!process.env.RAIL_BASELINE_ONLY);}

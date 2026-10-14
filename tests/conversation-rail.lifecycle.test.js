@@ -38,7 +38,7 @@ function fixture() {
   const source=fs.readFileSync(script,'utf8').replace('      stats,\n      flush:',`      stats, audit: {refresh,bind,navigate,buildIndex,restore,
         references:()=>({cached:cache.size,users:[...cache.values()].filter(r=>r.element).length,answers:[...cache.values()].filter(r=>r.responseElement).length,
           detached:[...cache.values()].filter(r=>r.element&&!r.element.isConnected||r.responseElement&&!r.responseElement.isConnected).length,
-          restoring:Boolean(restoreJob),staleWeak:staleElements instanceof WeakSet})},\n      flush:`);
+          restoring:Boolean(restoreJob),staleWeak:staleElements instanceof WeakMap})},\n      flush:`);
   assert.ok(source.includes('references:()=>'), 'audit injection matches controller export');w.module={exports:{}};w.eval(source);const api=w.module.exports;
   const thread='dots:/dots/home:memory~memory';const memory=new Map([[api.cacheKey(thread),api.encodeSaved(thread,Array.from({length:200},(_,i)=>({key:key(i),top:i*220,bottom:(i+1)*220,prompt:`Question ${i}`,answer:`Answer ${i}`})),true,44000,true)]]);
   const storage={getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,v),removeItem:k=>memory.delete(k)};

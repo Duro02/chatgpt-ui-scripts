@@ -18,7 +18,7 @@
   #results{position:fixed;left:16px;top:80px;width:240px;background:var(--fixture-header);padding:12px;font:12px/1.5 monospace;max-height:70vh;overflow:auto;z-index:60}
   #results:empty{display:none}.sr-only{display:none}
 </style>
-<header><h1>对话导航 · 演示与测试</h1><button id="showsearch">展示搜索与预览</button><button id="demo">展示长对话</button><button id="light">切换明暗</button><button id="persist">验证缓存与按需加载</button><button id="panel">验证七节点预览</button><button id="search">验证左侧搜索</button><button id="dots">验证 Dots 适配</button><button id="all">运行全部回归</button><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="railscroll">验证长列表滚动</button><button id="animation">验证焦点动画</button><button id="selection">验证跳转高亮</button><button id="latest">验证最新节点保留</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button></header>
+<header><h1>对话导航 · 演示与测试</h1><button id="showsearch">展示搜索与预览</button><button id="demo">展示长对话</button><button id="light">切换明暗</button><button id="persist">验证缓存与按需加载</button><button id="panel">验证七节点预览</button><button id="search">验证左侧搜索</button><button id="dots">验证 Dots 适配</button><button id="all">运行全部回归</button><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="railscroll">验证长列表滚动</button><button id="animation">验证焦点动画</button><button id="selection">验证跳转高亮</button><button id="latest">验证最新节点保留</button><button id="routeisolation">验证会话隔离</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button></header>
 <div id="scroll"><main id="content" data-thread-find-target="conversation"></main></div>
 <footer><textarea aria-label="草稿">测试草稿：索引和跳转应保留这段输入</textarea></footer><pre id="results"></pre>
 <script>window.module={exports:{}};</script><script src="../chatgpt-conversation-rail.user.js"></script>
@@ -331,6 +331,30 @@ async function latestRegression(){
   }catch(e){log('FAIL '+e.stack);}
 }
 document.querySelector('#latest').onclick=latestRegression;
+async function routeIsolationRegression(){
+  results.textContent='';const savedPath=location.pathname;
+  try {
+    history.replaceState({},'', '/c/route-old');const c=setup(5);await sleep(250);
+    const old=[...content.children];
+    history.pushState({},'', '/c/route-current');
+    const a=turn(100),b=turn(101);content.append(a,b);await sleep(400);
+    check(c.snapshot().count===2&&c.snapshot().entries.every(e=>['turn:message-100','turn:message-101'].includes(e.key)),'新旧 DOM 混合时只接收当前会话节点');
+    content.append(document.createElement('span'));await sleep(1600);
+    check(c.snapshot().count===2,'慢切页超过一秒仍不收录旧节点');
+    const hidden=old[0].cloneNode(true);hidden.dataset.turnKey='hidden-foreign';hidden.style.display='none';content.append(hidden);await sleep(400);
+    check(c.snapshot().count===2,'CSS 隐藏的零高度节点不进入导航');
+    old[0].dataset.turnKey='reused-current';content.append(document.createElement('span'));await sleep(400);
+    check(c.snapshot().count===3,'复用元素换成当前消息 ID 后正常进入导航');
+    history.replaceState({},'', '/c/route-third');content.append(document.createElement('span'));await sleep(400);
+    check(c.snapshot().count===0,'连续切页不遗忘更早会话的旧元素');
+    content.replaceChildren(turn(0));await sleep(400);
+    check(c.snapshot().count===1,'重新挂载的相同消息 ID 可正常索引');
+    const raw=JSON.stringify({v:1,thread:'cache-repair',updated:Date.now(),complete:true,end:120,tail:true,entries:[['turn:good',0,100,'当前提问',''],['turn:foreign',80,80,'旧会话提问','']]});
+    const repaired=api.decodeSaved(raw,'cache-repair');
+    check(repaired.entries.length===1&&repaired.entries[0].key==='turn:good'&&repaired.droppedGeometry===1&&!repaired.complete,'旧缓存只移除零高度记录，保留有效历史');
+    log('ALL ROUTE ISOLATION TESTS PASSED');
+  }catch(e){log('FAIL '+e.stack);}finally{controller?.stop();history.replaceState({},'',savedPath);}
+}
 async function hydrationRegression(){
   results.textContent='';
   const savedPath=location.pathname;
@@ -352,7 +376,9 @@ async function hydrationRegression(){
     await sleep(600);
     check(c.snapshot().count===5,'切换会话时接受重新挂载的相同消息 ID');
     history.replaceState({},'', '/c/reused-elements');preferred.append(document.createElement('span'));await sleep(1400);
-    check(c.snapshot().count===5,'会话切换后的相同 DOM 不会永久阻塞索引');
+    check(c.snapshot().count===0,'切页超过一秒仍排除旧会话的相同 DOM');
+    [...preferred.querySelectorAll('[data-turn-key]')].forEach((el,i)=>el.dataset.turnKey='reused-new-'+i);preferred.append(document.createElement('span'));await sleep(500);
+    check(c.snapshot().count===5,'复用 DOM 更新消息 ID 后接受当前会话节点');
     c.stop();content.replaceChildren();content.dataset.threadFindTarget='conversation';
     c=setup(5);
     const loader=document.createElement('div');loader.innerHTML='<div role="status">正在加载更早的消息…</div>';content.prepend(loader);await sleep(400);
@@ -373,6 +399,7 @@ async function hydrationRegression(){
     log('ALL HYDRATION TESTS PASSED');
   }catch(e){log('FAIL '+e.stack);}finally{history.replaceState({},'',savedPath);}
 }
+document.querySelector('#routeisolation').onclick=routeIsolationRegression;
 document.querySelector('#hydration').onclick=hydrationRegression;
 async function previewPanelRegression(){
   results.textContent='';
@@ -604,7 +631,7 @@ document.querySelector('#dots').onclick=dotsRegression;
 document.querySelector('#all').onclick=async()=>{
   const button=document.querySelector('#all');button.disabled=true;const combined=[];
   try {
-    for(const [name,test] of [['Dots and route isolation',dotsRegression],['search',searchRegression],['preview panel',previewPanelRegression],['rapid panel',rapidPanelRegression],['persistence',persistenceRegression],['multipage target jump',historyJumpRegression],['latest',latestRegression],['selection',selectionRegression],['animation',animationRegression],['rail scroll',railScrollRegression],['hydration',hydrationRegression],['full performance and virtual history',()=>run()]]){
+    for(const [name,test] of [['mixed route and cache repair',routeIsolationRegression],['Dots and route isolation',dotsRegression],['search',searchRegression],['preview panel',previewPanelRegression],['rapid panel',rapidPanelRegression],['persistence',persistenceRegression],['multipage target jump',historyJumpRegression],['latest',latestRegression],['selection',selectionRegression],['animation',animationRegression],['rail scroll',railScrollRegression],['hydration',hydrationRegression],['full performance and virtual history',()=>run()]]){
       await test();combined.push(name+'\n'+results.textContent);
       results.textContent=combined.join('\n\n');
       if(combined.at(-1).includes('FAIL '))return;

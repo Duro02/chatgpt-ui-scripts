@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.4.9
+// @version      0.4.10
 // @description  Persistent conversation navigation with short marks, previews and on-demand history loading.
 // @author       duro
 // @license      MIT
@@ -215,26 +215,27 @@
           data.updated > now + 86400000 ||
           !Array.isArray(data.entries) || data.entries.length > CACHE_ITEMS) return null;
       const keys = new Set(), entries = [], dots = typeof thread === 'string' && thread.startsWith('dots:');
-      let droppedProvisional = 0;
+      let droppedProvisional = 0, droppedGeometry = 0;
       for (const row of data.entries) {
         if (!Array.isArray(row) || typeof row[0] !== 'string' || row[0].length > 200 ||
             !/^(turn|message):/.test(row[0]) || keys.has(row[0]) ||
             !Number.isFinite(row[1]) || !Number.isFinite(row[2]) || row[2] < row[1] ||
             Math.abs(row[1]) > 1e9 || Math.abs(row[2]) > 1e9) return null;
         keys.add(row[0]);
+        if (row[2] === row[1]) { droppedGeometry++; continue; }
         if (dots && provisionalDotsKey(row[0])) { droppedProvisional++; continue; }
         entries.push({ key: row[0], top: row[1], bottom: row[2],
           prompt: typeof row[3] === 'string' ? row[3].slice(0, 180) : '',
           answer: typeof row[4] === 'string' ? row[4].slice(0, 140) : '', element: null });
       }
-      return { entries, droppedProvisional, complete: data.complete === true,
-        end: Number.isFinite(data.end) && Math.abs(data.end) <= 1e9 ? data.end : null, tail: data.tail === true };
+      return { entries, droppedProvisional, droppedGeometry, complete: data.complete === true && !droppedGeometry,
+        end: Number.isFinite(data.end) && Math.abs(data.end) <= 1e9 ? data.end : null, tail: data.tail === true && !droppedGeometry };
     } catch { return null; }
   }
 
   function encodeSaved(thread, items, complete, end, tail, now = Date.now()) {
     const dots = typeof thread === 'string' && thread.startsWith('dots:');
-    const eligible = items.filter(item => !/^turn:conversation-turn-/.test(item.key) && !(dots && provisionalDotsKey(item.key)));
+    const eligible = items.filter(item => item.bottom > item.top && !/^turn:conversation-turn-/.test(item.key) && !(dots && provisionalDotsKey(item.key)));
     if (!eligible.length) return null;
     const stable = eligible.length > CACHE_ITEMS ? eligible.slice(-CACHE_ITEMS) : eligible;
     const data = { v: 1, thread, updated: now, complete: complete && stable.length === items.length, end, tail,
@@ -392,7 +393,7 @@
     let content = null, scroller = null, items = [], loaded = [], pending = [], mounted = [], route = pageIdentity().route;
     let selectedKey = null, positioned = [], focusY = null, railMotion = null;
     let chronology = [], transcriptEnd = null, tailKnown = false;
-    let staleElements = null, staleUntil = 0, historyComplete = false, activeKey = null, hovered = false, stopped = false;
+    let staleElements = null, historyComplete = false, activeKey = null, hovered = false, stopped = false;
     let saveTimer = 0, saveIdle = 0, dirty = false, waitingKey = null;
     let savedThread = pageIdentity().thread;
     let timer = 0, frame = 0, scan = null, jump = null, restoreJob = null, restoreTimer = 0, statusTimer = 0;
@@ -453,7 +454,7 @@
       transcriptEnd = saved.end;
       tailKnown = saved.tail;
       rebuildIndexes();
-      if (saved.droppedProvisional) markDirty();
+      if (saved.droppedProvisional || saved.droppedGeometry) markDirty();
     }
     function flushSaved() {
       win.clearTimeout(saveTimer); saveTimer = 0;
@@ -1066,14 +1067,12 @@
       if (stopped || doc.hidden || !content?.isConnected) return;
       if (checkRoute()) return;
       if (preferredRoot() !== content) { bind(); return; }
-      const found = discover();
-      // Only suppress the exact old DOM briefly during a real thread switch.
-      // A remounted turn with the same message ID is valid new content.
-      if (staleElements && Date.now() < staleUntil && found.length && found.every(item => staleElements.has(item.element))) {
-        schedule();
-        return;
-      }
-      if (found.length) staleElements = null;
+      const found = discover().filter(item => {
+        const owner = staleElements?.get(item.element);
+        // A previous route can stay mounted during a slow or mixed transition.
+        // Changed IDs on reused elements and fresh mounts remain eligible.
+        return !owner || owner.route === route || owner.key !== item.key;
+      });
       stats.refreshes += 1;
       const previousComplete = historyComplete;
       const previousHead = chronology[0];
@@ -1084,7 +1083,16 @@
       const measured = found.map(item => {
         const rect = item.element.getBoundingClientRect();
         return { ...item, top: rect.top - scrollRect.top + position(), bottom: rect.bottom - scrollRect.top + position() };
-      });
+      }).filter(item => item.bottom > item.top);
+      if (!measured.length && mounted.length) {
+        for (const item of positioned) {
+          const record = cache.get(item.key);
+          if (record) { record.element = null; record.responseElement = null; }
+        }
+        loaded = positioned = [];
+        watch();
+        return;
+      }
       const rootRect = content.getBoundingClientRect();
       const end = rootRect.bottom - scrollRect.top + position();
       const overlapping = measured.find(item => cache.has(item.key));
@@ -1183,13 +1191,13 @@
       const identity = pageIdentity(), next = identity.route;
       if (next === route) return false;
       flushSaved();
+      staleElements ||= new WeakMap();
+      for (const item of positioned) staleElements.set(item.element, { route, key: item.key });
       route = next;
       savedThread = identity.thread;
       waitingKey = null;
       cancelRestore();
       stopRailMotion();
-      staleElements = new WeakSet(loaded);
-      staleUntil = Date.now() + 1000;
       historyComplete = false;
       chronology = []; transcriptEnd = null; tailKnown = false;
       cancelScan(false);
@@ -1197,7 +1205,7 @@
       cache.clear(); provisionalKeys.clear();
       indexes.clear();
       items = [];
-      activeKey = selectedKey = null; positioned = [];
+      activeKey = selectedKey = null; loaded = positioned = [];
       hidePreview();
       toast('');
       hydrate();

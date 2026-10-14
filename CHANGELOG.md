@@ -1,5 +1,11 @@
 # 更新记录
 
+## Conversation Rail 0.4.10 — 2026-10-14
+
+- Exclude previous-conversation elements throughout slow and mixed SPA transitions, while accepting reused elements with changed message IDs and fresh mounts.
+- Ignore zero-height message nodes and migrate flat cached records without discarding valid history. Keep route ownership weak and avoid polling for a transition deadline.
+- Verify mixed routes, slow transitions, repeated navigation, cache repair and resource teardown.
+
 ## 仓库发布整理 — 2026-10-13
 
 - 将 ChatGPT Conversation Rail 列为合集仓库的正式导航脚本，保留现有文件名和安装标识。
