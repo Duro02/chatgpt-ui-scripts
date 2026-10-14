@@ -45,6 +45,7 @@ function fixture(file, count) {
   return {dom,w,d,c,api,storage,memory,content,scroll,changes,startupMs,advance,
     frame(){const queued=[...frames.values()];frames.clear();queued.forEach(fn=>fn(time));},
     mutate(){heightChange++;content.lastElementChild.querySelector('.markdown').textContent='Stream '+heightChange;},
+    resize(total){heightChange=total-count*220;},
     observeCalls:()=>observerCalls,layoutReads:()=>layoutReads,
     close(){c.stop();changes.disconnect();dom.window.close();}};
 }
@@ -187,6 +188,34 @@ function mixedRouteRegression(){
   f.close();
   console.log('Route isolation: mixed DOM, slow transitions, zero-height nodes, reused and remounted identities passed');
 }
+function confirmedEndingRegression(){
+  const f=fixture(current,100);
+  f.c.stop();
+  const oldRecords=Array.from({length:100},(_,i)=>({key:'turn:message-'+i,top:i*220,bottom:(i+1)*220,prompt:'Cached '+i,answer:''}));
+  let max=100*220-700;
+  const croot=f.content;
+  croot.replaceChildren();
+  croot.getBoundingClientRect=()=>({top:-f.scroll.scrollTop,bottom:100*220-f.scroll.scrollTop,height:100*220});
+  const mounted=[90,91,92].map(i=>{const el=f.d.createElement('div');el.dataset.turnKey='message-'+i;el.innerHTML='<div data-user-message-bubble>Current '+i+'</div>';el.getBoundingClientRect=()=>({top:i*220-f.scroll.scrollTop,bottom:(i+1)*220-f.scroll.scrollTop,height:220});croot.append(el);return el;});
+  f.memory.set(f.api.cacheKey('performance'),f.api.encodeSaved('performance',oldRecords,true,22000,true));
+  f.scroll.scrollTop=max;
+  let c=f.api.start(f.d,{storage:f.storage});
+  assert.equal(c.snapshot().count,100,'bottom scrolling with reserved tail space does not prune unseen latest nodes');
+  c.stop();
+  f.resize(93*220);f.scroll.scrollTop=93*220-700;
+  croot.getBoundingClientRect=()=>({top:-f.scroll.scrollTop,bottom:93*220-f.scroll.scrollTop,height:93*220});
+  c=f.api.start(f.d,{storage:f.storage});
+  assert.equal(c.snapshot().count,93,'an actual current ending trims the obsolete positive-height suffix');
+  assert.equal(c.snapshot().activeKey,'turn:message-92','refresh at the actual bottom highlights the current last prompt');
+  c.flush();let saved=f.api.decodeSaved(f.memory.get(f.api.cacheKey('performance')),'performance');
+  assert.equal(saved.entries.at(-1).key,'turn:message-92','merging the old snapshot cannot restore the obsolete tail');
+  const beforeWrites=c.stats.storageWrites;
+  f.advance(10000);assert.equal(c.stats.storageWrites,beforeWrites,'ending confirmation adds no polling or repeated idle writes');
+  c.stop();c=f.api.start(f.d,{storage:f.storage});
+  assert.equal(c.snapshot().count,93,'the repaired ending survives restart');
+  c.stop();f.close();
+  console.log('Current ending: virtual tail protection, suffix pruning, bottom highlight, persistence and idle stability passed');
+}
 function dotsRegression(){
   const f=fixture(current,100),pane=f.d.createElement('main');pane.className='thread-pane';
   const scroller=f.d.createElement('div');scroller.dataset.role='messages-scroll';scroller.style.overflowY='auto';
@@ -261,6 +290,7 @@ function dotsRegression(){
 }
 routeRegression();
 mixedRouteRegression();
+confirmedEndingRegression();
 dotsRegression();
 previewRegression();
 for(const count of [100,1000,10000]){if(baseline)run(baseline,'0.2.0',count,false);run(current,'current',count,!process.env.RAIL_BASELINE_ONLY);}

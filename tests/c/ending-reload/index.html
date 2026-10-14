@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN" class="dark"><meta charset="utf-8"><title>刷新后的会话末尾 · 验证</title>
+<style>
+:root{color-scheme:dark;--text-primary:#eeeae2;--text-tertiary:#969187;--bg-elevated-primary:#302f2c;--border-light:#ffffff22}
+*{box-sizing:border-box}body{margin:0;background:#20201e;color:var(--text-primary);font:15px/1.6 system-ui}header{height:64px;padding:12px 24px;display:flex;gap:24px;align-items:center;background:#181817}h1{font-size:16px;margin:0}button{font:inherit;cursor:pointer}#scroll{height:calc(100vh - 124px);overflow-y:auto}main{width:min(720px,calc(100% - 100px));margin:auto}.turn{height:180px;padding:20px 0;border-bottom:1px solid #ffffff15}[data-user-message-bubble]{margin-left:70px;border-radius:16px;padding:12px 18px;background:#302e29}.markdown{padding:12px 0;color:#aaa79e}footer{height:60px;padding:15px 24px;background:#181817}#result{font-size:13px}
+</style>
+<header><h1>刷新后的会话末尾 · 合成验证</h1><button id="seed">写入过期尾部并刷新</button></header>
+<div id="scroll"><main data-thread-find-target="conversation"></main></div><footer><span id="result"></span></footer>
+<script>window.module={exports:{}};</script><script src="../../../chatgpt-conversation-rail.user.js"></script>
+<script>
+const api=module.exports;delete window.module;
+const content=document.querySelector('main'),scroll=document.querySelector('#scroll');
+for(let i=0;i<5;i++){const e=document.createElement('div');e.className='turn';e.dataset.turnKey='reload-'+i;e.innerHTML='<div data-user-message-bubble></div><div class="markdown"></div>';e.firstElementChild.textContent=i===4?'第 5 个当前节点：这是最后一条提问':'第 '+(i+1)+' 个当前节点：演示提问';e.lastElementChild.textContent='这是合成内容，用于验证页面刷新后的节点顺序和定位。';content.append(e);}
+scroll.scrollTop=scroll.scrollHeight;
+const thread=api.threadIdentity(location.pathname),controller=api.start(document);controller.flush();
+const snapshot=controller.snapshot(),saved=api.decodeSaved(localStorage.getItem(api.cacheKey(thread)),thread);
+const result=document.querySelector('#result');result.dataset.count=snapshot.count;result.dataset.active=snapshot.activeKey;result.dataset.savedCount=saved?.entries.length;
+result.textContent=(snapshot.count===5&&snapshot.activeKey==='turn:reload-4'&&saved?.entries.length===5?'PASS':'FAIL')+' · 当前节点 '+snapshot.count+' 个 · 高亮最后一条 · 保存节点 '+saved?.entries.length+' 个';
+document.querySelector('#seed').onclick=()=>{controller.stop();const old=Array.from({length:10},(_,i)=>({key:'turn:reload-'+i,top:i*180,bottom:(i+1)*180,prompt:i<5?'当前演示提问 '+i:'过期尾部 '+i,answer:''}));localStorage.setItem(api.cacheKey(thread),api.encodeSaved(thread,old,true,1800,true));location.reload();};
+</script></html>

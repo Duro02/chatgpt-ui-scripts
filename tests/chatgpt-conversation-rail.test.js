@@ -103,6 +103,13 @@ assert.deepEqual(combined.entries.map(item=>item.key),['turn:old','turn:latest',
 assert.equal(combined.entries[0].top,-100);
 assert.equal(combined.complete,true);
 assert.equal(mergeSaved(completeSaved,completeSaved.entries,false,200,true).complete,false);
+const previousBranch={entries:[{key:'turn:common',top:0,bottom:100},{key:'turn:current-tail',top:100,bottom:200},{key:'turn:obsolete-tail',top:200,bottom:300}],complete:true,end:300,tail:true};
+const repairedBranch=mergeSaved(previousBranch,previousBranch.entries.slice(0,2),false,200,true,'turn:current-tail');
+assert.deepEqual(repairedBranch.entries.map(i=>i.key),['turn:common','turn:current-tail'],'confirmed current ending excludes older snapshot suffixes');
+assert.equal(repairedBranch.complete,false,'changing the cached ending requires rechecking older history');
+const partialBranch=mergeSaved(previousBranch,previousBranch.entries.slice(0,2),false,200,true);
+assert.ok(partialBranch.entries.some(i=>i.key==='turn:obsolete-tail'),'an unconfirmed partial window continues preserving unseen nodes');
+console.log('Persistence: authoritative tail repair and unconfirmed history retention passed');
 store.read('thread-3');
 store.write('thread-35',encodeSaved('thread-35',records,true,200,true));
 assert.ok(memory.has(cacheKey('thread-3')));

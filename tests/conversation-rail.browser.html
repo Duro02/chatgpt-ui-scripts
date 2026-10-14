@@ -18,7 +18,7 @@
   #results{position:fixed;left:16px;top:80px;width:240px;background:var(--fixture-header);padding:12px;font:12px/1.5 monospace;max-height:70vh;overflow:auto;z-index:60}
   #results:empty{display:none}.sr-only{display:none}
 </style>
-<header><h1>对话导航 · 演示与测试</h1><button id="showsearch">展示搜索与预览</button><button id="demo">展示长对话</button><button id="light">切换明暗</button><button id="persist">验证缓存与按需加载</button><button id="panel">验证七节点预览</button><button id="search">验证左侧搜索</button><button id="dots">验证 Dots 适配</button><button id="all">运行全部回归</button><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="railscroll">验证长列表滚动</button><button id="animation">验证焦点动画</button><button id="selection">验证跳转高亮</button><button id="latest">验证最新节点保留</button><button id="routeisolation">验证会话隔离</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button></header>
+<header><h1>对话导航 · 演示与测试</h1><button id="showsearch">展示搜索与预览</button><button id="demo">展示长对话</button><button id="light">切换明暗</button><button id="persist">验证缓存与按需加载</button><button id="panel">验证七节点预览</button><button id="search">验证左侧搜索</button><button id="dots">验证 Dots 适配</button><button id="all">运行全部回归</button><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="railscroll">验证长列表滚动</button><button id="animation">验证焦点动画</button><button id="selection">验证跳转高亮</button><button id="latest">验证最新节点保留</button><button id="currentending">验证当前末尾</button><button id="routeisolation">验证会话隔离</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button></header>
 <div id="scroll"><main id="content" data-thread-find-target="conversation"></main></div>
 <footer><textarea aria-label="草稿">测试草稿：索引和跳转应保留这段输入</textarea></footer><pre id="results"></pre>
 <script>window.module={exports:{}};</script><script src="../chatgpt-conversation-rail.user.js"></script>
@@ -331,6 +331,31 @@ async function latestRegression(){
   }catch(e){log('FAIL '+e.stack);}
 }
 document.querySelector('#latest').onclick=latestRegression;
+async function currentEndingRegression(){
+  results.textContent='';const savedPath=location.pathname;
+  try {
+    history.replaceState({},'', '/c/current-ending');setup(5);controller.stop();
+    const records=Array.from({length:10},(_,i)=>({key:'turn:message-'+i,top:i*220,bottom:(i+1)*220,prompt:'缓存提问 '+i,answer:''}));
+    const memory=new Map([[api.cacheKey('current-ending'),api.encodeSaved('current-ending',records,true,2200,true)]]);
+    const storage={getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,v),removeItem:k=>memory.delete(k)};
+    content.replaceChildren(...[2,3,4].map(i=>{const e=turn(i);e.style.height='220px';e.style.minHeight='220px';return e;}));
+    content.style.height='2200px';scroll.scrollTop=scroll.scrollHeight;
+    controller=api.start(document,{storage});await sleep(400);
+    check(controller.snapshot().count===10,'有未挂载的尾部预留空间时保留最新缓存');
+    controller.stop();content.style.height='';scroll.scrollTop=scroll.scrollHeight;
+    controller=api.start(document,{storage});await sleep(400);
+    check(controller.snapshot().count===5&&controller.snapshot().entries.at(-1).key==='turn:message-4','确认当前实际末尾后移除过期尾部');
+    check(controller.snapshot().activeKey==='turn:message-4','刷新到正文底部时高亮当前最后一个节点');
+    controller.flush();check(api.decodeSaved(memory.get(api.cacheKey('current-ending')),'current-ending').entries.length===5,'旧快照合并不会恢复过期尾部');
+    controller.stop();controller=api.start(document,{storage});await sleep(400);
+    check(controller.snapshot().count===5&&controller.snapshot().activeKey==='turn:message-4','再次初始化仍保持正确末尾和高亮');
+    controller.stop();memory.set(api.cacheKey('current-ending'),api.encodeSaved('current-ending',records,true,2200,true));
+    const pending=document.createElement('div');pending.dataset.turnKey='pending-tail';pending.className='turn';content.append(pending);scroll.scrollTop=scroll.scrollHeight;
+    controller=api.start(document,{storage});await sleep(400);
+    check(controller.snapshot().count===10,'尾部还有待挂载消息时不清理缓存');
+    log('ALL CURRENT ENDING TESTS PASSED');
+  }catch(e){log('FAIL '+e.stack);}finally{controller?.stop();content.style.height='';history.replaceState({},'',savedPath);}
+}
 async function routeIsolationRegression(){
   results.textContent='';const savedPath=location.pathname;
   try {
@@ -399,6 +424,7 @@ async function hydrationRegression(){
     log('ALL HYDRATION TESTS PASSED');
   }catch(e){log('FAIL '+e.stack);}finally{history.replaceState({},'',savedPath);}
 }
+document.querySelector('#currentending').onclick=currentEndingRegression;
 document.querySelector('#routeisolation').onclick=routeIsolationRegression;
 document.querySelector('#hydration').onclick=hydrationRegression;
 async function previewPanelRegression(){
@@ -523,7 +549,9 @@ async function searchRegression(){
       const shell=surface.getBoundingClientRect(),well=list.getBoundingClientRect(),box=searchCenter().getBoundingClientRect();
       const gap=box.left-shell.left;
       check(gap>=6&&Math.abs(shell.right-box.right-gap)<1,edge+'：高亮左右留白一致');
-      if(edge==='首结果'||edge==='单结果')check(Math.abs(box.top-root.querySelector('.search-count').getBoundingClientRect().bottom-gap)<1,edge+'：高亮顶部留白与左右一致');
+      // The count edge is inside the shell border; compare content insets.
+      const innerGap=gap-parseFloat(getComputedStyle(surface).borderLeftWidth);
+      if(edge==='首结果'||edge==='单结果')check(Math.abs(box.top-root.querySelector('.search-count').getBoundingClientRect().bottom-innerGap)<1,edge+'：高亮上/左内容内边距一致');
       if(edge==='末结果'||edge==='单结果')check(Math.abs(shell.bottom-box.bottom-gap)<1,edge+'：高亮底部留白与左右一致');
       check(parseFloat(getComputedStyle(surface).borderRadius)===14&&parseFloat(getComputedStyle(searchCenter()).borderRadius)===7,edge+'：内外圆角统一');
     };
@@ -631,7 +659,7 @@ document.querySelector('#dots').onclick=dotsRegression;
 document.querySelector('#all').onclick=async()=>{
   const button=document.querySelector('#all');button.disabled=true;const combined=[];
   try {
-    for(const [name,test] of [['mixed route and cache repair',routeIsolationRegression],['Dots and route isolation',dotsRegression],['search',searchRegression],['preview panel',previewPanelRegression],['rapid panel',rapidPanelRegression],['persistence',persistenceRegression],['multipage target jump',historyJumpRegression],['latest',latestRegression],['selection',selectionRegression],['animation',animationRegression],['rail scroll',railScrollRegression],['hydration',hydrationRegression],['full performance and virtual history',()=>run()]]){
+    for(const [name,test] of [['current ending',currentEndingRegression],['mixed route and cache repair',routeIsolationRegression],['Dots and route isolation',dotsRegression],['search',searchRegression],['preview panel',previewPanelRegression],['rapid panel',rapidPanelRegression],['persistence',persistenceRegression],['multipage target jump',historyJumpRegression],['latest',latestRegression],['selection',selectionRegression],['animation',animationRegression],['rail scroll',railScrollRegression],['hydration',hydrationRegression],['full performance and virtual history',()=>run()]]){
       await test();combined.push(name+'\n'+results.textContent);
       results.textContent=combined.join('\n\n');
       if(combined.at(-1).includes('FAIL '))return;

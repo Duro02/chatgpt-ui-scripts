@@ -1,5 +1,11 @@
 # 更新记录
 
+## Conversation Rail 0.4.11 — 2026-10-14
+
+- Confirm the rendered conversation ending before trimming an obsolete cached suffix. Keep reserved virtual tail space, pending turns and paged Dots windows protected.
+- Prevent snapshot merging from restoring a trimmed tail and highlight the confirmed last prompt when refreshing at the bottom. Explicit clicked selections still take precedence.
+- Cover ending changes, partial-window retention, restart persistence and bottom highlighting.
+
 ## Conversation Rail 0.4.10 — 2026-10-14
 
 - Exclude previous-conversation elements throughout slow and mixed SPA transitions, while accepting reused elements with changed message IDs and fresh mounts.

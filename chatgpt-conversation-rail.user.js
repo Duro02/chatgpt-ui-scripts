@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.4.10
+// @version      0.4.11
 // @description  Persistent conversation navigation with short marks, previews and on-demand history loading.
 // @author       duro
 // @license      MIT
@@ -267,7 +267,7 @@
     return raw.length <= CACHE_SIZE ? raw : null;
   }
 
-  function mergeSaved(saved, items, complete, end, tail) {
+  function mergeSaved(saved, items, complete, end, tail, confirmedTailKey = null) {
     if (!saved?.entries.length) return { entries: items, complete, end, tail };
     const previous = new Map(saved.entries.map(item => [item.key, item]));
     const anchor = items.find(item => previous.has(item.key));
@@ -276,10 +276,13 @@
     const records = new Map(saved.entries.map(item => [item.key,
       { ...item, top: item.top + shift, bottom: item.bottom + shift }]));
     for (const item of items) records.set(item.key, item);
-    const order = mergeTimeline(saved.entries.map(item => item.key), items, records);
+    let order = mergeTimeline(saved.entries.map(item => item.key), items, records);
+    const tailIndex = confirmedTailKey ? order.indexOf(confirmedTailKey) : -1;
+    const trimmed = tailIndex >= 0 && tailIndex < order.length - 1;
+    if (trimmed) order = order.slice(0, tailIndex + 1);
     const covered = items.filter(item => previous.has(item.key)).length;
     return { entries: order.map(key => records.get(key)),
-      complete: complete && order.length === items.length || Boolean(anchor) && saved.complete && covered < saved.entries.length && order[0] === saved.entries[0].key,
+      complete: !trimmed && (complete && order.length === items.length || Boolean(anchor) && saved.complete && covered < saved.entries.length && order[0] === saved.entries[0].key),
       end: end ?? saved.end, tail: tail || saved.tail };
   }
 
@@ -392,7 +395,7 @@
     const indexes = new Map();
     let content = null, scroller = null, items = [], loaded = [], pending = [], mounted = [], route = pageIdentity().route;
     let selectedKey = null, positioned = [], focusY = null, railMotion = null;
-    let chronology = [], transcriptEnd = null, tailKnown = false;
+    let chronology = [], transcriptEnd = null, tailKnown = false, confirmedTailKey = null;
     let staleElements = null, historyComplete = false, activeKey = null, hovered = false, stopped = false;
     let saveTimer = 0, saveIdle = 0, dirty = false, waitingKey = null;
     let savedThread = pageIdentity().thread;
@@ -463,7 +466,7 @@
       dirty = false;
       // Merge a newer snapshot from another tab so a partial page cannot erase
       // IDs already discovered in a complete index of this same conversation.
-      const merged = mergeSaved(store.read(savedThread, false), items, historyComplete, transcriptEnd, tailKnown);
+      const merged = mergeSaved(store.read(savedThread, false), items, historyComplete, transcriptEnd, tailKnown, confirmedTailKey);
       const raw = encodeSaved(savedThread, merged.entries, merged.complete, merged.end, merged.tail);
       if (raw && storage && !store.write(savedThread, raw)) {
         persistenceAvailable = false;
@@ -697,6 +700,9 @@
       // An explicit navigation selection wins over viewport inference, including
       // a final turn that cannot align to the top because the scrollport has ended.
       if (selectedKey && cache.has(selectedKey)) { setActive(selectedKey); return; }
+      if (confirmedTailKey && cache.has(confirmedTailKey) && Math.abs(position() - geometry.max) <= 2) {
+        setActive(confirmedTailKey); return;
+      }
       const current = positioned.length ? positioned : items;
       const i = activeAt(current, position() + Math.min(160, geometry.height * .25));
       setActive(current[i]?.key);
@@ -1103,7 +1109,7 @@
       const previousPositioned = positioned;
       positioned = measured;
       const live = new Set(measured.map(item => item.key));
-      let retiredProvisional = false;
+      let retiredRecords = false;
       if (isDots() && measured.length && provisionalKeys.size) {
         for (const key of provisionalKeys) if (!live.has(key)) {
           const old = cache.get(key);
@@ -1116,9 +1122,9 @@
           if (previewKey === key) hidePreview();
           scan?.pendingKeys.delete(key);
           cache.delete(key); provisionalKeys.delete(key);
-          retiredProvisional = changed = true;
+          retiredRecords = changed = true;
         }
-        if (retiredProvisional) chronology = chronology.filter(key => cache.has(key));
+        if (retiredRecords) chronology = chronology.filter(key => cache.has(key));
       }
 
       if (Math.abs(shift) > 2) for (const item of cache.values()) {
@@ -1148,12 +1154,33 @@
       }
       // Existing records retain their identity, so layout changes do not need
       // an O(total cached turns) order copy, array rebuild or key-index rebuild.
-      if (added || retiredProvisional) {
+      if (added || retiredRecords) {
         chronology = mergeTimeline(chronology, measured, cache, scan?.anchor, scan?.atStart);
         items = chronology.map(key => cache.get(key));
         rebuildIndexes();
       }
-      if (retiredProvisional && searchSubmitted) {
+      const last = measured.at(-1);
+      // Only normal ChatGPT exposes a transcript end independent of paged Dots
+      // windows. A missing tail, reserved virtual space or pending turn is not proof.
+      if (!isDots() && last && mounted.at(-1) === last.element &&
+          Math.abs(position() - geometry.max) <= 2 && last.bottom >= end - 96) {
+        confirmedTailKey = last.key;
+        const lastIndex = indexes.get(last.key);
+        if (lastIndex < items.length - 1) {
+          const removed = items.slice(lastIndex + 1);
+          for (const item of removed) { cache.delete(item.key); provisionalKeys.delete(item.key); }
+          if (jump && !cache.has(jump.key)) cancelJump(false);
+          if (selectedKey && !cache.has(selectedKey)) selectedKey = null;
+          if (activeKey && !cache.has(activeKey)) activeKey = null;
+          if (previewKey && !cache.has(previewKey)) hidePreview();
+          chronology = chronology.slice(0, lastIndex + 1);
+          items = items.slice(0, lastIndex + 1);
+          historyComplete = false;
+          retiredRecords = changed = true;
+          rebuildIndexes();
+        }
+      }
+      if (retiredRecords && searchSubmitted) {
         cancelBrowse(searchBrowse, searchDock);
         const key = searchMatches[searchIndex]?.key, previousIndex = searchIndex;
         const matches = new Map(searchMatches.filter(item => cache.has(item.key)).map(item => [item.key, item]));
@@ -1199,7 +1226,7 @@
       cancelRestore();
       stopRailMotion();
       historyComplete = false;
-      chronology = []; transcriptEnd = null; tailKnown = false;
+      chronology = []; transcriptEnd = null; tailKnown = false; confirmedTailKey = null;
       cancelScan(false);
       cancelJump(false);
       cache.clear(); provisionalKeys.clear();
@@ -1256,6 +1283,7 @@
     }
 
     function detach(preserveJump = false) {
+      confirmedTailKey = null;
       stopRailMotion();
       cancelScan(false);
       if (!preserveJump) cancelJump(false);
