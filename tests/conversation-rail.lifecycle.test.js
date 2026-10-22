@@ -65,6 +65,13 @@ async function run(){
   const stoppedStats=JSON.stringify(f.c.stats);f.w.history.pushState({},'', '/c/after-stop');assert.equal(JSON.stringify(f.c.stats),stoppedStats,'retained history hook is inert after stop');f.close();
   f=fixture();f.c.audit.restore({route:'/dots/home#memory~memory',container:f.scroll,saved:0,offset:0});assert.ok(f.c.audit.references().restoring);
   f.w.history.pushState({},'', '/c/other');assert.ok(!f.c.audit.references().restoring,'route change cancels restore and its old container reference');assert.ok(f.c.audit.references().staleWeak,'stale route suppression is weak');f.c.stop();assert.equal(f.resources().timers,0);f.close();
+  f=fixture();const restoreMoves=[];f.scroll.style.scrollBehavior='smooth';
+  f.scroll.scrollTo=options=>{restoreMoves.push(options);if(options.behavior==='instant')f.scroll.scrollTop=options.top;};
+  f.c.audit.restore({route:'/dots/home#memory~memory',container:f.scroll,saved:1000,offset:0,atBottom:true});
+  assert.equal(f.scroll.scrollTop,43300,'a bottom-origin load restores the current bottom immediately rather than an obsolete offset');
+  assert.ok(restoreMoves.every(move=>move.behavior==='instant'),'native CSS smooth scrolling must not animate internal scan/restore moves');
+  f.d.dispatchEvent(new f.w.WheelEvent('wheel',{bubbles:true}));f.scroll.scrollTop=2000;f.advance(300);
+  assert.equal(f.scroll.scrollTop,2000,'user scroll cancels the delayed bottom correction');f.close();
   f=fixture();f.c.audit.navigate(f.key(0));assert.ok(f.c.snapshot().loadingTarget);f.c.stop();await Promise.resolve();
   assert.deepEqual(f.resources(),{observerTargets:0,listeners:0,timers:0,frames:0,idle:0},'stop resolves pending target waits without orphan timers');f.close();
   f=fixture();const scan=f.c.audit.buildIndex();assert.ok(f.c.snapshot().indexing);f.c.stop();await scan;

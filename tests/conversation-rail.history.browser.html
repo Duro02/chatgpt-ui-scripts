@@ -1,0 +1,73 @@
+<!doctype html>
+<!-- Optional before/after run: save the chosen baseline commit's userscript
+     as ../.rail-history-baseline.js, open ?baseline=1, then remove that file. -->
+<html lang="zh-CN"><meta charset="utf-8"><title>导航定位与历史恢复回归</title>
+<style>
+  *{box-sizing:border-box}body{margin:0;background:#1f1f1e;color:#eeeae2;font:15px/1.6 system-ui}
+  header{height:64px;padding:14px 24px;background:#181817;display:flex;gap:20px;align-items:center}
+  button{font:inherit;padding:4px 12px;cursor:pointer}.page{height:calc(100vh - 64px)}
+  .scroll{height:100%;overflow-y:auto;overflow-anchor:none}.content{width:min(760px,80%);margin:auto}
+  .turn{height:260px;padding:28px 0;border-bottom:1px solid #ffffff18}
+  [data-user-message-bubble]{padding:12px 18px;border-radius:14px;background:#302f2c}
+  .markdown{padding:18px;color:#d6d1c5}#results{position:fixed;left:16px;top:80px;z-index:100;background:#181817;padding:12px;font:12px/1.6 monospace;max-width:380px;white-space:pre-wrap}
+</style>
+<header><b>导航定位与历史恢复</b><button id="run" disabled>运行回归</button><span id="source"></span></header>
+<section class="page" id="cached" style="display:none"><div class="scroll"><main class="content" data-thread-find-target="conversation"></main></div></section>
+<section class="page" id="live"><div class="scroll"><main class="content" data-thread-find-target="conversation"></main></div></section>
+<pre id="results"></pre>
+<script>
+window.module={exports:{}};
+const baseline=new URLSearchParams(location.search).get('baseline')==='1';
+const script=document.createElement('script');script.src=baseline?'../.rail-history-baseline.js':'../chatgpt-conversation-rail.user.js';
+script.onload=()=>{document.querySelector('#run').disabled=false;document.querySelector('#source').textContent=baseline?'修改前':'本地修正版';};
+document.head.append(script);
+</script>
+<script>
+const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const cached=document.querySelector('#cached'),live=document.querySelector('#live'),scroll=live.querySelector('.scroll'),content=live.querySelector('main');
+const results=document.querySelector('#results');let controller;
+function turn(id){const el=document.createElement('div');el.className='turn';el.dataset.turnKey=id;el.innerHTML='<div data-user-message-bubble>'+id+'</div><div class="markdown">用于验证导航与历史恢复的本地测试内容。</div>';return el;}
+function start(){return controller=module.exports.start(document,{storage:null});}
+function root(){return document.querySelector('#duro-conversation-rail').shadowRoot;}
+function assert(value,message){if(!value)throw Error(message);}
+async function until(test,ms=4000){const end=performance.now()+ms;while(!test()&&performance.now()<end)await sleep(25);return test();}
+async function testRoots(){
+  controller?.stop();cached.style.display='none';live.style.display='';cached.querySelector('main').replaceChildren(turn('cached'));
+  content.replaceChildren(...Array.from({length:12},(_,i)=>turn('live-'+i)));scroll.scrollTop=0;const c=start();await sleep(250);
+  assert(c.snapshot().entries.some(i=>i.key==='turn:live-0')&&!c.snapshot().entries.some(i=>i.key==='turn:cached'),'不能选择 CSS 隐藏的缓存页面');
+  const nav=root().querySelector('nav').getBoundingClientRect();assert(nav.top>innerHeight*.25&&nav.bottom<innerHeight*.8,'导航应位于可见正文中央');
+  live.style.display='none';assert(await until(()=>root().querySelector('nav').hidden,2000),'全部页面暂时隐藏时不显示旧导航（refreshes='+c.stats.refreshes+'）');
+  cached.style.display='';assert(await until(()=>c.snapshot().entries.some(i=>i.key==='turn:cached')&&!root().querySelector('nav').hidden,2000),'仅 CSS 切换也能恢复可见页面，无需刷新或轮询');
+  controller.stop();cached.style.display='none';live.style.display='';
+}
+async function testMountedHistory(){
+  controller?.stop();cached.style.display='none';live.style.display='';scroll.style.scrollBehavior='smooth';
+  content.replaceChildren(...Array.from({length:40},(_,i)=>turn('history-'+i)));
+  // Establish the real bottom without an animation before starting the job.
+  scroll.scrollTo({top:scroll.scrollHeight,behavior:'instant'});const c=start();await sleep(250);
+  const moves=[],nativeMove=scroll.scrollTo;scroll.scrollTo=function(options){moves.push({top:options.top,behavior:options.behavior});return nativeMove.call(this,options);};
+  const begin=performance.now();
+  // A hidden history button is still callable, allowing a complete DOM to
+  // exercise the scanner without changing production diagnostics or cache.
+  root().querySelector('.index').click();
+  try{
+    assert(await until(()=>!c.snapshot().indexing,4000),'全部消息已挂载时不应从顶部逐屏扫描整篇长回答');
+    await sleep(400);assert(c.snapshot().count===40&&c.snapshot().historyComplete,'扫描保留完整的 40 轮索引');
+    assert(Math.abs(scroll.scrollTop-(scroll.scrollHeight-scroll.clientHeight))<2,'从底部开始的任务完成后立即回到底部');
+    assert(moves.every(m=>m.behavior==='instant'),'内部定位不能继承原生 smooth 动画');
+    assert(moves.filter(m=>m.top>1&&m.top<scroll.scrollHeight-scroll.clientHeight-1).length===0,'已覆盖的正文不出现逐屏向下滚动');
+    return Math.round(performance.now()-begin)+' ms，'+moves.length+' 次定位';
+  }finally{c.stop();scroll.scrollTo=nativeMove;scroll.style.scrollBehavior='';}
+}
+document.querySelector('#run').onclick=async()=>{
+  const button=document.querySelector('#run');button.disabled=true;const lines=[];
+  try{
+    for(const [name,test] of [['隐藏缓存页面及 CSS 切换',testRoots],['长会话扫描及瞬时返回底部',testMountedHistory]]){
+      try{const detail=await test();lines.push('PASS '+name+(detail?'：'+detail:''));}catch(error){lines.push('FAIL '+name+'：'+error.message);}finally{controller?.stop();cached.style.display='none';live.style.display='';}
+      results.textContent=lines.join('\n');
+    }
+    results.textContent+='\n'+(lines.every(line=>line.startsWith('PASS'))?'ALL TESTS PASSED':'REGRESSION REPRODUCED');
+  }finally{button.disabled=false;start();}
+};
+content.replaceChildren(...Array.from({length:4},(_,i)=>turn('preview-'+i)));
+</script></html>

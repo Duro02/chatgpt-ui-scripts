@@ -195,7 +195,7 @@ function confirmedEndingRegression(){
   let max=100*220-700;
   const croot=f.content;
   croot.replaceChildren();
-  croot.getBoundingClientRect=()=>({top:-f.scroll.scrollTop,bottom:100*220-f.scroll.scrollTop,height:100*220});
+  croot.getBoundingClientRect=()=>({top:-f.scroll.scrollTop,bottom:100*220-f.scroll.scrollTop,height:100*220,width:700});
   const mounted=[90,91,92].map(i=>{const el=f.d.createElement('div');el.dataset.turnKey='message-'+i;el.innerHTML='<div data-user-message-bubble>Current '+i+'</div>';el.getBoundingClientRect=()=>({top:i*220-f.scroll.scrollTop,bottom:(i+1)*220-f.scroll.scrollTop,height:220});croot.append(el);return el;});
   f.memory.set(f.api.cacheKey('performance'),f.api.encodeSaved('performance',oldRecords,true,22000,true));
   f.scroll.scrollTop=max;
@@ -203,7 +203,7 @@ function confirmedEndingRegression(){
   assert.equal(c.snapshot().count,100,'bottom scrolling with reserved tail space does not prune unseen latest nodes');
   c.stop();
   f.resize(93*220);f.scroll.scrollTop=93*220-700;
-  croot.getBoundingClientRect=()=>({top:-f.scroll.scrollTop,bottom:93*220-f.scroll.scrollTop,height:93*220});
+  croot.getBoundingClientRect=()=>({top:-f.scroll.scrollTop,bottom:93*220-f.scroll.scrollTop,height:93*220,width:700});
   c=f.api.start(f.d,{storage:f.storage});
   assert.equal(c.snapshot().count,93,'an actual current ending trims the obsolete positive-height suffix');
   assert.equal(c.snapshot().activeKey,'turn:message-92','refresh at the actual bottom highlights the current last prompt');
@@ -223,7 +223,7 @@ function dotsRegression(){
   Object.defineProperties(scroller,{clientHeight:{value:300},scrollHeight:{get:()=>list.children.length*120}});
   scroller.getBoundingClientRect=()=>({top:64,bottom:364,height:300});
   scroller.scrollTo=({top})=>{scroller.scrollTop=top;};
-  list.getBoundingClientRect=()=>({top:64-scroller.scrollTop,bottom:64-scroller.scrollTop+list.children.length*120,height:list.children.length*120});
+  list.getBoundingClientRect=()=>({top:64-scroller.scrollTop,bottom:64-scroller.scrollTop+list.children.length*120,height:list.children.length*120,width:700});
   const message=(scope,i,self,text)=>{
     const el=f.d.createElement('article');el.className='message-row'+(self?' self':'');el.dataset.messageId=`${scope}~${scope}~CalpicoMessage~msg-${i}`;
     el.innerHTML=`<div class="message-body" data-message-id="${el.dataset.messageId}"><div class="message-text">${text}</div><button>Ignore control</button></div><time>12:00</time>`;
@@ -288,6 +288,21 @@ function dotsRegression(){
   recovered.flush();assert.equal(JSON.parse(f.memory.get(f.api.cacheKey(thread))).entries.length,1,'a later cache merge cannot reintroduce old provisional rows');
   recovered.stop();f.close();
 }
+function hiddenRootRegression(){
+  const f=fixture(current,100);
+  const cached=f.d.createElement('div');cached.style.display='none';
+  cached.innerHTML='<div style="overflow-y:auto"><main data-thread-find-target="conversation"><div data-thread-scroll-footer></div></main></div>';
+  let hiddenScrolls=0;cached.firstElementChild.scrollTo=()=>hiddenScrolls++;
+  f.d.body.prepend(cached);f.c.audit.refresh();
+  const host=f.d.querySelector('#duro-conversation-rail');
+  assert.equal(host.style.getPropertyValue('--rail-center'),'332px','CSS-hidden cached roots must not collapse the rail to the 114px fallback');
+  host.shadowRoot.querySelector('.mark[data-key="turn:message-99"]').click();
+  assert.equal(hiddenScrolls,0,'navigation must never scroll the hidden cached page');
+  assert.ok(f.scroll.scrollTop>0,'navigation still uses the rendered conversation');
+  f.close();
+  console.log('Hidden roots: cached zero-size conversation ignored; visible scrollport owns rail and jumps');
+}
+hiddenRootRegression();
 routeRegression();
 mixedRouteRegression();
 confirmedEndingRegression();

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.4.11
+// @version      0.4.12
 // @description  Persistent conversation navigation with short marks, previews and on-demand history loading.
 // @author       duro
 // @license      MIT
@@ -412,10 +412,17 @@
     const store = createIndexStore(storage, stats);
 
     function isDots() { return /^\/dots(?:\/|$)/.test(win.location.pathname); }
+    function renderedRoot(node) {
+      if (node.closest('[hidden], [aria-hidden="true"]')) return false;
+      const visibility = win.getComputedStyle(node).visibility;
+      if (visibility === 'hidden' || visibility === 'collapse') return false;
+      const rect = node.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    }
     function dotsRoot() {
       if (!isDots()) return null;
       return [...doc.querySelectorAll('[data-role="messages-scroll"] .message-list')]
-        .find(node => !node.closest('[hidden], [aria-hidden="true"]')) || null;
+        .find(renderedRoot) || null;
     }
     function pageIdentity() {
       const path = win.location.pathname;
@@ -491,7 +498,7 @@
         ? { top: 0, bottom: win.innerHeight, height: win.innerHeight }
         : scroller.getBoundingClientRect();
     }
-    function move(top, behavior = 'auto') {
+    function move(top, behavior = 'instant') {
       if (!scroller) return;
       scroller.scrollTo({ top: Math.max(0, Math.min(geometry.max, top)) - geometry.origin, behavior });
     }
@@ -505,8 +512,10 @@
       const rect = viewport();
       geometry.height = rect.height;
       const footer = scroller.querySelector('[data-thread-scroll-footer]');
-      const bottom = Math.min(rect.bottom, footer?.getBoundingClientRect().top || rect.bottom - 100);
       const top = Math.max(64, rect.top);
+      const footerRect = footer?.getBoundingClientRect();
+      const bottom = Math.min(rect.bottom,
+        footerRect?.height > 0 && footerRect.top > top ? footerRect.top : rect.bottom - 100);
       const band = Math.max(100, bottom - top);
       railHeight = Math.max(60, Math.min(420, band - 64));
       setStyle(host, '--rail-center', `${top + band / 2}px`);
@@ -562,7 +571,7 @@
     }
     function render(extraIndex) {
       stats.renders += 1;
-      setAttribute(nav, 'hidden', items.length && !profileBlocked ? null : '');
+      setAttribute(nav, 'hidden', items.length && content && scroller && !profileBlocked ? null : '');
       setAttribute(indexButton, 'hidden', historyComplete && !scan ? '' : null);
       const offset = indexButton.hidden ? 0 : 1;
       setStyle(marks, 'height', `${(items.length + offset) * PITCH}px`);
@@ -948,7 +957,7 @@
       if (checkRoute()) return;
       bind();
     });
-    const resize = new win.ResizeObserver(() => schedule());
+    const resize = new win.ResizeObserver(() => { if (content?.isConnected) schedule(); else bind(); });
     const boot = new win.MutationObserver(() => bind());
     const theme = new win.MutationObserver(() => syncTheme());
     const profileObserver = new win.MutationObserver(() => syncProfile());
@@ -1244,8 +1253,8 @@
     function preferredRoot() {
       if (isDots()) return dotsRoot();
       for (const selector of ROOTS) {
-        const node = doc.querySelector(selector);
-        if (node && !node.closest('[hidden], [aria-hidden="true"]')) return node;
+        const node = [...doc.querySelectorAll(selector)].find(renderedRoot);
+        if (node) return node;
       }
       return null;
     }
@@ -1259,6 +1268,12 @@
         const resumeKey = jump?.key || waitingKey;
         detach();
         waitingKey = resumeKey;
+        // Cached SPA pages may become visible by CSS alone. Observe their
+        // boxes while waiting; do not poll or watch every class mutation.
+        const candidates = isDots()
+          ? doc.querySelectorAll('[data-role="messages-scroll"] .message-list')
+          : doc.querySelectorAll(ROOTS.join(','));
+        for (const node of candidates) resize.observe(node);
         boot.observe(doc.body, { childList: true, subtree: true });
         return;
       }
@@ -1320,6 +1335,7 @@
       const anchorKey = items.find(record => record.element === first)?.key;
       const job = { key, keepPreview, attempts: 0, timer: 0, route, container: scroller,
         stage: item.element?.isConnected ? 'calibrate' : 'load', saved: position(), anchorKey, originalSelection,
+        atBottom: Math.abs(position() - geometry.max) <= 2,
         offset: first ? first.getBoundingClientRect().top - viewport().top : 0 };
       jump = job;
       if (job.stage === 'load') loadTarget(job);
@@ -1474,6 +1490,7 @@
       const first = loaded.find(element => element.getBoundingClientRect().bottom > viewport().top);
       const anchorKey = items.find(item => item.element === first)?.key;
       const job = { route, container: scroller, saved: position(), anchorKey, originalSelection,
+        atBottom: Math.abs(position() - geometry.max) <= 2,
         offset: first ? first.getBoundingClientRect().top - viewport().top : 0,
         cancelled: false, started: Date.now(), pendingKeys: new Set(), atStart: true, anchor: null };
       scan = job;
@@ -1508,6 +1525,10 @@
             if (scan !== job) break;
             if (earlierLoading()) { historyTimedOut = true; break; }
           }
+          // Server paging can mount the entire transcript at once. Once all
+          // intervals are covered, there is nothing left to discover by
+          // walking every screen of already indexed answers.
+          if (historyComplete && !job.pendingKeys.size) { bottomPasses = 2; break; }
           // Scroll events and virtual DOM commits can lag behind scrollTop. Wait for
           // actual message content at this viewport before advancing (only while indexing).
           for (let retry = 0; retry < (y >= geometry.max - 2 ? 20 : 12); retry++) {
@@ -1531,7 +1552,7 @@
             refresh();
           }
           if (scan !== job) break;
-          toast(`正在补全导航：${items.length} 轮 · 再次点击或 Esc 取消`, true);
+          toast(`正在扫描历史消息：${items.length} 轮 · 完成后返回原位置 · Esc 取消`, true);
           if (++steps >= 600 || Date.now() - job.started > 120000) break;
           if (y >= geometry.max - 2) {
             if (++bottomPasses >= 2) break;
@@ -1565,7 +1586,7 @@
       if (job.route !== pageIdentity().route || job.container !== scroller || !scroller?.isConnected) return;
       selectedKey = cache.has(job.originalSelection) ? job.originalSelection : null;
       measure();
-      move((cache.get(job.anchorKey)?.top ?? job.saved + job.offset) - job.offset);
+      move(job.atBottom ? geometry.max : (cache.get(job.anchorKey)?.top ?? job.saved + job.offset) - job.offset);
       // Keep the original viewport, including when its virtualized anchor remounts.
       restoreJob = job;
       restoreTimer = win.setTimeout(() => {
@@ -1575,7 +1596,8 @@
         if (job.route !== route || job.container !== scroller || stopped) return;
         refresh();
         const anchor = cache.get(job.anchorKey)?.element;
-        if (anchor?.isConnected) {
+        if (job.atBottom) move(geometry.max);
+        else if (anchor?.isConnected) {
           const delta = anchor.getBoundingClientRect().top - viewport().top - job.offset;
           move(position() + delta);
         }
