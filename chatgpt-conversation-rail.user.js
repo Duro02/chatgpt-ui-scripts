@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.4.12
+// @version      0.4.13
 // @description  Persistent conversation navigation with short marks, previews and on-demand history loading.
 // @author       duro
 // @license      MIT
@@ -155,9 +155,22 @@
   }
 
   // Preserve chronology independently of coordinates that shift during history paging.
-  function mergeTimeline(previous, found, cache, scanAnchor, atStart = false) {
+  function mergeTimeline(previous, found, cache, scanAnchor, atStart = false, atEnd = false) {
+    // At a verified mounted bottom, older cached nodes cannot follow the live
+    // window. Retain them before it, rather than deleting unseen server pages.
+    if (atEnd) {
+      const live = new Set(found.map(item => item.key));
+      return previous.filter(key => !live.has(key)).concat(found.map(item => item.key));
+    }
     const order = previous.slice();
     const known = new Set(previous);
+    // A mounted window is stronger evidence than the order inferred while
+    // separate history pages were loaded. Repair known keys too; keep unseen
+    // keys in their existing slots until an overlapping window locates them.
+    const observed = found.filter(item => known.has(item.key)).map(item => item.key);
+    const observedKeys = new Set(observed);
+    let slot = 0;
+    for (let i = 0; i < order.length; i++) if (observedKeys.has(order[i])) order[i] = observed[slot++];
     let previousFound = null;
     for (let i = 0; i < found.length;) {
       if (known.has(found[i].key)) { previousFound = found[i++].key; continue; }
@@ -395,7 +408,7 @@
     const indexes = new Map();
     let content = null, scroller = null, items = [], loaded = [], pending = [], mounted = [], route = pageIdentity().route;
     let selectedKey = null, positioned = [], focusY = null, railMotion = null;
-    let chronology = [], transcriptEnd = null, tailKnown = false, confirmedTailKey = null;
+    let chronology = [], transcriptEnd = null, tailKnown = false, confirmedTailKey = null, positionedTailKey = null;
     let staleElements = null, historyComplete = false, activeKey = null, hovered = false, stopped = false;
     let saveTimer = 0, saveIdle = 0, dirty = false, waitingKey = null;
     let savedThread = pageIdentity().thread;
@@ -709,8 +722,10 @@
       // An explicit navigation selection wins over viewport inference, including
       // a final turn that cannot align to the top because the scrollport has ended.
       if (selectedKey && cache.has(selectedKey)) { setActive(selectedKey); return; }
-      if (confirmedTailKey && cache.has(confirmedTailKey) && Math.abs(position() - geometry.max) <= 2) {
-        setActive(confirmedTailKey); return;
+      const tail = isDots() ? positionedTailKey : confirmedTailKey;
+      if (tail && cache.has(tail) && Math.abs(position() - geometry.max) <= 2) {
+        if (isDots() && indexes.get(tail) !== items.length - 1) schedule();
+        setActive(tail); return;
       }
       const current = positioned.length ? positioned : items;
       const i = activeAt(current, position() + Math.min(160, geometry.height * .25));
@@ -1099,6 +1114,7 @@
         const rect = item.element.getBoundingClientRect();
         return { ...item, top: rect.top - scrollRect.top + position(), bottom: rect.bottom - scrollRect.top + position() };
       }).filter(item => item.bottom > item.top);
+      positionedTailKey = null;
       if (!measured.length && mounted.length) {
         for (const item of positioned) {
           const record = cache.get(item.key);
@@ -1110,6 +1126,14 @@
       }
       const rootRect = content.getBoundingClientRect();
       const end = rootRect.bottom - scrollRect.top + position();
+      const last = measured.at(-1);
+      if (isDots() && last && !pending.length) {
+        // Answers are separate articles, potentially far below the last prompt.
+        // Reserved virtual space after the final article must not count as tail.
+        const tailRect = mounted.at(-1)?.getBoundingClientRect();
+        if (tailRect?.height > 0 && Math.abs(tailRect.bottom - scrollRect.top + position() - end) <= 96) positionedTailKey = last.key;
+      }
+      const atDotsEnd = Boolean(positionedTailKey && Math.abs(position() - geometry.max) <= 2);
       const overlapping = measured.find(item => cache.has(item.key));
       // Older server pages prepend to a transcript whose latest end was known.
       // An overlapping anchor gives a better translation once it mounts again.
@@ -1161,14 +1185,22 @@
         else { cache.set(item.key, record); added = true; }
         if (isDots() && provisionalDotsKey(item.key)) provisionalKeys.add(item.key);
       }
+      let previousIndex = -1, reordered = false;
+      for (const item of measured) {
+        const index = indexes.get(item.key);
+        if (index === undefined) continue;
+        if (index < previousIndex) { reordered = true; break; }
+        previousIndex = index;
+      }
+      if (atDotsEnd && indexes.has(last.key) && indexes.get(last.key) !== items.length - 1) reordered = true;
       // Existing records retain their identity, so layout changes do not need
       // an O(total cached turns) order copy, array rebuild or key-index rebuild.
-      if (added || retiredRecords) {
-        chronology = mergeTimeline(chronology, measured, cache, scan?.anchor, scan?.atStart);
+      if (added || retiredRecords || reordered) {
+        chronology = mergeTimeline(chronology, measured, cache, scan?.anchor, scan?.atStart, atDotsEnd);
         items = chronology.map(key => cache.get(key));
         rebuildIndexes();
       }
-      const last = measured.at(-1);
+      if (reordered) changed = true;
       // Only normal ChatGPT exposes a transcript end independent of paged Dots
       // windows. A missing tail, reserved virtual space or pending turn is not proof.
       if (!isDots() && last && mounted.at(-1) === last.element &&
@@ -1189,7 +1221,7 @@
           rebuildIndexes();
         }
       }
-      if (retiredRecords && searchSubmitted) {
+      if ((retiredRecords || reordered) && searchSubmitted) {
         cancelBrowse(searchBrowse, searchDock);
         const key = searchMatches[searchIndex]?.key, previousIndex = searchIndex;
         const matches = new Map(searchMatches.filter(item => cache.has(item.key)).map(item => [item.key, item]));
@@ -1298,7 +1330,7 @@
     }
 
     function detach(preserveJump = false) {
-      confirmedTailKey = null;
+      confirmedTailKey = positionedTailKey = null;
       stopRailMotion();
       cancelScan(false);
       if (!preserveJump) cancelJump(false);

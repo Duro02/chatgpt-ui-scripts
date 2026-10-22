@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><title>Dot 顺序和原生底部定位回归</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#1f1f1e;color:#eeeae2;font:15px/1.6 system-ui}
+header{height:64px;padding:14px 20px;display:flex;gap:24px;align-items:center;background:#181817}button{font:inherit;cursor:pointer}
+.messages-scroll{height:calc(100vh - 64px);overflow-y:auto;overflow-anchor:none}.message-list{width:min(740px,70%);margin:auto;padding:20px 0}
+.message-row{padding:12px 18px;margin:8px 0;border-radius:20px;background:#302f2c;min-height:60px}.self{background:#006b8d;margin-left:100px}.answer{height:180px}
+#bottom{position:fixed;bottom:20px;left:55%;padding:8px 20px}#results{position:fixed;left:12px;top:80px;max-width:360px;padding:12px;background:#181817;white-space:pre-wrap;font:12px/1.6 monospace}
+</style>
+<header><b>Dot 顺序和底部定位</b><button id="run" disabled>运行回归</button><span id="source"></span></header>
+<div class="messages-scroll" data-role="messages-scroll"><div class="message-list"></div><div id="footer" style="height:64px"></div></div>
+<button id="bottom" aria-label="滚动到底部">↓ 原生式回到底部</button><pre id="results"></pre>
+<script>
+window.module={exports:{}};
+const baseline=new URLSearchParams(location.search).has('baseline'),script=document.createElement('script');
+script.src=baseline?'../.rail-dot-baseline.js':'../chatgpt-conversation-rail.user.js';
+script.onload=()=>{document.querySelector('#run').disabled=false;document.querySelector('#source').textContent=baseline?'已发布版本 v0.4.12':'本地修正版';};document.head.append(script);
+</script>
+<script>
+const scroll=document.querySelector('.messages-scroll'),list=document.querySelector('.message-list'),results=document.querySelector('#results');
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));let c,api,memory,storage;
+const key=i=>'message:regression~regression~CalpicoMessage~user-'+i;
+function row(i,self=true,part=0){const n=document.createElement('article');n.className='message-row '+(self?'self':'answer');n.dataset.messageId=self?key(i).slice(8):'regression~regression~CalpicoMessage~answer-'+i+'-'+part;n.innerHTML='<div class="message-text">'+(self?'提问 '+i:'回答 '+i+' / '+part)+'</div>';return n;}
+function mount(ids){list.replaceChildren(...ids.flatMap(i=>[row(i),row(i,false)]));}
+function root(){return document.querySelector('#duro-conversation-rail').shadowRoot;}
+function check(ok,label){results.textContent+=(ok?'PASS ':'FAIL ')+label+'\n';}
+function manual(){document.dispatchEvent(new WheelEvent('wheel',{bubbles:true}));}
+async function until(fn,ms=3000){const end=performance.now()+ms;while(!fn()&&performance.now()<end)await sleep(25);return fn();}
+document.querySelector('#bottom').onclick=()=>{manual();scroll.scrollTo({top:scroll.scrollHeight,behavior:'instant'});};
+document.querySelector('#run').onclick=async()=>{
+document.querySelector('#run').disabled=true;results.textContent='';c?.stop();history.replaceState({},'', '/dots/home'+location.search);api=module.exports;
+const order=[0,1,4,5,6,7,2,3],thread='dots:/dots/home:regression~regression';
+const records=order.map((i,j)=>({key:key(i),top:j*260,bottom:j*260+60,prompt:'提问 '+i,answer:'回答 '+i}));
+memory=new Map([[api.cacheKey(thread),api.encodeSaved(thread,records,false,2200,true)]]);storage={getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,v),removeItem:k=>memory.delete(k)};
+try{
+ mount([0,1,2,3]);scroll.scrollTop=0;c=api.start(document,{storage});await sleep(250);
+ check(c.snapshot().count===8,'局部页面保留尚未挂载的缓存节点');
+ mount([0,1,2,3,4,5,6,7]);await until(()=>c.snapshot().entries.map(n=>n.key).join()===Array.from({length:8},(_,i)=>key(i)).join());
+ check(c.snapshot().entries.map(n=>n.key).join()===Array.from({length:8},(_,i)=>key(i)).join(),'没有新增 ID 时也按正文纠正已有节点顺序');
+ c.flush();check(JSON.parse(memory.get(api.cacheKey(thread))).entries.map(n=>n[0]).join()===Array.from({length:8},(_,i)=>key(i)).join(),'保存缓存不会把修正后的顺序重新改回旧顺序');
+ c.stop();c=api.start(document,{storage});await sleep(250);check(c.snapshot().entries.at(-1).key===key(7),'重启后末尾仍是正文最后一轮');
+ list.append(row(7,false,1),row(7,false,2));list.querySelectorAll('.answer').forEach(n=>n.style.height='100px');await sleep(300);
+ // Keyboard/native pointer intent and ordinary scrolling release any selected rail node.
+ root().querySelector('.mark[data-key="'+key(0)+'"]').click();await sleep(600);
+ document.querySelector('#bottom').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));document.querySelector('#bottom').click();
+ await until(()=>c.snapshot().activeKey===key(7));check(c.snapshot().activeKey===key(7),'原生式回到底部选中最后提问，即使回答由多个独立卡片组成');
+ const before={...c.stats};manual();scroll.scrollTop=list.querySelector('[data-message-id="'+key(4).slice(8)+'"]').offsetTop-100;await sleep(300);
+ check(c.snapshot().activeKey===key(4),'向上滚动后恢复按当前正文定位');check(c.stats.geometryReads===before.geometryReads&&c.stats.refreshes===before.refreshes,'普通滚动不增加布局测量或重建索引');
+ const spacer=document.createElement('div');spacer.style.height='1800px';list.append(spacer);await sleep(300);manual();scroll.scrollTop=scroll.scrollHeight;await sleep(300);
+ // If reserved virtual space extends beyond mounted rows, do not assert a verified tail.
+ check(!c.snapshot().historyComplete&&c.snapshot().count===8,'预留虚拟空间不删除缓存，也不声称历史已完整加载');
+ spacer.remove();c.stop();memory.set(api.cacheKey(thread),api.encodeSaved(thread,records,false,2200,true));
+ mount([4,5,6,7]);list.append(spacer);scroll.scrollTop=scroll.scrollHeight;c=api.start(document,{storage});await sleep(300);
+ check(c.snapshot().entries.at(-1).key===key(3)&&c.snapshot().count===8,'虚拟预留空间后仍有缓存节点时不误认当前窗口为真实末尾');
+ manual();scroll.scrollTop=0;spacer.remove();await sleep(300);
+ document.querySelector('#bottom').click();await until(()=>c.snapshot().entries.at(-1).key===key(7));
+ check(c.snapshot().count===8&&c.snapshot().entries.at(-1).key===key(7),'只挂载最新窗口时，回到底部会把错排在其后的旧缓存移到前面并保留');
+ check(c.snapshot().activeKey===key(7),'最新窗口的最后一轮对应导航真正末尾');
+ results.textContent+=results.textContent.includes('FAIL')?'REGRESSION REPRODUCED':'ALL TESTS PASSED';
+}catch(e){results.textContent+='ERROR '+e.stack;}finally{document.querySelector('#run').disabled=false;}
+};
+</script></html>

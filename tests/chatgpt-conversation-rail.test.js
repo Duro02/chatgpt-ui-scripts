@@ -24,6 +24,9 @@ const cached = new Map([['latest-1', {top: 6000}], ['latest-2', {top: 6200}]]);
 assert.deepEqual(mergeTimeline(['latest-1','latest-2'], [{key:'older-1',top:0},{key:'older-2',top:220}], cached), ['older-1','older-2','latest-1','latest-2']);
 assert.deepEqual(mergeTimeline(['first','latest'], [{key:'middle',top:200}], new Map(), 'first'), ['first','middle','latest']);
 assert.deepEqual(mergeTimeline(['first','latest'], [{key:'new',top:0},{key:'latest',top:900}], new Map()), ['first','new','latest']);
+assert.deepEqual(mergeTimeline(['a','b','e','f','c','d'], ['a','b','c','d','e','f'].map(key=>({key})), new Map()), ['a','b','c','d','e','f'], 'mounted order repairs an already cached but misplaced suffix');
+assert.deepEqual(mergeTimeline(['head','b','unseen','a','tail'], ['a','new','b'].map(key=>({key})), new Map()), ['head','a','unseen','new','b','tail'], 'partial overlap repairs observed order without deleting unseen history');
+assert.deepEqual(mergeTimeline(['old','latest-a','latest-b','misplaced-old'], ['latest-a','latest-b'].map(key=>({key})), new Map(),null,false,true), ['old','misplaced-old','latest-a','latest-b'], 'a verified bottom moves unseen cached history before the live latest window without deleting it');
 
 
 const { encodeSaved, decodeSaved, createIndexStore, cacheKey } = require('../chatgpt-conversation-rail.user.js');
