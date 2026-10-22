@@ -1,5 +1,13 @@
 # 更新记录
 
+## Claude-like Theme 0.4.10 — 2026-10-22
+
+- 适配新版自适应输入框底栏，让思考强度按钮所在背景与输入框同色，消除多行输入时的深色横条。
+- 为新版思考强度弹窗和滑块应用局部暖色配色。
+- 适配 Dot 新的输入区渐变背景层，以页面暖深色替换近黑色，保留底部遮挡效果。
+
+已在 Chrome 新标签页中注入完整本地样式，验证首页及会话的单行、多行输入、思考强度弹窗和 Dot 底部背景。
+
 ## Conversation Rail 0.4.11 — 2026-10-14
 
 - Confirm the rendered conversation ending before trimming an obsolete cached suffix. Keep reserved virtual tail space, pending turns and paged Dots windows protected.

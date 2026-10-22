@@ -1,7 +1,7 @@
 /* ==UserStyle==
 @name           ChatGPT Claude-like Dark Theme
 @namespace      codex.local
-@version        0.4.9
+@version        0.4.10
 @description    Low-intrusion Stylus theme that makes ChatGPT dark mode feel closer to Claude's calm, narrow, warm dark layout. Supports the legacy web app (html.dark), the new web app (html[data-color-scheme="dark"]), and the logged-in app (html[data-theme="dark"]).
 @author         duro
 @match          https://chatgpt.com/*
@@ -865,6 +865,9 @@
      some, 28px on the body in others) — so force the radius on the
      painted shell to keep the pill rounded in both layouts. */
   :is(html[data-color-scheme="dark"], html[data-theme="dark"]) [data-composer-dark] {
+    /* The adaptive footer paints its action group with this variable;
+       setting only the shell background leaves a dark pill/row inside. */
+    --composer-layout-surface-background: var(--claude-surface-raised) !important;
     background: var(--claude-surface-raised) !important;
     background-color: var(--claude-surface-raised) !important;
     border-color: var(--claude-border-soft) !important;
@@ -876,6 +879,29 @@
     background: transparent !important;
     background-color: transparent !important;
     box-shadow: none !important;
+  }
+
+  /* Model/reasoning menus are portaled outside the composer and now use
+     their own background override. Keep the slider palette local too;
+     chart colors and primary send/stop buttons retain their own colors. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    [role="menu"][data-radix-menu-content][class*="ModelPickerDropdownContent-"] {
+    --model-picker-background: var(--claude-surface);
+    color: var(--claude-text-soft) !important;
+  }
+
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    [data-model-picker-power-slider] {
+    --color-chart-blue: color-mix(in srgb, var(--claude-accent) 65%, var(--claude-surface));
+    --color-text: var(--claude-text-soft);
+    --color-border: var(--claude-border-soft);
+    --color-codex-description: var(--claude-muted);
+  }
+
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    [data-model-picker-power-slider] [class^="Thumb-"] {
+    background: var(--claude-text-soft) !important;
+    border-color: var(--claude-border-soft) !important;
   }
 
   :is(html[data-color-scheme="dark"], html[data-theme="dark"]) [data-user-message-bubble] {
@@ -1155,6 +1181,16 @@
     overflow-x: hidden !important;
     border-bottom-color: transparent !important;
   }
+
+  /* The new Dot composer replaced .composer-wrap with a transcript
+     backdrop: a solid base plus a short fade. Recolor just that layer,
+     keeping its shape so scrolled messages do not show below the input. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    [data-codex-composer-root] > [class*="transcriptBackdrop-"] > [aria-hidden="true"] {
+    background-color: transparent !important;
+    background-image: linear-gradient(to top, var(--claude-page) calc(100% - 32px), transparent 100%) !important;
+  }
+
   :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"]) .messaging-root,
   :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"]) .messaging-root * {
     scrollbar-color: rgba(255, 250, 240, 0.22) transparent !important;
