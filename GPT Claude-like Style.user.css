@@ -1,7 +1,7 @@
 /* ==UserStyle==
 @name           ChatGPT Claude-like Dark Theme
 @namespace      codex.local
-@version        0.4.10
+@version        0.4.11
 @description    Low-intrusion Stylus theme that makes ChatGPT dark mode feel closer to Claude's calm, narrow, warm dark layout. Supports the legacy web app (html.dark), the new web app (html[data-color-scheme="dark"]), and the logged-in app (html[data-theme="dark"]).
 @author         duro
 @match          https://chatgpt.com/*
@@ -89,9 +89,12 @@
   }
 
   /* Share/menu and panel-toggle wrappers carry browser-only surface
-     backgrounds. Clear the wrappers while retaining button hover states. */
+     backgrounds. The Work title slot also gets a native background
+     without a bg-surface utility. Clear these slots, retaining button hover. */
   :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
-    [data-app-shell-main-titlebar] [class~="browser:bg-surface"] {
+    [data-app-shell-main-titlebar] [class~="browser:bg-surface"],
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    [data-app-shell-main-titlebar] [data-app-shell-header-toolbar] > div.truncate {
     background: transparent !important;
   }
 
@@ -852,9 +855,11 @@
   }
 
   /* The variant-class guard skips this bg-surface element because it
-     also has extension:bg-surface-secondary. It is the real footer base. */
+     also has extension:bg-surface-secondary. It is the real footer base.
+     Work's current footer positions it via a CSS module instead of
+     inset-x-0; use its direct footer relationship and solid surface role. */
   :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
-    [data-thread-scroll-footer] > div.pointer-events-none[class~="bg-surface"][class~="inset-x-0"][class~="bottom-0"] {
+    [data-thread-scroll-footer] > div.pointer-events-none[class~="bg-surface"][class~="bottom-0"] {
     background: var(--claude-page) !important;
   }
 
