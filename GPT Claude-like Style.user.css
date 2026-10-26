@@ -1,7 +1,7 @@
 /* ==UserStyle==
 @name           ChatGPT Claude-like Dark Theme
 @namespace      codex.local
-@version        0.4.11
+@version        0.4.12
 @description    Low-intrusion Stylus theme that makes ChatGPT dark mode feel closer to Claude's calm, narrow, warm dark layout. Supports the legacy web app (html.dark), the new web app (html[data-color-scheme="dark"]), and the logged-in app (html[data-theme="dark"]).
 @author         duro
 @match          https://chatgpt.com/*
@@ -832,6 +832,15 @@
   }
 
   /* ============ Logged-in app surfaces ============ */
+  /* Side chats live in the right app-shell panel and use a separate
+     background token, falling back to the native near-black surface.
+     Theme that panel locally, including its backing layer and content. */
+  :is(html.dark, html[data-color-scheme="dark"], html[data-theme="dark"])
+    [data-app-shell-focus-area="right-panel"] {
+    --app-shell-panel-background: var(--claude-page);
+    background-color: var(--claude-page) !important;
+  }
+
   /* The app-shell titlebar is a full-width fixed overlay: never paint it,
      it would cover the sidebar header (logo + collapse trigger). */
   :is(html[data-color-scheme="dark"], html[data-theme="dark"]) [data-app-shell-titlebar] {
