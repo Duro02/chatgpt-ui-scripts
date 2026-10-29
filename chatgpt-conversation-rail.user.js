@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Conversation Rail
 // @namespace    https://github.com/Duro02/chatgpt-ui-scripts
-// @version      0.4.13
+// @version      0.4.14
 // @description  Persistent conversation navigation with short marks, previews and on-demand history loading.
 // @author       duro
 // @license      MIT
@@ -48,15 +48,12 @@
     .scroller::-webkit-scrollbar { display:none; }
     .marks { position:relative; }
     button { font:inherit; color:inherit; cursor:pointer; }
-    .mark { position:absolute; left:0; right:0; height:10px; padding:0; border:0; border-radius:6px; background:transparent; }
-    .mark::before { content:''; position:absolute; top:4px; right:0; width:20px; height:2px;
+    .mark { position:absolute; left:0; right:0; height:var(--rail-pitch,10px); padding:0; border:0; border-radius:6px; background:transparent; }
+    .mark::before { content:''; position:absolute; top:var(--rail-stroke-top,4px); right:0; width:20px; height:var(--rail-stroke,2px);
       border-radius:2px; background:var(--rail-muted); opacity:.5; transform:scaleX(.6); transform-origin:right;
       transition:transform 140ms ease,opacity 140ms ease; }
     .mark[data-unloaded]::before { transform:scaleX(.4); opacity:.35; }
     .mark:hover::before { transform:scaleX(.9); opacity:.85; }
-    .mark[aria-current]::before { transform:scaleX(1); opacity:1; background:transparent; }
-    .focus-line { position:absolute; right:0; top:4px; width:20px; height:2px; border-radius:2px;
-      background:currentColor; z-index:1; pointer-events:none; transition:none; }
     .mark:focus-visible { outline:1px solid currentColor; outline-offset:-1px; }
     .mark:focus-visible::before { transform:scaleX(1); opacity:1; }
     .index::before { background:#cf746b; opacity:.95; transform:scaleX(.75); }
@@ -85,6 +82,7 @@
     .preview-label { font-size:12px; line-height:15px; -webkit-line-clamp:var(--preview-label-lines,2); }
     .answer { margin-top:4px; color:var(--rail-muted); font-size:12px; -webkit-line-clamp:3; }
     .mark[data-preview]::before { transform:scaleX(.9); opacity:.9; }
+    .mark[aria-current]::before { transform:scaleX(1); opacity:1; background:currentColor; }
     .search-dock { position:absolute; right:calc(100% + 10px); top:var(--search-top,50%);
       width:var(--search-width,36px); height:var(--search-height,36px); transform:translateY(-50%);
       transition:width 240ms cubic-bezier(.2,.85,.25,1),height 260ms cubic-bezier(.2,.85,.25,1),top 260ms ease; }
@@ -123,7 +121,7 @@
       border-radius:8px; background:var(--rail-bg); color:inherit; box-shadow:0 4px 18px #0002; }
     [hidden] { display:none !important; }
     @media(max-width:760px) { nav { right:5px; } .preview { right:39px; } }
-    @media(prefers-reduced-motion:reduce) { .mark::before,.focus-line,.preview,.preview-card,.search-dock,.search-surface { transition:none; } }
+    @media(prefers-reduced-motion:reduce) { .mark::before,.preview,.preview-card,.search-dock,.search-surface { transition:none; } }
   `;
 
   // Binary search over cached content coordinates; no DOM reads in this function.
@@ -137,10 +135,10 @@
     return items.length ? Math.max(0, low - 1) : -1;
   }
 
-  function railRange(count, scrollTop, height) {
+  function railRange(count, scrollTop, height, pitch = PITCH) {
     return {
-      start: Math.max(0, Math.floor(scrollTop / PITCH) - OVERSCAN),
-      end: Math.min(count, Math.ceil((scrollTop + height) / PITCH) + OVERSCAN),
+      start: Math.max(0, Math.floor(scrollTop / pitch) - OVERSCAN),
+      end: Math.min(count, Math.ceil((scrollTop + height) / pitch) + OVERSCAN),
     };
   }
 
@@ -368,7 +366,7 @@
     host.id = 'duro-conversation-rail';
     const shadow = host.attachShadow({ mode: 'open' });
     shadow.innerHTML = `<style>${CSS}</style><nav aria-label="对话导航" hidden>
-      <div class="scroller" tabindex="0" aria-label="对话节点列表，可上下滚动"><div class="marks"><div class="focus-line" aria-hidden="true" hidden></div><button class="mark index" type="button" style="top:0" aria-label="点击加载过去的对话" hidden></button></div></div></nav>
+      <div class="scroller" tabindex="0" aria-label="对话节点列表，可上下滚动"><div class="marks"><button class="mark index" type="button" style="top:0" aria-label="点击加载过去的对话" hidden></button></div></div></nav>
       <div class="preview" role="region" aria-label="对话节点预览" id="rail-preview" hidden><div class="preview-window"></div><div class="search-dock" hidden><div class="search-surface">
         <button class="search-toggle" type="button" aria-label="搜索对话节点" title="搜索已索引的提问和回答摘要"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m15.5 15.5 5 5"></path></svg></button>
         <form class="search-form" hidden><input class="search-input" type="search" maxlength="160" placeholder="搜索节点摘要" aria-label="搜索节点摘要" autocomplete="off"><button class="search-submit" type="submit" aria-label="执行搜索"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m15.5 15.5 5 5"></path></svg></button></form>
@@ -400,14 +398,13 @@
     const previewBrowse = { frame:0, timer:0, target:null, key:null }, searchBrowse = { frame:0, timer:0, target:null, key:null };
     const status = shadow.querySelector('.status');
     const indexButton = shadow.querySelector('.index');
-    const focusLine = shadow.querySelector('.focus-line');
     const cache = new Map();
     const provisionalKeys = new Set();
     let dotsIdentityPath = null, dotsIdentityScope = null;
     const buttons = new Map();
     const indexes = new Map();
     let content = null, scroller = null, items = [], loaded = [], pending = [], mounted = [], route = pageIdentity().route;
-    let selectedKey = null, positioned = [], focusY = null, railMotion = null;
+    let selectedKey = null, positioned = [], railMotion = null;
     let chronology = [], transcriptEnd = null, tailKnown = false, confirmedTailKey = null, positionedTailKey = null;
     let staleElements = null, historyComplete = false, activeKey = null, hovered = false, stopped = false;
     let saveTimer = 0, saveIdle = 0, dirty = false, waitingKey = null;
@@ -415,7 +412,8 @@
     let timer = 0, frame = 0, scan = null, jump = null, restoreJob = null, restoreTimer = 0, statusTimer = 0;
     const pauses = new Map();
     let geometry = { origin: 0, height: 0, max: 0, reverse: false };
-    let railHeight = 320;
+    let railHeight = 320, railCenter = win.innerHeight * .45, pixelRatio = 1, pitch = PITCH;
+    let pixelQuery = null;
     let observedStructure = new Map(), observedParents = [];
     let profileBlocked = false, profileTargets = [];
     const stats = { refreshes: 0, geometryReads: 0, scrollFrames: 0, renders: 0, railAnimationFrames: 0, storageReads: 0, storageWrites: 0, searches: 0 };
@@ -530,9 +528,50 @@
       const bottom = Math.min(rect.bottom,
         footerRect?.height > 0 && footerRect.top > top ? footerRect.top : rect.bottom - 100);
       const band = Math.max(100, bottom - top);
-      railHeight = Math.max(60, Math.min(420, band - 64));
-      setStyle(host, '--rail-center', `${top + band / 2}px`);
+      // Whole device-pixel spacing prevents alternating rasterization at e.g. 125%.
+      // Recompute only with the existing geometry refresh, including resize/zoom.
+      const ratio = win.devicePixelRatio || 1;
+      const previousPitch = pitch, previousHeight = railHeight;
+      const nextPitch = Math.max(1, Math.ceil(PITCH * ratio - 1e-6)) / ratio;
+      const previousScroll = nextPitch !== pitch ? rail.scrollTop : 0;
+      if (!pixelQuery || pixelRatio !== ratio) {
+        pixelQuery?.removeEventListener?.('change', schedule);
+        pixelRatio = ratio;
+        // JS and CSS resolution values can round differently. Start inside a tiny
+        // matching band so the next density change reliably emits an event.
+        const epsilon = pixelRatio * 1e-6;
+        pixelQuery = win.matchMedia(`(min-resolution: ${pixelRatio - epsilon}dppx) and (max-resolution: ${pixelRatio + epsilon}dppx)`);
+        pixelQuery.addEventListener?.('change', schedule);
+      }
+      pitch = nextPitch;
+      const stroke = Math.max(1, Math.round(2 * pixelRatio)) / pixelRatio;
+      railCenter = top + band / 2;
+      railHeight = Math.round(Math.max(60, Math.min(420, band - 64)) * pixelRatio) / pixelRatio;
+      setStyle(host, '--rail-pitch', `${pitch}px`);
+      setStyle(host, '--rail-stroke', `${stroke}px`);
+      setStyle(host, '--rail-stroke-top', `${Math.round((pitch - stroke) * pixelRatio / 2) / pixelRatio}px`);
       setStyle(host, '--rail-height', `${railHeight}px`);
+      if (pitch !== previousPitch) {
+        // Preserve the browsed window and in-flight destination in node units.
+        // Update the extent first: a browser would clamp a new bottom offset
+        // against the old height if scrollTop were written before this style.
+        const offset = indexButton.hidden ? 0 : 1, count = items.length + offset;
+        const oldMax = Math.max(0, count * previousPitch - previousHeight);
+        const max = Math.max(0, count * pitch - railHeight);
+        const clamp = value => snapRail(Math.max(0, Math.min(max, value)));
+        const rebase = value => clamp(oldMax > 0 && Math.abs(value - oldMax) < .5 ? max : value * pitch / previousPitch);
+        setStyle(marks, 'height', `${count * pitch}px`);
+        let scroll = rebase(previousScroll);
+        const focused = indexes.get(shadow.activeElement?.dataset.key);
+        if (focused !== undefined) {
+          const oldTop = (focused + offset) * previousPitch, top = (focused + offset) * pitch;
+          const keepVisible = value => clamp(Math.max(top + pitch - railHeight, Math.min(top, value)));
+          if (oldTop >= previousScroll - .5 && oldTop + previousPitch <= previousScroll + previousHeight + .5) scroll = keepVisible(scroll);
+          if (railMotion) railMotion.toScroll = keepVisible(rebase(railMotion.toScroll));
+        } else if (railMotion) railMotion.toScroll = rebase(railMotion.toScroll);
+        if (railMotion) railMotion.fromScroll = rebase(railMotion.fromScroll);
+        rail.scrollTop = scroll;
+      }
       stats.geometryReads += 1;
     }
 
@@ -587,14 +626,19 @@
       setAttribute(nav, 'hidden', items.length && content && scroller && !profileBlocked ? null : '');
       setAttribute(indexButton, 'hidden', historyComplete && !scan ? '' : null);
       const offset = indexButton.hidden ? 0 : 1;
-      setStyle(marks, 'height', `${(items.length + offset) * PITCH}px`);
-      const range = railRange(items.length, Math.max(0, rail.scrollTop - offset * PITCH), railHeight);
-      const height = Math.min(railHeight, (items.length + offset) * PITCH);
+      setStyle(marks, 'height', `${(items.length + offset) * pitch}px`);
+      const range = railRange(items.length, Math.max(0, rail.scrollTop - offset * pitch), railHeight, pitch);
+      const height = Math.min(railHeight, (items.length + offset) * pitch);
+      // Account for translateY(-50%) so every mark starts on the same pixel grid.
+      const top = Math.round((railCenter - height / 2) * pixelRatio) / pixelRatio;
+      setStyle(host, '--rail-center', `${top + height / 2}px`);
       setAttribute(nav, 'data-above', rail.scrollTop > 2 ? '' : null);
-      setAttribute(nav, 'data-below', rail.scrollTop + height < (items.length + offset) * PITCH - 2 ? '' : null);
+      setAttribute(nav, 'data-below', rail.scrollTop + height < (items.length + offset) * pitch - 2 ? '' : null);
       const needed = new Set();
       const visibleIndexes = Array.from({ length: Math.max(0, range.end - range.start) }, (_, i) => range.start + i);
-      if (Number.isInteger(extraIndex) && extraIndex >= 0 && extraIndex < items.length && !visibleIndexes.includes(extraIndex)) visibleIndexes.push(extraIndex);
+      for (const index of [extraIndex, indexes.get(shadow.activeElement?.dataset.key)]) {
+        if (Number.isInteger(index) && index >= 0 && index < items.length && !visibleIndexes.includes(index)) visibleIndexes.push(index);
+      }
       for (const i of visibleIndexes) {
         const item = items[i];
         needed.add(item.key);
@@ -607,13 +651,12 @@
           buttons.set(item.key, button);
           marks.appendChild(button);
         }
-        setStyle(button, 'top', `${(i + offset) * PITCH}px`);
+        setStyle(button, 'top', `${(i + offset) * pitch}px`);
         setAttribute(button, 'aria-label', `跳到第 ${i + 1} 轮：${item.prompt || '尚未加载的提问'}`);
         setAttribute(button, 'data-unloaded', item.element?.isConnected ? null : '');
         setAttribute(button, 'aria-current', item.key === activeKey ? 'true' : null);
         setAttribute(button, 'data-preview', item.key === previewKey ? '' : null);
       }
-      updateIndicator();
       for (const [key, button] of buttons) {
         if (!needed.has(key) && shadow.activeElement !== button) {
           button.remove();
@@ -622,64 +665,48 @@
       }
     }
 
-    function indicatorTarget() {
+    function activeMarkTop() {
       const index = indexes.get(activeKey);
-      return index === undefined ? null : (index + (indexButton.hidden ? 0 : 1)) * PITCH;
-    }
-    function paintFocus(y) {
-      focusY = y;
-      setStyle(focusLine, 'transform', `translateY(${y}px)`);
-    }
-    function updateIndicator() {
-      const target = indicatorTarget();
-      setAttribute(focusLine, 'hidden', target === null || !items.length ? '' : null);
-      if (!focusLine.hidden && !railMotion) paintFocus(target);
+      return index === undefined ? null : (index + (indexButton.hidden ? 0 : 1)) * pitch;
     }
     function stopRailMotion() {
       if (railMotion) win.cancelAnimationFrame(railMotion.frame);
       railMotion = null;
     }
-    function animateRail(destination, target) {
-      const total = (items.length + (indexButton.hidden ? 0 : 1)) * PITCH;
-      destination = Math.max(0, Math.min(Math.max(0, total - railHeight), destination));
-      if (railMotion?.toScroll === destination && railMotion.toY === target) return;
+    function snapRail(value) {
+      return Math.round(value * pixelRatio) / pixelRatio;
+    }
+    function animateRail(destination) {
+      const total = (items.length + (indexButton.hidden ? 0 : 1)) * pitch;
+      destination = snapRail(Math.max(0, Math.min(Math.max(0, total - railHeight), destination)));
+      if (railMotion?.toScroll === destination) return;
       stopRailMotion();
       const fromScroll = rail.scrollTop;
-      let fromY = focusY ?? target;
-      // If the old active turn is outside a manually browsed rail viewport,
-      // let its focus enter from the nearest edge rather than from thousands of pixels away.
-      if (target !== null && target >= destination && target < destination + railHeight) {
-        fromY = Math.max(fromScroll, Math.min(fromScroll + railHeight - PITCH, fromY));
-      }
-      if (target === null || doc.hidden || win.matchMedia('(prefers-reduced-motion:reduce)').matches ||
-          Math.abs(fromScroll - destination) < .5 && Math.abs(fromY - target) < .5) {
-        rail.scrollTop = destination;
-        if (target !== null) paintFocus(target);
-        render();
+      if (doc.hidden || win.matchMedia('(prefers-reduced-motion:reduce)').matches ||
+          Math.abs(fromScroll - destination) < .5) {
+        if (fromScroll !== destination) {
+          rail.scrollTop = destination;
+          render();
+        }
         return;
       }
-      const job = { fromY, toY: target, fromScroll, toScroll: destination, previousTime: null, elapsed: 0, frame: 0 };
+      const job = { fromScroll, toScroll: destination, previousTime: null, elapsed: 0, frame: 0 };
       railMotion = job;
-      focusLine.hidden = false;
       const tick = time => {
         if (railMotion !== job || stopped) return;
         // Virtual mounts can stall the main thread. Cap a frame's contribution
-        // so a missed frame does not turn the whole focus transition into a snap.
+        // so a missed frame does not turn the whole list scroll into a snap.
         if (job.previousTime !== null) job.elapsed += Math.min(64, time - job.previousTime);
         job.previousTime = time;
         const progress = Math.min(1, job.elapsed / 260);
         const eased = progress * progress * (3 - 2 * progress);
-        paintFocus(job.fromY + (job.toY - job.fromY) * eased);
         stats.railAnimationFrames += 1;
-        if (job.fromScroll !== job.toScroll) {
-          rail.scrollTop = job.fromScroll + (job.toScroll - job.fromScroll) * eased;
-          render();
-        }
+        rail.scrollTop = snapRail(job.fromScroll + (job.toScroll - job.fromScroll) * eased);
+        render();
         if (progress < 1 && !doc.hidden) job.frame = win.requestAnimationFrame(tick);
         else {
           railMotion = null;
           rail.scrollTop = job.toScroll;
-          paintFocus(job.toY);
           render();
         }
       };
@@ -687,24 +714,21 @@
     }
 
     function follow(animate = false, force = false) {
-      if (!items.length) { updateIndicator(); return; }
-      const target = indicatorTarget();
-      if (target === null) { updateIndicator(); return; }
-      const height = Math.min(railHeight, (items.length + (indexButton.hidden ? 0 : 1)) * PITCH);
+      if (!items.length) return;
+      const target = activeMarkTop();
+      if (target === null) return;
+      const height = Math.min(railHeight, (items.length + (indexButton.hidden ? 0 : 1)) * pitch);
       let destination = railMotion?.toScroll ?? rail.scrollTop;
       const exploring = shadow.activeElement?.dataset.key && shadow.activeElement.dataset.key !== activeKey;
       if (force || !hovered && !exploring) {
-        const center = target + PITCH / 2;
+        const center = target + pitch / 2;
         const inset = Math.min(20, height / 4);
         if (center < destination + inset || center > destination + height - inset) {
           destination = Math.max(0, center - height / 2);
         }
       }
-      if (animate || railMotion) animateRail(destination, target);
-      else {
-        rail.scrollTop = destination;
-        paintFocus(target);
-      }
+      if (animate || railMotion) animateRail(destination);
+      else rail.scrollTop = snapRail(destination);
     }
 
     function setActive(key) {
@@ -921,8 +945,8 @@
       readPreview(items[next]); renderPreview();
       stopRailMotion();
       // Browse the rail along with the panel, without moving the transcript.
-      const top = (next + (indexButton.hidden ? 0 : 1)) * PITCH;
-      if (top < rail.scrollTop || top + PITCH > rail.scrollTop + railHeight) rail.scrollTop = Math.max(0, top - railHeight / 2);
+      const top = (next + (indexButton.hidden ? 0 : 1)) * pitch;
+      if (top < rail.scrollTop || top + pitch > rail.scrollTop + railHeight) rail.scrollTop = snapRail(Math.max(0, top - railHeight / 2));
       render();
     }
     function showPreview(button, keyboard = false) {
@@ -1769,12 +1793,12 @@
       else if (event.key === 'ArrowUp') next--;
       else if (event.key === 'Home') next = indexButton.hidden ? 0 : -1;
       else if (event.key === 'End') next = items.length - 1;
-      else if (event.key === 'PageDown') next += Math.max(1, Math.floor(railHeight / PITCH) - 2);
-      else if (event.key === 'PageUp') next -= Math.max(1, Math.floor(railHeight / PITCH) - 2);
+      else if (event.key === 'PageDown') next += Math.max(1, Math.floor(railHeight / pitch) - 2);
+      else if (event.key === 'PageUp') next -= Math.max(1, Math.floor(railHeight / pitch) - 2);
       else return;
       event.preventDefault();
       next = Math.max(indexButton.hidden ? 0 : -1, Math.min(items.length - 1, next));
-      animateRail(Math.max(0, (next + (indexButton.hidden ? 0 : 1)) * PITCH - railHeight / 2), indicatorTarget());
+      animateRail(Math.max(0, (next + (indexButton.hidden ? 0 : 1)) * pitch - railHeight / 2));
       render(next);
       (next < 0 ? indexButton : buttons.get(items[next]?.key))?.focus({ preventScroll: true });
     });
@@ -1820,6 +1844,7 @@
         detach();
         boot.disconnect();
         theme.disconnect();
+        pixelQuery?.removeEventListener?.('change', schedule); pixelQuery = null;
         profileObserver.disconnect(); profileTargets = [];
         win.clearTimeout(timer);
         win.clearTimeout(statusTimer);

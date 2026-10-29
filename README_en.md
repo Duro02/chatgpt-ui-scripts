@@ -62,6 +62,8 @@ Pairs with the theme to make dividers in responses more natural.
 
 Adds a right-side conversation node rail for ChatGPT and Dots. Click a node to jump to the corresponding question. Discovered nodes are retained for browsing when reopening the conversation, and you can search questions and answer summaries by keyword.
 
+As you scroll the conversation, the current question's mark grows longer and brighter in place.
+
 ## License
 
 [MIT](LICENSE.md)

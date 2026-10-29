@@ -288,6 +288,89 @@ function dotsRegression(){
   recovered.flush();assert.equal(JSON.parse(f.memory.get(f.api.cacheKey(thread))).entries.length,1,'a later cache merge cannot reintroduce old provisional rows');
   recovered.stop();f.close();
 }
+function currentMarkRegression(){
+  const f=fixture(current,8), root=f.d.querySelector('#duro-conversation-rail').shadowRoot;
+  const rail=root.querySelector('.scroller');
+  const tops=new Map([...root.querySelectorAll('.mark[data-key]')].map(mark=>[mark.dataset.key,mark.style.top]));
+  assert.equal(root.querySelector('.focus-line'),null,'current state belongs to each mark, with no traveling overlay');
+  const before={...f.c.stats}, reads=f.layoutReads(), frames=before.railAnimationFrames;
+  for(const index of [3,5,2,6,1]){
+    f.changes.takeRecords();
+    f.scroll.scrollTop=index*220;
+    f.scroll.dispatchEvent(new f.w.Event('scroll'));f.frame();
+    const key='turn:message-'+index;
+    assert.equal(f.c.snapshot().activeKey,key);
+    assert.equal(root.querySelectorAll('.mark[aria-current]').length,1);
+    assert.equal(root.querySelector('.mark[aria-current]').dataset.key,key);
+    assert.equal(rail.scrollTop,0,'changing a visible current mark never moves the rail');
+    assert.ok(!f.c.snapshot().animating,'visible current changes do not start list animations');
+    for(const mark of root.querySelectorAll('.mark[data-key]'))assert.equal(mark.style.top,tops.get(mark.dataset.key),'other nodes retain their own positions');
+    const mutations=f.changes.takeRecords();
+    assert.ok(mutations.length<=2&&mutations.every(m=>m.type==='attributes'&&m.attributeName==='aria-current'),'only previous/current state attributes change');
+  }
+  assert.equal(f.c.stats.railAnimationFrames,frames,'no focus animation frames are requested');
+  assert.equal(f.c.stats.renders,before.renders,'visible current changes do not rerender the mark window');
+  assert.equal(f.c.stats.refreshes,before.refreshes,'current changes do not rescan the transcript');
+  assert.equal(f.layoutReads(),reads,'current changes do not read layout');
+  f.close();
+  console.log('Current marks: in-place state, fixed neighbors, no overlay, layout reads or animation frames');
+}
+function pixelGridRegression(){
+  const f=fixture(current,1000), host=f.d.querySelector('#duro-conversation-rail'),root=host.shadowRoot,rail=root.querySelector('.scroller');
+  const queries=[];
+  f.w.matchMedia=query=>{
+    if(query.includes('prefers-reduced-motion'))return {matches:true};
+    const listeners=new Set();queries.push(listeners);
+    return {matches:true,addEventListener:(type,fn)=>listeners.add(fn),removeEventListener:(type,fn)=>listeners.delete(fn)};
+  };
+  root.querySelector('.mark[data-key]').dispatchEvent(new f.w.KeyboardEvent('keydown',{key:'End',bubbles:true}));
+  const focused=root.activeElement;
+  const integer=value=>Math.abs(value-Math.round(value))<1e-7;
+  for(const ratio of [.75,1,1.1,1.25,4/3,1.5,1.75,2]){
+    f.w.devicePixelRatio=ratio;
+    if(!queries.length)f.c.audit.refresh();
+    else {for(const listeners of queries)for(const fn of [...listeners])fn();f.advance(180);}
+    assert.equal(queries.reduce((n,listeners)=>n+listeners.size,0),1,'one resolution listener follows device-ratio changes without resize or polling');
+    const pitch=parseFloat(host.style.getPropertyValue('--rail-pitch'));
+    const stroke=parseFloat(host.style.getPropertyValue('--rail-stroke'));
+    const inset=parseFloat(host.style.getPropertyValue('--rail-stroke-top'));
+    const center=parseFloat(host.style.getPropertyValue('--rail-center'));
+    const height=parseFloat(host.style.getPropertyValue('--rail-height'));
+    assert.ok(integer(pitch*ratio)&&integer(stroke*ratio)&&integer(inset*ratio),'spacing and stroke dimensions use whole device pixels at '+ratio);
+    assert.ok(integer((center-height/2-rail.scrollTop)*ratio),'rail origin and scroll offset share the pixel grid at '+ratio);
+    for(const mark of root.querySelectorAll('.mark[data-key]'))assert.ok(integer(parseFloat(mark.style.top)*ratio),'every node shares the pixel grid');
+    assert.equal(root.activeElement,focused,'scaling retains the keyboard-focused node without another End press');
+    const focusTop=parseFloat(focused.style.top)-rail.scrollTop;
+    assert.ok(focusTop>=-.01&&focusTop+pitch<=height+.01,'focused end node remains visible across scale changes');
+    assert.ok(Math.abs(rail.scrollTop-(1000*pitch-height))<1e-7,'the browsed bottom follows the scaled extent without new input');
+    assert.ok(f.c.snapshot().mountedMarks<=52,'scaled range keeps node DOM bounded');
+    f.changes.takeRecords();const reads=f.layoutReads();
+    for(let i=0;i<20;i++)f.c.audit.render();
+    assert.equal(f.changes.takeRecords().length,0,'unchanged scaled renders do not rewrite DOM');
+    assert.equal(f.layoutReads(),reads,'pixel alignment does not add render-time layout reads');
+  }
+  f.close();
+  assert.equal(queries.reduce((n,listeners)=>n+listeners.size,0),0,'stop removes the resolution listener');
+  console.log('Pixel grid: multiple device ratios, resize recalculation, bounded keyboard range and unchanged render stability');
+}
+function scaledRailAnimationRegression(){
+  const f=fixture(current,1000),root=f.d.querySelector('#duro-conversation-rail').shadowRoot,rail=root.querySelector('.scroller');
+  f.w.matchMedia=()=>({matches:false});
+  const settle=()=>{for(let i=0;i<8;i++){f.advance(64);f.frame();}};
+  root.querySelector('.mark[data-key]').dispatchEvent(new f.w.KeyboardEvent('keydown',{key:'Home',bubbles:true}));settle();
+  assert.equal(rail.scrollTop,0);
+  root.activeElement.dispatchEvent(new f.w.KeyboardEvent('keydown',{key:'End',bubbles:true}));
+  f.frame();f.advance(64);f.frame();
+  assert.ok(f.c.snapshot().animating,'density change happens during a real list animation');
+  f.w.devicePixelRatio=1.25;f.c.audit.refresh();settle();
+  const host=f.d.querySelector('#duro-conversation-rail'),pitch=parseFloat(host.style.getPropertyValue('--rail-pitch')),height=parseFloat(host.style.getPropertyValue('--rail-height'));
+  assert.ok(!f.c.snapshot().animating);
+  assert.equal(root.activeElement.dataset.key,'turn:message-999');
+  assert.ok(Math.abs(rail.scrollTop-(1000*pitch-height))<1e-7,'in-flight End animation finishes at the new bottom, not the old pixel target');
+  assert.ok(parseFloat(root.activeElement.style.top)+pitch<=rail.scrollTop+height+.01,'animated focus remains visible after density changes');
+  f.close();
+  console.log('Scaled animation: End target and keyboard focus survive density changes mid-flight');
+}
 function hiddenRootRegression(){
   const f=fixture(current,100);
   const cached=f.d.createElement('div');cached.style.display='none';
@@ -302,6 +385,9 @@ function hiddenRootRegression(){
   f.close();
   console.log('Hidden roots: cached zero-size conversation ignored; visible scrollport owns rail and jumps');
 }
+currentMarkRegression();
+pixelGridRegression();
+scaledRailAnimationRegression();
 hiddenRootRegression();
 routeRegression();
 mixedRouteRegression();

@@ -18,7 +18,7 @@
   #results{position:fixed;left:16px;top:80px;width:240px;background:var(--fixture-header);padding:12px;font:12px/1.5 monospace;max-height:70vh;overflow:auto;z-index:60}
   #results:empty{display:none}.sr-only{display:none}
 </style>
-<header><h1>对话导航 · 演示与测试</h1><button id="showsearch">展示搜索与预览</button><button id="demo">展示长对话</button><button id="light">切换明暗</button><button id="persist">验证缓存与按需加载</button><button id="panel">验证七节点预览</button><button id="search">验证左侧搜索</button><button id="dots">验证 Dots 适配</button><button id="all">运行全部回归</button><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="railscroll">验证长列表滚动</button><button id="animation">验证焦点动画</button><button id="selection">验证跳转高亮</button><button id="latest">验证最新节点保留</button><button id="currentending">验证当前末尾</button><button id="routeisolation">验证会话隔离</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button></header>
+<header><h1>对话导航 · 演示与测试</h1><button id="showsearch">展示搜索与预览</button><button id="demo">展示长对话</button><button id="light">切换明暗</button><button id="persist">验证缓存与按需加载</button><button id="panel">验证七节点预览</button><button id="search">验证左侧搜索</button><button id="dots">验证 Dots 适配</button><button id="all">运行全部回归</button><button id="run">运行浏览器验证</button><button id="virtual">验证虚拟列表</button><button id="railscroll">验证长列表滚动</button><button id="animation">验证原位高亮</button><button id="selection">验证跳转高亮</button><button id="latest">验证最新节点保留</button><button id="currentending">验证当前末尾</button><button id="routeisolation">验证会话隔离</button><button id="hydration">验证刷新与历史入口</button><button id="preview">验证摘要</button></header>
 <div id="scroll"><main id="content" data-thread-find-target="conversation"></main></div>
 <footer><textarea aria-label="草稿">测试草稿：索引和跳转应保留这段输入</textarea></footer><pre id="results"></pre>
 <script>window.module={exports:{}};</script><script src="../chatgpt-conversation-rail.user.js"></script>
@@ -236,7 +236,7 @@ async function railScrollRegression(){
     check(scroll.scrollTop===bodyStart,'浏览节点列表不会滚动正文');
     shadow().activeElement.click();
     await waitUntil(()=>!c.snapshot().animating);
-    check(c.snapshot().activeKey==='turn:message-999'&&Math.abs(new DOMMatrixReadOnly(getComputedStyle(shadow().querySelector('.focus-line')).transform).m42-9990)<1,'列表末尾焦点与最后节点一致');
+    check(c.snapshot().activeKey==='turn:message-999'&&shadow().querySelector('.mark[aria-current]')===shadow().activeElement,'列表末尾由最后节点自身高亮');
     check(c.snapshot().mountedMarks<=52,'动画和长列表依然限制横线 DOM 数量');
     shadow().activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'PageUp',bubbles:true}));
     await waitUntil(()=>!c.snapshot().animating);
@@ -253,30 +253,50 @@ async function railScrollRegression(){
   }catch(e){log('FAIL '+e.stack);}
 }
 document.querySelector('#railscroll').onclick=railScrollRegression;
-async function animationRegression(){
+async function currentMarkRegression(){
   results.textContent='';
   try {
-    const c=setup(8);await sleep(400);
-    const line=shadow().querySelector('.focus-line');
-    const y=()=>new DOMMatrixReadOnly(getComputedStyle(line).transform).m42;
-    const before=y(), samples=[];
-    shadow().querySelector('.mark[data-key="turn:message-7"]').click();
-    for(let i=0;i<12;i++){await new Promise(requestAnimationFrame);samples.push(y());}
-    await sleep(350);
-    const reduced=matchMedia('(prefers-reduced-motion:reduce)').matches;
-    check(reduced||samples.some(value=>value>before+1&&value<69),'白色焦点连续经过中间位置');
-    check(Math.abs(y()-70)<1&&c.snapshot().activeKey==='turn:message-7','焦点动画结束与选中节点一致');
-    check(shadow().querySelectorAll('.focus-line').length===1,'单一白色焦点，不生成多个闪烁高亮');
+    const c=setup(20);await sleep(400);
+    const root=shadow(),rail=root.querySelector('.scroller'),marks=[...root.querySelectorAll('.mark[data-key]')];
+    const tops=new Map(marks.map(mark=>[mark.dataset.key,mark.getBoundingClientRect().top]));
+    const frames=c.stats.railAnimationFrames;
+    check(!root.querySelector('.focus-line'),'没有独立移动的高亮横线');
+    const integer=value=>Math.abs(value-Math.round(value))<.04;
+    check(marks.every(mark=>{
+      const style=getComputedStyle(mark,'::before'),top=(mark.getBoundingClientRect().top+parseFloat(style.top))*devicePixelRatio;
+      return integer(top)&&integer(parseFloat(style.height)*devicePixelRatio);
+    }),'各横线的位置与厚度对齐当前设备像素网格');
+    const stable=()=>marks.every(mark=>Math.abs(mark.getBoundingClientRect().top-tops.get(mark.dataset.key))<.1);
+    for(const index of [3,5,2,6,0]){
+      scroll.scrollTop=content.children[index].offsetTop;
+      await waitUntil(()=>c.snapshot().activeKey==='turn:message-'+index);
+      let fixed=true;
+      for(let i=0;i<12;i++){
+        await new Promise(requestAnimationFrame);
+        fixed=stable()&&fixed;
+      }
+      check(fixed,'切换当前节点时所有横线保持原位');
+      const current=root.querySelector('.mark[aria-current]'),style=getComputedStyle(current,'::before');
+      const matrix=new DOMMatrixReadOnly(style.transform);
+      check(root.querySelectorAll('.mark[aria-current]').length===1&&current.dataset.key==='turn:message-'+index,'滚动到的节点自身带有唯一高亮状态');
+      check(Math.abs(matrix.m11-1)<.01&&matrix.m42===0&&Number(style.opacity)===1&&style.backgroundColor===getComputedStyle(current).color,'当前横线在原位变长、变亮');
+      check(rail.scrollTop===0&&!c.snapshot().animating,'可见节点切换不启动列表滚动');
+    }
+    const current=root.querySelector('.mark[aria-current]');
+    current.dispatchEvent(new Event('pointerover',{bubbles:true}));await sleep(180);
+    check(new DOMMatrixReadOnly(getComputedStyle(current,'::before').transform).m11===1,'预览当前节点不缩短高亮线');
+    shadow().querySelector('.mark[data-key="turn:message-7"]').click();await sleep(80);
     shadow().querySelector('.mark[data-key="turn:message-0"]').click();await sleep(80);
     shadow().querySelector('.mark[data-key="turn:message-5"]').click();
-    await waitUntil(()=>Math.abs(y()-50)<1);
-    check(Math.abs(y()-50)<1&&c.snapshot().activeKey==='turn:message-5','快速连续点击平滑转向最终目标');
+    await waitUntil(()=>c.snapshot().activeKey==='turn:message-5');
+    check(stable()&&root.querySelector('.mark[aria-current]').dataset.key==='turn:message-5','快速连续点击由最终目标自身高亮');
+    check(c.stats.railAnimationFrames===frames,'原位高亮不申请逐帧动画');
     const beforeStats={...c.stats};await sleep(500);
-    check(c.stats.refreshes===beforeStats.refreshes&&c.stats.geometryReads===beforeStats.geometryReads,'动画结束后无持续扫描或几何测量');
-    log('ALL ANIMATION TESTS PASSED');
+    check(c.stats.refreshes===beforeStats.refreshes&&c.stats.geometryReads===beforeStats.geometryReads,'高亮切换后无持续扫描或几何测量');
+    log('ALL CURRENT MARK TESTS PASSED');
   }catch(e){log('FAIL '+e.stack);}
 }
-document.querySelector('#animation').onclick=animationRegression;
+document.querySelector('#animation').onclick=currentMarkRegression;
 async function selectionRegression(){
   results.textContent='';
   try {
@@ -659,7 +679,7 @@ document.querySelector('#dots').onclick=dotsRegression;
 document.querySelector('#all').onclick=async()=>{
   const button=document.querySelector('#all');button.disabled=true;const combined=[];
   try {
-    for(const [name,test] of [['current ending',currentEndingRegression],['mixed route and cache repair',routeIsolationRegression],['Dots and route isolation',dotsRegression],['search',searchRegression],['preview panel',previewPanelRegression],['rapid panel',rapidPanelRegression],['persistence',persistenceRegression],['multipage target jump',historyJumpRegression],['latest',latestRegression],['selection',selectionRegression],['animation',animationRegression],['rail scroll',railScrollRegression],['hydration',hydrationRegression],['full performance and virtual history',()=>run()]]){
+    for(const [name,test] of [['current ending',currentEndingRegression],['mixed route and cache repair',routeIsolationRegression],['Dots and route isolation',dotsRegression],['search',searchRegression],['preview panel',previewPanelRegression],['rapid panel',rapidPanelRegression],['persistence',persistenceRegression],['multipage target jump',historyJumpRegression],['latest',latestRegression],['selection',selectionRegression],['current mark',currentMarkRegression],['rail scroll',railScrollRegression],['hydration',hydrationRegression],['full performance and virtual history',()=>run()]]){
       await test();combined.push(name+'\n'+results.textContent);
       results.textContent=combined.join('\n\n');
       if(combined.at(-1).includes('FAIL '))return;
