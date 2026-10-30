@@ -33,6 +33,19 @@ Manual method:
 3. Paste the contents of `GPT Claude-like Style.user.css`.
 4. Open `https://chatgpt.com/`.
 
+### Fonts and Fallback Order
+
+The theme uses fonts installed on your device and does not automatically download or install fonts. Font lists are checked from first to last; for each character, the browser selects the first available font that contains that character. As a result, Latin and Chinese text may use different fonts, and the appearance may vary across devices.
+
+- **Interface text**: Prefers system sans-serif fonts, such as Apple's system font, Segoe UI, and Roboto, with a generic sans-serif fallback.
+- **Body text**:
+  - Latin font priority: Iowan Old Style → Charter → Georgia → Times New Roman.
+  - Chinese font priority: Noto Serif CJK SC → Noto Serif SC → Source Han Serif SC → Songti SC → SimSun.
+  - The final fallback is the browser's generic serif font.
+- **Code text**: Tries SFMono-Regular → Consolas → Liberation Mono → Menlo in order. Chinese characters not covered by these fonts then follow the Chinese font order above, with a generic monospace font as the final fallback.
+
+To give Chinese body text the theme's intended Song-style serif appearance, you can install one of the Chinese fonts listed above. Installing a font later in the list does not give it priority over an earlier available font. To choose a preferred font, adjust the corresponding font list in Stylus: `--claude-font` (interface), `--claude-prose-font` (body), or `--claude-mono` (code).
+
 ### Tampermonkey Scripts
 
 1. Install the Tampermonkey browser extension.
